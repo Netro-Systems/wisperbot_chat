@@ -490,9 +490,9 @@ WisperBotWidgetConfig _parseWidgetConfig(Map<String, dynamic> json) {
       );
     }
   }
-  final rawColor = _stringOrNull(json['primary_color']) ?? '#6258f9';
+  final rawColor = _stringOrNull(json['primary_color']) ?? '#ff762e';
   final color =
-      RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(rawColor) ? rawColor : '#6258f9';
+      RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(rawColor) ? rawColor : '#ff762e';
   return WisperBotWidgetConfig(
     title: _stringOrNull(json['title']) ?? 'Chat with us',
     subtitle: _stringOrNull(json['subtitle']) ??

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -34,6 +35,7 @@ class WisperBotChatView extends StatefulWidget {
     this.errorBuilder,
     this.messageBuilder,
     this.composerBuilder,
+    this.onClose,
   });
 
   final WisperBotConfig config;
@@ -43,6 +45,7 @@ class WisperBotChatView extends StatefulWidget {
   final WisperBotChatStateBuilder? errorBuilder;
   final WisperBotMessageBuilder? messageBuilder;
   final WisperBotComposerBuilder? composerBuilder;
+  final VoidCallback? onClose;
 
   @override
   State<WisperBotChatView> createState() => _WisperBotChatViewState();
@@ -146,7 +149,12 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
       color: colors.background,
       child: Column(
         children: <Widget>[
-          if (widget.showHeader) _ChatHeader(state: _state, colors: colors),
+          if (widget.showHeader)
+            _ChatHeader(
+              state: _state,
+              colors: colors,
+              onClose: widget.onClose,
+            ),
           if (_state.phase == WisperBotChatPhase.reconnecting)
             _ConnectionBanner(colors: colors),
           if (_state.supportAvailability ==
@@ -186,8 +194,8 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
       case WisperBotChatPhase.ready:
       case WisperBotChatPhase.reconnecting:
         if (_state.messages.isEmpty) {
-          return widget.emptyBuilder?.call(context, _state) ??
-              _EmptyState(state: _state, colors: colors);
+          final custom = widget.emptyBuilder?.call(context, _state);
+          if (custom != null) return custom;
         }
         return _timeline(colors);
       case WisperBotChatPhase.disposed:
@@ -195,90 +203,119 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
     }
   }
 
-  Widget _timeline(WisperBotResolvedTheme colors) => RefreshIndicator(
-        color: colors.primary,
-        onRefresh: _controller.refresh,
-        child: Stack(
-          children: <Widget>[
-            ListView.builder(
-              controller: _scrollController,
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              itemCount:
-                  _state.messages.length + (_state.agentTyping == null ? 0 : 1),
-              itemBuilder: (context, index) {
-                if (index == _state.messages.length) {
-                  return _TypingIndicator(
-                    typing: _state.agentTyping!,
-                    colors: colors,
-                  );
-                }
-                final message = _state.messages[index];
+  Widget _timeline(WisperBotResolvedTheme colors) {
+    final configuredWelcome = _state.widget?.welcomeMessage.trim();
+    final welcome = configuredWelcome?.isNotEmpty == true
+        ? configuredWelcome!
+        : 'Hi there! How can we help?';
+    const welcomeCount = 1;
+    final typingCount = _state.agentTyping == null ? 0 : 1;
+    return RefreshIndicator(
+      color: colors.primary,
+      onRefresh: _controller.refresh,
+      child: Stack(
+        children: <Widget>[
+          ListView.builder(
+            controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+            itemCount: welcomeCount + _state.messages.length + typingCount,
+            itemBuilder: (context, index) {
+              if (index == 0) {
                 return Padding(
                   padding: EdgeInsets.only(bottom: colors.messageSpacing),
-                  child: widget.messageBuilder?.call(context, message) ??
-                      _MessageBubble(
-                        message: message,
-                        colors: colors,
-                        onRetry:
-                            message.status == WisperBotMessageStatus.failed &&
-                                    message.error?.retryable == true
-                                ? () => unawaited(
-                                      _controller
-                                          .retryMessage(message.localId)
-                                          .catchError((_) => message),
-                                    )
-                                : null,
-                        onRemove: message.status ==
-                                    WisperBotMessageStatus.failed ||
-                                message.status ==
-                                    WisperBotMessageStatus.unconfirmed
-                            ? () => unawaited(
-                                  _controller.removeMessage(message.localId),
-                                )
-                            : null,
-                        onRefresh:
-                            message.status == WisperBotMessageStatus.unconfirmed
-                                ? () => unawaited(
-                                      _controller.refresh().catchError((_) {}),
-                                    )
-                                : null,
-                      ),
+                  child: _WelcomeBubble(
+                    body: welcome,
+                    widgetConfig: _state.widget,
+                    colors: colors,
+                  ),
                 );
-              },
-            ),
-            if (!_nearBottom)
-              PositionedDirectional(
-                end: 12,
-                bottom: 12,
-                child: FloatingActionButton.small(
-                  heroTag: null,
-                  tooltip: 'Jump to latest message',
-                  onPressed: _scrollToEnd,
-                  backgroundColor: colors.surface,
-                  foregroundColor: colors.onSurface,
-                  child: const Icon(Icons.keyboard_arrow_down),
-                ),
+              }
+              final messageIndex = index - welcomeCount;
+              if (messageIndex == _state.messages.length) {
+                return _TypingIndicator(
+                  typing: _state.agentTyping!,
+                  colors: colors,
+                );
+              }
+              final message = _state.messages[messageIndex];
+              return Padding(
+                padding: EdgeInsets.only(bottom: colors.messageSpacing),
+                child: widget.messageBuilder?.call(context, message) ??
+                    _MessageBubble(
+                      message: message,
+                      widgetConfig: _state.widget,
+                      colors: colors,
+                      onRetry:
+                          message.status == WisperBotMessageStatus.failed &&
+                                  message.error?.retryable == true
+                              ? () => unawaited(
+                                    _controller
+                                        .retryMessage(message.localId)
+                                        .catchError((_) => message),
+                                  )
+                              : null,
+                      onRemove:
+                          message.status == WisperBotMessageStatus.failed ||
+                                  message.status ==
+                                      WisperBotMessageStatus.unconfirmed
+                              ? () => unawaited(
+                                    _controller.removeMessage(message.localId),
+                                  )
+                              : null,
+                      onRefresh:
+                          message.status == WisperBotMessageStatus.unconfirmed
+                              ? () => unawaited(
+                                    _controller.refresh().catchError((_) {}),
+                                  )
+                              : null,
+                    ),
+              );
+            },
+          ),
+          if (!_nearBottom)
+            PositionedDirectional(
+              end: 12,
+              bottom: 12,
+              child: FloatingActionButton.small(
+                heroTag: null,
+                tooltip: 'Jump to latest message',
+                onPressed: _scrollToEnd,
+                backgroundColor: colors.surface,
+                foregroundColor: colors.onSurface,
+                child: const Icon(Icons.keyboard_arrow_down),
               ),
-          ],
-        ),
-      );
+            ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildComposer(WisperBotResolvedTheme colors) {
     final custom = widget.composerBuilder;
     if (custom != null) return custom(context, _controller, _state);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        _HandoffAction(
-          state: _state,
-          colors: colors,
-          onPressed: () => unawaited(
-            _controller.requestHumanAgent().catchError((_) {}),
-          ),
+    return Material(
+      color: colors.surface,
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            _HandoffAction(
+              state: _state,
+              colors: colors,
+              onPressed: () => unawaited(
+                _controller.requestHumanAgent().catchError((_) {}),
+              ),
+            ),
+            _Composer(controller: _controller, colors: colors),
+            _BrandFooter(
+              companyName: _state.widget?.footerCompanyName,
+              colors: colors,
+            ),
+          ],
         ),
-        _Composer(controller: _controller, colors: colors),
-      ],
+      ),
     );
   }
 
@@ -301,10 +338,15 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
 }
 
 class _ChatHeader extends StatelessWidget {
-  const _ChatHeader({required this.state, required this.colors});
+  const _ChatHeader({
+    required this.state,
+    required this.colors,
+    required this.onClose,
+  });
 
   final WisperBotChatState state;
   final WisperBotResolvedTheme colors;
+  final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -314,42 +356,76 @@ class _ChatHeader extends StatelessWidget {
         : 'Chat with us';
     final subtitle = _subtitle(state);
     return Material(
-      color: colors.surface,
-      elevation: 1,
+      color: colors.primary,
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 8, 10),
           child: Row(
             children: <Widget>[
-              CircleAvatar(
-                backgroundColor: colors.primary,
+              _SupportAvatar(
+                avatarUrl: widgetConfig?.avatarUrl,
+                size: 36,
+                backgroundColor: colors.onPrimary.withValues(alpha: 0.18),
                 foregroundColor: colors.onPrimary,
-                child: const Icon(Icons.chat_bubble_outline),
+                borderColor: colors.onPrimary.withValues(alpha: 0.62),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 9),
               Expanded(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: colors.onPrimary,
+                            fontWeight: FontWeight.w700,
+                          ),
                     ),
-                    Text(
-                      subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
+                    const SizedBox(height: 2),
+                    Row(
+                      children: <Widget>[
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: state.supportAvailability ==
+                                    WisperBotSupportAvailability.unavailable
+                                ? colors.onPrimary.withValues(alpha: 0.45)
+                                : const Color(0xFF4ADE80),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
+                                  color:
+                                      colors.onPrimary.withValues(alpha: 0.92),
+                                ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
+              if (onClose != null)
+                IconButton(
+                  tooltip: 'Close chat',
+                  onPressed: onClose,
+                  color: colors.onPrimary,
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                ),
             ],
           ),
         ),
@@ -410,36 +486,158 @@ class _AvailabilityBanner extends StatelessWidget {
       );
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.state, required this.colors});
+class _WelcomeBubble extends StatelessWidget {
+  const _WelcomeBubble({
+    required this.body,
+    required this.widgetConfig,
+    required this.colors,
+  });
 
-  final WisperBotChatState state;
+  final String body;
+  final WisperBotWidgetConfig? widgetConfig;
   final WisperBotResolvedTheme colors;
 
   @override
-  Widget build(BuildContext context) => Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Icon(Icons.waving_hand_outlined,
-                    color: colors.primary, size: 36),
-                const SizedBox(height: 16),
-                Text(
-                  state.widget?.welcomeMessage.trim().isNotEmpty == true
-                      ? state.widget!.welcomeMessage
-                      : 'Hi! How can we help?',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium,
+  Widget build(BuildContext context) => Semantics(
+        label: 'Support welcome message. $body',
+        child: _BubbleLayout(
+          visitor: false,
+          widgetConfig: widgetConfig,
+          colors: colors,
+          bubbleKey: const ValueKey<String>('wisperbot-welcome-bubble'),
+          child: SelectableText(
+            body,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colors.onAgentBubble,
+                  height: 1.4,
                 ),
-              ],
-            ),
           ),
         ),
       );
+}
+
+class _BubbleLayout extends StatelessWidget {
+  const _BubbleLayout({
+    required this.visitor,
+    required this.widgetConfig,
+    required this.colors,
+    required this.child,
+    this.bubbleKey,
+  });
+
+  final bool visitor;
+  final WisperBotWidgetConfig? widgetConfig;
+  final WisperBotResolvedTheme colors;
+  final Widget child;
+  final Key? bubbleKey;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          final maximumWidth = math.min(constraints.maxWidth * 0.76, 520.0);
+          return Align(
+            alignment: visitor
+                ? AlignmentDirectional.centerEnd
+                : AlignmentDirectional.centerStart,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maximumWidth),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  if (!visitor) ...<Widget>[
+                    _SupportAvatar(
+                      avatarUrl: widgetConfig?.avatarUrl,
+                      size: 28,
+                      backgroundColor: colors.primary,
+                      foregroundColor: colors.onPrimary,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Flexible(
+                    child: DecoratedBox(
+                      key: bubbleKey,
+                      decoration: BoxDecoration(
+                        color:
+                            visitor ? colors.visitorBubble : colors.agentBubble,
+                        border:
+                            visitor ? null : Border.all(color: colors.outline),
+                        borderRadius: BorderRadiusDirectional.only(
+                          topStart: Radius.circular(colors.borderRadius),
+                          topEnd: Radius.circular(colors.borderRadius),
+                          bottomStart: Radius.circular(
+                            visitor ? colors.borderRadius : 5,
+                          ),
+                          bottomEnd: Radius.circular(
+                            visitor ? 5 : colors.borderRadius,
+                          ),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 13,
+                          vertical: 9,
+                        ),
+                        child: child,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+}
+
+class _SupportAvatar extends StatelessWidget {
+  const _SupportAvatar({
+    required this.avatarUrl,
+    required this.size,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    this.borderColor,
+  });
+
+  final Uri? avatarUrl;
+  final double size;
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final Color? borderColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = Center(
+      child: Icon(
+        Icons.support_agent_rounded,
+        size: size * 0.56,
+        color: foregroundColor,
+      ),
+    );
+    return Semantics(
+      label: 'Support avatar',
+      image: true,
+      child: Container(
+        width: size,
+        height: size,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          shape: BoxShape.circle,
+          border: borderColor == null
+              ? null
+              : Border.all(color: borderColor!, width: 2),
+        ),
+        child: avatarUrl == null
+            ? fallback
+            : Image.network(
+                avatarUrl.toString(),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => fallback,
+              ),
+      ),
+    );
+  }
 }
 
 class _ErrorState extends StatelessWidget {
@@ -489,6 +687,7 @@ class _ErrorState extends StatelessWidget {
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
+    required this.widgetConfig,
     required this.colors,
     required this.onRetry,
     required this.onRemove,
@@ -496,6 +695,7 @@ class _MessageBubble extends StatelessWidget {
   });
 
   final WisperBotMessage message;
+  final WisperBotWidgetConfig? widgetConfig;
   final WisperBotResolvedTheme colors;
   final VoidCallback? onRetry;
   final VoidCallback? onRemove;
@@ -508,99 +708,78 @@ class _MessageBubble extends StatelessWidget {
     return Semantics(
       label:
           '${visitor ? 'Your' : 'Support'} message. ${message.body}${visitor ? '. $status' : ''}',
-      child: Align(
-        alignment: visitor
-            ? AlignmentDirectional.centerEnd
-            : AlignmentDirectional.centerStart,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: FractionallySizedBox(
-            widthFactor: 0.76,
-            alignment: visitor
-                ? AlignmentDirectional.centerEnd
-                : AlignmentDirectional.centerStart,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: visitor ? colors.visitorBubble : colors.agentBubble,
-                borderRadius: BorderRadius.circular(colors.borderRadius),
-              ),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    if (message.senderName?.trim().isNotEmpty == true &&
-                        !visitor)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text(
-                          message.senderName!,
-                          style:
-                              Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: colors.onAgentBubble,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                        ),
-                      ),
-                    _MessageContent(message: message, colors: colors),
-                    if (visitor) ...<Widget>[
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          Icon(
-                            _statusIcon(message.status),
-                            size: 13,
+      child: _BubbleLayout(
+        visitor: visitor,
+        widgetConfig: widgetConfig,
+        colors: colors,
+        bubbleKey: ValueKey<String>(
+          'wisperbot-message-bubble-${message.localId}',
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            _MessageContent(message: message, colors: colors),
+            if (visitor) ...<Widget>[
+              const SizedBox(height: 4),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Icon(
+                    _statusIcon(message.status),
+                    size: 13,
+                    color: colors.onVisitorBubble.withValues(alpha: 0.72),
+                  ),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      status,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
                             color:
                                 colors.onVisitorBubble.withValues(alpha: 0.72),
                           ),
-                          const SizedBox(width: 4),
-                          Flexible(
-                            child: Text(
-                              status,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
-                                  ?.copyWith(
-                                    color: colors.onVisitorBubble
-                                        .withValues(alpha: 0.72),
-                                  ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    if (onRetry != null ||
-                        onRefresh != null ||
-                        onRemove != null)
-                      Wrap(
-                        spacing: 4,
-                        children: <Widget>[
-                          if (onRetry != null)
-                            TextButton(
-                                onPressed: onRetry, child: const Text('Retry')),
-                          if (onRefresh != null)
-                            TextButton(
-                              onPressed: onRefresh,
-                              child: const Text('Refresh status'),
-                            ),
-                          if (onRemove != null)
-                            TextButton(
-                              onPressed: onRemove,
-                              child: const Text('Remove'),
-                            ),
-                        ],
-                      ),
-                  ],
-                ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ),
+            ],
+            if (onRetry != null || onRefresh != null || onRemove != null)
+              Wrap(
+                spacing: 4,
+                children: <Widget>[
+                  if (onRetry != null)
+                    TextButton(
+                      style: _messageActionStyle(visitor, colors),
+                      onPressed: onRetry,
+                      child: const Text('Retry'),
+                    ),
+                  if (onRefresh != null)
+                    TextButton(
+                      style: _messageActionStyle(visitor, colors),
+                      onPressed: onRefresh,
+                      child: const Text('Refresh status'),
+                    ),
+                  if (onRemove != null)
+                    TextButton(
+                      style: _messageActionStyle(visitor, colors),
+                      onPressed: onRemove,
+                      child: const Text('Remove'),
+                    ),
+                ],
+              ),
+          ],
         ),
       ),
     );
   }
+
+  ButtonStyle _messageActionStyle(
+    bool visitor,
+    WisperBotResolvedTheme colors,
+  ) =>
+      TextButton.styleFrom(
+        foregroundColor:
+            visitor ? colors.onVisitorBubble : colors.onAgentBubble,
+      );
 
   static String _statusLabel(WisperBotMessageStatus status) => switch (status) {
         WisperBotMessageStatus.pending => 'Sending',
@@ -666,7 +845,7 @@ class _MessageContent extends StatelessWidget {
           style: Theme.of(context)
               .textTheme
               .bodyMedium
-              ?.copyWith(color: textColor),
+              ?.copyWith(color: textColor, height: 1.4),
         ),
       ],
     );
@@ -749,6 +928,47 @@ class _HandoffAction extends StatelessWidget {
   }
 }
 
+class _BrandFooter extends StatelessWidget {
+  const _BrandFooter({required this.companyName, required this.colors});
+
+  final String? companyName;
+  final WisperBotResolvedTheme colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final configured = companyName?.trim();
+    final brand = configured?.isNotEmpty == true ? configured! : 'WisperBot';
+    final baseStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: colors.onSurfaceMuted.withValues(alpha: 0.7),
+          fontSize: 11,
+        );
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(top: BorderSide(color: colors.outline)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Text.rich(
+        TextSpan(
+          text: 'Powered by ',
+          children: <InlineSpan>[
+            TextSpan(
+              text: brand,
+              style: baseStyle?.copyWith(
+                color: colors.onSurfaceMuted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        textAlign: TextAlign.center,
+        style: baseStyle,
+      ),
+    );
+  }
+}
+
 class _Composer extends StatefulWidget {
   const _Composer({required this.controller, required this.colors});
 
@@ -765,61 +985,69 @@ class _ComposerState extends State<_Composer> {
   bool _hasText = false;
 
   @override
-  Widget build(BuildContext context) => Material(
-        color: widget.colors.surface,
-        elevation: 4,
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: <Widget>[
-                Expanded(
-                  child: TextField(
-                    controller: _textController,
-                    focusNode: _focusNode,
-                    minLines: 1,
-                    maxLines: 5,
-                    maxLength: 4000,
-                    buildCounter: (_,
-                            {required currentLength,
-                            required isFocused,
-                            maxLength}) =>
-                        null,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      hintText: 'Write a message',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
+  Widget build(BuildContext context) => DecoratedBox(
+        decoration: BoxDecoration(
+          color: widget.colors.surface,
+          border: Border(top: BorderSide(color: widget.colors.outline)),
+        ),
+        child: Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(12, 9, 9, 9),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              Expanded(
+                child: TextField(
+                  controller: _textController,
+                  focusNode: _focusNode,
+                  minLines: 1,
+                  maxLines: 5,
+                  maxLength: 4000,
+                  buildCounter: (_,
+                          {required currentLength,
+                          required isFocused,
+                          maxLength}) =>
+                      null,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    hintText: 'Type your message…',
+                    hintStyle: TextStyle(color: widget.colors.onSurfaceMuted),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 13,
                     ),
-                    onChanged: (value) {
-                      final hasText = value.trim().isNotEmpty;
-                      if (hasText != _hasText) {
-                        setState(() => _hasText = hasText);
-                      }
-                      unawaited(widget.controller.setTyping(hasText));
-                    },
-                    onSubmitted: (_) => _send(),
                   ),
+                  onChanged: (value) {
+                    final hasText = value.trim().isNotEmpty;
+                    if (hasText != _hasText) {
+                      setState(() => _hasText = hasText);
+                    }
+                    unawaited(widget.controller.setTyping(hasText));
+                  },
+                  onSubmitted: (_) => _send(),
                 ),
-                const SizedBox(width: 4),
-                Semantics(
-                  button: true,
-                  label: 'Send message',
-                  child: IconButton.filled(
-                    tooltip: 'Send message',
-                    onPressed: _hasText ? _send : null,
-                    icon: const Icon(Icons.send),
+              ),
+              const SizedBox(width: 6),
+              Semantics(
+                button: true,
+                label: 'Send message',
+                child: IconButton.filled(
+                  style: IconButton.styleFrom(
+                    minimumSize: const Size.square(48),
+                    backgroundColor: widget.colors.primary,
+                    foregroundColor: widget.colors.onPrimary,
+                    disabledBackgroundColor: widget.colors.surfaceMuted,
+                    disabledForegroundColor: widget.colors.onSurfaceMuted,
                   ),
+                  tooltip: 'Send message',
+                  onPressed: _hasText ? _send : null,
+                  icon: const Icon(Icons.send_rounded, size: 21),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       );

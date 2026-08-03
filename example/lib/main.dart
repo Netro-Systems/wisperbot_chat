@@ -1,29 +1,42 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 
-void main() => runApp(const ExampleApp());
-
-const config = WisperBotConfig(
-  widgetKey: 'CtgT1RAdDZNngub78prZLbmTb3NPPoxS7P',
-  user: WisperBotUser(name: "GG"),
-);
+Future<void> main() async {
+  await dotenv.load(fileName: '.env');
+  final config = WisperBotConfig(
+      widgetKey: dotenv.get('WISPERBOT_WIDGET_KEY').trim(),
+      apiBaseUrl: dotenv
+          .get(
+            'WISPERBOT_API_BASE_URL',
+            fallback: 'https://wisperbot.com',
+          )
+          .trim(),
+      user: const WisperBotUser(name: 'GG'),);
+  runApp(ExampleApp(config: config));
+}
 
 class ExampleApp extends StatelessWidget {
-  const ExampleApp({super.key});
+  const ExampleApp({super.key, required this.config});
+
+  final WisperBotConfig config;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
+        debugShowCheckedModeBanner: false,
         title: 'WisperBot Chat SDK',
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF6258F9)),
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFFF762E)),
           useMaterial3: true,
         ),
-        home: const ExampleHome(),
+        home: ExampleHome(config: config),
       );
 }
 
 class ExampleHome extends StatelessWidget {
-  const ExampleHome({super.key});
+  const ExampleHome({super.key, required this.config});
+
+  final WisperBotConfig config;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -32,8 +45,8 @@ class ExampleHome extends StatelessWidget {
           padding: const EdgeInsets.all(24),
           children: <Widget>[
             const Text(
-              'Replace YOUR_WIDGET_KEY with a controlled staging widget key, '
-              'then try any integration style.',
+              'The widget key is loaded from .env. Try any integration style '
+              'below.',
             ),
             const SizedBox(height: 24),
             FilledButton(
@@ -62,25 +75,27 @@ class ExampleHome extends StatelessWidget {
             OutlinedButton(
               onPressed: () => Navigator.of(context).push<void>(
                 MaterialPageRoute<void>(
-                  builder: (_) => const EmbeddedExample(),
+                  builder: (_) => EmbeddedExample(config: config),
                 ),
               ),
               child: const Text('Open embedded view'),
             ),
           ],
         ),
-        floatingActionButton: const WisperBotChatLauncher(config: config),
+        floatingActionButton: WisperBotChatLauncher(config: config),
       );
 }
 
 class EmbeddedExample extends StatelessWidget {
-  const EmbeddedExample({super.key});
+  const EmbeddedExample({super.key, required this.config});
+
+  final WisperBotConfig config;
 
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('Embedded chat')),
-        body: const Padding(
-          padding: EdgeInsets.all(16),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
           child: Card(
             clipBehavior: Clip.antiAlias,
             child: WisperBotChatView(config: config),

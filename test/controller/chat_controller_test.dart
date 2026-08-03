@@ -68,6 +68,37 @@ void main() {
     await client.close();
   });
 
+  test('uses the web-widget primary fallback for missing or invalid colors',
+      () async {
+    var calls = 0;
+    final httpClient = MockClient((request) async {
+      calls++;
+      final response = sessionResponse();
+      final widget = response['config']! as Map<String, Object?>;
+      if (calls == 1) {
+        widget.remove('primary_color');
+      } else {
+        widget['primary_color'] = 'not-a-color';
+      }
+      return http.Response(jsonEncode(response), 200);
+    });
+
+    for (var index = 0; index < 2; index++) {
+      final client = WisperBotClient(
+        config: config,
+        httpClient: httpClient,
+        sessionStore: MemorySessionStore(),
+      );
+      final controller = WisperBotChatController(client: client);
+
+      await controller.initialize();
+
+      expect(controller.state.widget?.primaryColorHex, '#ff762e');
+      await controller.dispose();
+      await client.close();
+    }
+  });
+
   test('restores only with the securely stored visitor id and token', () async {
     final store = MemorySessionStore();
     final namespace = sessionNamespace(config: config, user: null);
@@ -209,6 +240,101 @@ void main() {
       controller.state.messages.last.sentBy,
       WisperBotSenderKind.visitor,
     );
+
+    await controller.dispose();
+    await client.close();
+  });
+
+  test('poll defers a visitor echo while its send is still in flight',
+      () async {
+    final sendStarted = Completer<void>();
+    final releaseSend = Completer<void>();
+    final httpClient = MockClient((request) async {
+      if (request.url.path.endsWith('/session')) {
+        return http.Response(jsonEncode(sessionResponse()), 200);
+      }
+      if (request.url.path.endsWith('/typing')) {
+        return http.Response('{"ok":true}', 200);
+      }
+      if (request.method == 'POST' && request.url.path.endsWith('/messages')) {
+        sendStarted.complete();
+        await releaseSend.future;
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'message': message(
+              id: 12,
+              role: 'visitor',
+              body: 'My message',
+              sentBy: 'human',
+            ),
+            'handoff': <String, Object?>{
+              'enabled': true,
+              'eligible': true,
+              'status': 'bot',
+            },
+          }),
+          200,
+        );
+      }
+      return http.Response(
+        jsonEncode(
+          pollResponse(messages: <Map<String, Object?>>[
+            message(id: 11, body: 'Reply while sending'),
+            message(
+              id: 12,
+              role: 'visitor',
+              body: 'My message',
+              sentBy: 'human',
+            ),
+            message(
+              id: 13,
+              role: 'visitor',
+              body: 'Another device message',
+              sentBy: 'human',
+            ),
+          ]),
+        ),
+        200,
+      );
+    });
+    final client = WisperBotClient(
+      config: config,
+      httpClient: httpClient,
+      sessionStore: MemorySessionStore(),
+    );
+    final controller = WisperBotChatController(client: client);
+
+    await controller.initialize();
+    final send = controller.sendText('My message');
+    await sendStarted.future;
+    await controller.refresh();
+    expect(controller.state.messages, hasLength(2));
+    expect(
+      controller.state.messages
+          .where((message) => message.body == 'My message'),
+      hasLength(1),
+    );
+    expect(
+      controller.state.messages.last.status,
+      WisperBotMessageStatus.pending,
+    );
+    expect(
+      controller.state.messages.first.body,
+      'Reply while sending',
+    );
+
+    releaseSend.complete();
+    final sent = await send;
+
+    expect(controller.state.messages, hasLength(3));
+    expect(controller.state.messages[1].localId, sent.localId);
+    expect(controller.state.messages[1].serverId, 12);
+    expect(
+      controller.state.messages[1].status,
+      WisperBotMessageStatus.sent,
+    );
+    expect(controller.state.messages.last.body, 'Another device message');
+    expect(controller.state.pendingCount, 0);
 
     await controller.dispose();
     await client.close();

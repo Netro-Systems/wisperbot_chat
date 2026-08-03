@@ -88,7 +88,7 @@ abstract final class WisperBotChat {
             isScrollControlled: true,
             useSafeArea: true,
             backgroundColor: Colors.transparent,
-            builder: (context) => FractionallySizedBox(
+            builder: (sheetContext) => FractionallySizedBox(
               heightFactor: 0.92,
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(
@@ -98,6 +98,7 @@ abstract final class WisperBotChat {
                   child: WisperBotChatView(
                     config: config,
                     controller: controller,
+                    onClose: () => Navigator.of(sheetContext).pop(),
                   ),
                 ),
               ),
@@ -115,15 +116,16 @@ abstract final class WisperBotChat {
               clipBehavior: Clip.antiAlias,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(
-                  maxWidth: 680,
-                  maxHeight: 760,
+                  maxWidth: 420,
+                  maxHeight: 720,
                 ),
                 child: SizedBox(
-                  width: 680,
+                  width: 420,
                   height: MediaQuery.sizeOf(dialogContext).height * 0.82,
                   child: WisperBotChatView(
                     config: config,
                     controller: controller,
+                    onClose: () => Navigator.of(dialogContext).pop(),
                   ),
                 ),
               ),

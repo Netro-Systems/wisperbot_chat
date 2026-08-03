@@ -255,6 +255,8 @@ class WisperBotChatController with WidgetsBindingObserver {
   Future<void>? _initializing;
   Future<void>? _pollInFlight;
   Future<void> _sendQueue = Future<void>.value();
+  final Map<int, WisperBotMessage> _deferredVisitorPollMessages =
+      <int, WisperBotMessage>{};
   Timer? _pollTimer;
   Timer? _typingIdleTimer;
   DateTime? _lastTypingSentAt;
@@ -268,6 +270,7 @@ class WisperBotChatController with WidgetsBindingObserver {
   bool _observingLifecycle = false;
   bool _disposed = false;
   bool _recoveryAttempted = false;
+  String? _activeSendLocalId;
 
   WisperBotChatState get state => _state;
 
@@ -400,7 +403,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     _pollTimer?.cancel();
     try {
       final result = await _client._poll(_pollCursor);
-      final messages = _mergeMessages(
+      final messages = _mergePollMessages(
         _state.messages,
         result.messages,
         emitReceivedEvents: true,
@@ -569,6 +572,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     Future<WidgetSendResult> Function() operation,
   ) async {
     final started = DateTime.now();
+    _activeSendLocalId = pending.localId;
     try {
       final result = await operation();
       final confirmed = result.message.copyWith(
@@ -606,6 +610,11 @@ class WisperBotChatController with WidgetsBindingObserver {
         unawaited(_recoverAfterSend());
       }
       throw exception;
+    } finally {
+      if (_activeSendLocalId == pending.localId) {
+        _activeSendLocalId = null;
+        _flushDeferredVisitorPollMessages();
+      }
     }
   }
 
@@ -725,6 +734,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     _cancelPoll();
     final changed = await _client._switchUser(user);
     if (!changed) return;
+    _deferredVisitorPollMessages.clear();
     _pollCursor = 0;
     _recoveryAttempted = false;
     _emit(
@@ -740,6 +750,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     _ensureNotDisposed();
     _cancelPoll();
     await _client._clearSession();
+    _deferredVisitorPollMessages.clear();
     _pollCursor = 0;
     _recoveryAttempted = false;
     _addEvent(
@@ -778,6 +789,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     _disposed = true;
     _cancelPoll();
     _typingIdleTimer?.cancel();
+    _deferredVisitorPollMessages.clear();
     if (_observingLifecycle) {
       WidgetsBinding.instance.removeObserver(this);
       _observingLifecycle = false;
@@ -905,6 +917,56 @@ class WisperBotChatController with WidgetsBindingObserver {
     return messages;
   }
 
+  List<WisperBotMessage> _mergePollMessages(
+    List<WisperBotMessage> existing,
+    List<WisperBotMessage> incoming, {
+    required bool emitReceivedEvents,
+  }) {
+    if (_activeSendLocalId == null) {
+      return _mergeMessages(
+        existing,
+        incoming,
+        emitReceivedEvents: emitReceivedEvents,
+      );
+    }
+
+    final knownServerIds =
+        existing.map((message) => message.serverId).whereType<int>().toSet();
+    final immediate = <WisperBotMessage>[];
+    for (final message in incoming) {
+      final serverId = message.serverId;
+      if (message.role == WisperBotMessageRole.visitor &&
+          serverId != null &&
+          !knownServerIds.contains(serverId)) {
+        _deferredVisitorPollMessages[serverId] = message;
+      } else {
+        immediate.add(message);
+      }
+    }
+    return _mergeMessages(
+      existing,
+      immediate,
+      emitReceivedEvents: emitReceivedEvents,
+    );
+  }
+
+  void _flushDeferredVisitorPollMessages() {
+    if (_deferredVisitorPollMessages.isEmpty) return;
+    final deferred = _deferredVisitorPollMessages.values.toList();
+    _deferredVisitorPollMessages.clear();
+    final messages = _mergeMessages(
+      _state.messages,
+      deferred,
+      emitReceivedEvents: false,
+    );
+    _emit(
+      _state.copyWith(
+        messages: messages,
+        pendingCount: _pendingCount(messages),
+      ),
+    );
+  }
+
   int _greatestServerId(
     List<WisperBotMessage> messages, {
     required int fallback,
@@ -945,13 +1007,24 @@ class WisperBotChatController with WidgetsBindingObserver {
   }
 
   void _replaceLocal(String localId, WisperBotMessage replacement) {
-    final messages = <WisperBotMessage>[..._state.messages];
-    final index = messages.indexWhere((message) => message.localId == localId);
-    if (index == -1) {
-      messages.add(replacement);
-    } else {
-      messages[index] = replacement;
+    final messages = <WisperBotMessage>[];
+    final replacementServerId = replacement.serverId;
+    var replaced = false;
+    for (final message in _state.messages) {
+      if (message.localId == localId) {
+        if (!replaced) {
+          messages.add(replacement);
+          replaced = true;
+        }
+        continue;
+      }
+      if (replacementServerId != null &&
+          message.serverId == replacementServerId) {
+        continue;
+      }
+      messages.add(message);
     }
+    if (!replaced) messages.add(replacement);
     messages.sort(_compareMessages);
     _emit(
       _state.copyWith(

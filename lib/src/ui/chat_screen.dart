@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../application/chat_runtime.dart';
 import '../domain/config.dart';
-import '../domain/models.dart';
 import 'chat_view.dart';
 
 class WisperBotChatScreen extends StatefulWidget {
@@ -28,8 +27,6 @@ class WisperBotChatScreen extends StatefulWidget {
 class _WisperBotChatScreenState extends State<WisperBotChatScreen> {
   late WisperBotChatController _controller;
   WisperBotClient? _ownedClient;
-  StreamSubscription<WisperBotChatState>? _subscription;
-  late WisperBotChatState _state;
   bool _closed = false;
 
   @override
@@ -43,30 +40,25 @@ class _WisperBotChatScreenState extends State<WisperBotChatScreen> {
     } else {
       _controller = supplied;
     }
-    _state = _controller.state;
-    _subscription = _controller.states.listen((state) {
-      if (mounted) setState(() => _state = state);
-    });
     _controller.handlePresentationOpened();
-    unawaited(_controller.initialize().catchError((_) {}));
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: widget.appBar ??
-            AppBar(
-              title: Text(
-                _state.widget?.title.trim().isNotEmpty == true
-                    ? _state.widget!.title
-                    : 'Chat with us',
-              ),
-            ),
-        body: WisperBotChatView(
-          config: widget.config,
-          controller: _controller,
-          showHeader: false,
-        ),
-      );
+  Widget build(BuildContext context) {
+    final usesBrandedHeader = widget.appBar == null;
+    final navigator = Navigator.of(context);
+    return Scaffold(
+      appBar: widget.appBar,
+      body: WisperBotChatView(
+        config: widget.config,
+        controller: _controller,
+        showHeader: usesBrandedHeader,
+        onClose: usesBrandedHeader && navigator.canPop()
+            ? () => navigator.maybePop()
+            : null,
+      ),
+    );
+  }
 
   void _notifyClosed() {
     if (_closed) return;
@@ -79,7 +71,6 @@ class _WisperBotChatScreenState extends State<WisperBotChatScreen> {
   @override
   void dispose() {
     _notifyClosed();
-    unawaited(_subscription?.cancel());
     final client = _ownedClient;
     if (client != null) {
       unawaited(_controller.dispose().then((_) => client.close()));

@@ -81,17 +81,37 @@ void main() {
     await tester.pump();
 
     expect(find.text('Welcome to the test chat'), findsOneWidget);
+    expect(find.text('Powered by WisperBot'), findsOneWidget);
+    expect(find.bySemanticsLabel('Support avatar'), findsWidgets);
     expect(find.bySemanticsLabel('Send message'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'Write a message'), findsOneWidget);
+    expect(
+      find.widgetWithText(TextField, 'Type your message…'),
+      findsOneWidget,
+    );
+    expect(runtime.controller.state.messages, isEmpty);
+
+    final sendButtonSize = tester.getSize(
+      find.widgetWithIcon(IconButton, Icons.send_rounded),
+    );
+    expect(sendButtonSize.width, greaterThanOrEqualTo(48));
+    expect(sendButtonSize.height, greaterThanOrEqualTo(48));
 
     await tester.enterText(find.byType(TextField), 'Hello SDK');
     await tester.pump();
-    await tester.tap(find.byIcon(Icons.send));
+    await tester.tap(find.byIcon(Icons.send_rounded));
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(sendCalls, 1);
     expect(find.text('Hello SDK'), findsOneWidget);
+    expect(find.text('Welcome to the test chat'), findsOneWidget);
     expect(find.text('Sent'), findsOneWidget);
+    final sent = runtime.controller.state.messages.single;
+    final bubbleSize = tester.getSize(
+      find.byKey(
+        ValueKey<String>('wisperbot-message-bubble-${sent.localId}'),
+      ),
+    );
+    expect(bubbleSize.width, lessThan(300));
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();
@@ -190,6 +210,115 @@ void main() {
 
     expect(find.text('Test support'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets('branded header honors theme override and close action',
+      (tester) async {
+    const themedConfig = WisperBotConfig(
+      widgetKey: 'test-widget',
+      apiBaseUrl: 'https://chat.example.com',
+      theme: WisperBotThemeData(primaryColor: Color(0xFF087F5B)),
+      polling: WisperBotPollingConfig(
+        visibleInterval: Duration(minutes: 1),
+        idleInterval: Duration(minutes: 1),
+        failureMaxInterval: Duration(minutes: 1),
+      ),
+    );
+    final runtime = _runtime(
+      themedConfig,
+      MockClient(
+        (_) async => http.Response(jsonEncode(sessionResponse()), 200),
+      ),
+    );
+    var closeCalls = 0;
+
+    await tester.pumpWidget(_app(
+      WisperBotChatView(
+        config: themedConfig,
+        controller: runtime.controller,
+        onClose: () => closeCalls++,
+      ),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    final materials = tester.widgetList<Material>(find.byType(Material));
+    expect(
+      materials.any((material) => material.color == const Color(0xFF087F5B)),
+      isTrue,
+    );
+    expect(find.text('Test support'), findsOneWidget);
+    expect(find.byTooltip('Close chat'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Close chat'));
+    expect(closeCalls, 1);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets('custom full-screen app bar remains host-owned', (tester) async {
+    final runtime = _runtime(
+      config,
+      MockClient(
+        (_) async => http.Response(jsonEncode(sessionResponse()), 200),
+      ),
+    );
+
+    await tester.pumpWidget(_app(
+      WisperBotChatScreen(
+        config: config,
+        controller: runtime.controller,
+        appBar: AppBar(title: const Text('Host support title')),
+      ),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Host support title'), findsOneWidget);
+    expect(find.text('Test support'), findsNothing);
+    expect(find.byType(TextField), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets('default layout fits a small phone at 200 percent text scale',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final runtime = _runtime(
+      config,
+      MockClient(
+        (_) async => http.Response(jsonEncode(sessionResponse()), 200),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: const TextScaler.linear(2),
+          ),
+          child: child!,
+        ),
+        home: WisperBotChatView(
+          config: config,
+          controller: runtime.controller,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Test support'), findsOneWidget);
+    expect(find.text('Powered by WisperBot'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();

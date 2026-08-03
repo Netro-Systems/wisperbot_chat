@@ -16,6 +16,7 @@ class WisperBotResolvedTheme {
     required this.onAgentBubble,
     required this.error,
     required this.onSurface,
+    required this.onSurfaceMuted,
     required this.outline,
     required this.borderRadius,
     required this.messageSpacing,
@@ -39,12 +40,15 @@ class WisperBotResolvedTheme {
           );
     final primary =
         override?.primaryColor ?? serverPrimary ?? colorScheme.primary;
-    final background =
-        override?.backgroundColor ?? colorScheme.surfaceContainerLowest;
+    final isDark = colorScheme.brightness == Brightness.dark;
     final surface = override?.surfaceColor ?? colorScheme.surface;
+    final background = override?.backgroundColor ??
+        Color.alphaBlend(
+          colorScheme.onSurface.withValues(alpha: isDark ? 0.05 : 0.025),
+          surface,
+        );
     final visitorBubble = override?.visitorBubbleColor ?? primary;
-    final agentBubble =
-        override?.agentBubbleColor ?? colorScheme.surfaceContainerHigh;
+    final agentBubble = override?.agentBubbleColor ?? surface;
     return WisperBotResolvedTheme(
       primary: primary,
       onPrimary: _contrasting(primary),
@@ -55,11 +59,13 @@ class WisperBotResolvedTheme {
       onVisitorBubble:
           override?.onVisitorBubbleColor ?? _contrasting(visitorBubble),
       agentBubble: agentBubble,
-      onAgentBubble:
-          override?.onAgentBubbleColor ?? colorScheme.onSurfaceVariant,
+      onAgentBubble: override?.onAgentBubbleColor ?? colorScheme.onSurface,
       error: override?.errorColor ?? colorScheme.error,
       onSurface: colorScheme.onSurface,
-      outline: colorScheme.outlineVariant,
+      onSurfaceMuted: isDark
+          ? colorScheme.onSurface.withValues(alpha: 0.68)
+          : const Color(0xFF687386),
+      outline: isDark ? colorScheme.outlineVariant : const Color(0xFFECEEF2),
       borderRadius: override?.borderRadius?.clamp(4, 32).toDouble() ?? 16,
       messageSpacing: override?.messageSpacing?.clamp(2, 24).toDouble() ?? 8,
       launcherSize: override?.launcherSize?.clamp(48, 80).toDouble() ?? 56,
@@ -77,6 +83,7 @@ class WisperBotResolvedTheme {
   final Color onAgentBubble;
   final Color error;
   final Color onSurface;
+  final Color onSurfaceMuted;
   final Color outline;
   final double borderRadius;
   final double messageSpacing;

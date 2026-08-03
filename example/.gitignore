@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local public client configuration. Never place server secrets here.
+.env
+.env.*
+!.env.example
