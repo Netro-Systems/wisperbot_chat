@@ -6,19 +6,19 @@ This repository is the Flutter package `wisperbot_chat`. It provides a ready-mad
 
 Before changing code, read these files in order:
 
-1. `PROJECT_GOAL.md`
-2. `ARCHITECTURE.md`
-3. `DESIGN_SYSTEM.md`
-4. `API.md`
+1. `docs/PROJECT_GOAL.md`
+2. `docs/ARCHITECTURE.md`
+3. `docs/DESIGN_SYSTEM.md`
+4. `docs/API.md`
 
 When documents disagree, use this precedence:
 
 1. The user's current request
 2. `AGENTS.md`
-3. `API.md`
-4. `ARCHITECTURE.md`
-5. `DESIGN_SYSTEM.md`
-6. `PROJECT_GOAL.md`
+3. `docs/API.md`
+4. `docs/ARCHITECTURE.md`
+5. `docs/DESIGN_SYSTEM.md`
+6. `docs/PROJECT_GOAL.md`
 
 Update the relevant document whenever an implementation decision changes a documented public contract.
 
@@ -44,11 +44,18 @@ The SDK serves the customer/visitor side of chat. It is not the WisperBot agent 
 - Add native Kotlin/Swift only when maintained Flutter packages cannot safely provide a capability such as attestation or specialized notification hooks.
 - Keep platform code behind interfaces so the package can become federated later without breaking its Dart API.
 
-Recommended creation command:
+Create the core as a package. Platform folders belong to the example app unless
+the SDK later becomes a plugin:
 
 ```bash
-flutter create --template=package --platforms=android,ios,web,macos,windows,linux wisperbot_chat
+flutter create --template=package wisperbot_chat
+flutter create --template=app --platforms=android,ios,web,macos,windows,linux wisperbot_chat/example
 ```
+
+The Flutter CLI does not accept `--platforms` with the `package` template.
+If an application scaffold is present, convert it before SDK implementation:
+the core entry point is `lib/wisperbot_chat.dart`, while runnable application
+code and platform folders belong under `example/`.
 
 ## Non-negotiable engineering rules
 
@@ -63,6 +70,11 @@ flutter create --template=package --platforms=android,ios,web,macos,windows,linu
 - Stop polling when no listener needs updates or the app is backgrounded. Resume and reconcile when active.
 - Deduplicate messages by server message ID.
 - Preserve message order and prevent overlapping poll requests.
+- Advance the receive cursor only from session/poll batches, never from a send
+  response; otherwise an unseen reply with a lower server ID can be skipped.
+- Treat a send whose outcome is ambiguous as unconfirmed. Do not automatically
+  retry it or present it as definitively failed until backend idempotency exists.
+- Never spoof browser `Origin` or `Referer` headers from a native application.
 - Treat server configuration as the default and local theme overrides as presentation only.
 - Do not force BLoC, Riverpod, Provider, or another host state-management package.
 - Keep transport injectable and independently testable.
@@ -79,6 +91,9 @@ Expected initial dependencies:
 - `meta` only if it materially improves the API
 
 Media picker, recorder, audio player, push, and deep-link dependencies belong in later milestones or optional adapters. Do not force heavy features into the core package.
+Credential storage and message-body caching are separate concerns. Do not put a
+conversation-history cache in Keychain/Keystore-backed key-value storage; keep
+messages in memory unless an explicit encrypted cache adapter is configured.
 
 ## Architecture boundaries
 
@@ -113,6 +128,7 @@ The controller exposes immutable state with these phases:
 
 ```text
 idle -> initializing -> ready
+                  \-> awaitingPreChat -> initializing
                   \-> failure
 ready -> reconnecting -> ready
 ready -> expired -> initializing
@@ -124,11 +140,12 @@ State includes at minimum:
 - Session phase
 - Ordered messages
 - Connection/polling status
-- Online status
+- Support availability/working-hours status, separate from network connection
 - Visitor and agent typing
 - Handoff state
 - Unread count when supported
 - Pending sends/uploads
+- Required pre-chat state when supported
 - Recoverable error
 
 Do not represent expected UI states solely with exceptions.
@@ -149,14 +166,19 @@ Every behavior change needs proportionate tests. Minimum groups:
 
 - JSON parsing and unknown fields
 - New anonymous session and valid restoration
+- Required pre-chat bootstrap and submission
 - Expired-token recovery
 - Identity switching and logout reset
 - Send/server-echo reconciliation
+- Poll cursor gaps when a send response has a newer ID than an unseen reply
+- Ambiguous send outcomes without automatic retry
+- Ambiguous sends followed by similar/identical poll echoes without heuristic merge
 - Message deduplication and ordering
 - Poll start, stop, pause, resume, and non-overlap
 - Typing throttling and expiry
 - Handoff eligibility and request
 - Secure storage isolation
+- Native domain-policy rejection and required pre-chat configuration handling
 - Controller disposal and timer cleanup
 - Full-screen, embedded, launcher, loading, empty, and error widget tests
 - Accessibility semantics for composer, launcher, attachments, and unread badge
@@ -194,4 +216,3 @@ A change is done when:
 - Formatting, analysis, and tests pass.
 - No secrets or private user data are logged or committed.
 - The example builds and demonstrates the affected feature.
-
