@@ -1,6 +1,9 @@
 # WisperBot Chat SDK example
 
 This app demonstrates the full-screen facade, floating launcher, embedded view, bottom sheet, and dialog integrations.
+It sets `useApiColors: false` to demonstrate the built-in WisperBot orange
+palette. Change it to `true` in `lib/main.dart` to use the widget's API color;
+explicit `WisperBotThemeData` colors override either mode.
 
 1. Copy `.env.example` to `.env`.
 2. Put your public widget key in `WISPERBOT_WIDGET_KEY`. Change `WISPERBOT_API_BASE_URL` only for staging or a self-hosted API.

@@ -71,6 +71,7 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
       hostTheme: Theme.of(context),
       server: _state.widget,
       override: widget.config.theme,
+      useApiColors: widget.config.useApiColors,
     );
     final unread = _state.unreadCount;
     final label = unread != null && unread > 0

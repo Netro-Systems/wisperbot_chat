@@ -15,3 +15,4 @@
 - Fixed duplicate outgoing bubbles by deferring visitor poll echoes while the matching send response is still in flight, then reconciling by exact server ID.
 - Moved the example widget key and API base URL into a local `.env` file and disabled the example app's debug banner.
 - Aligned the default Flutter chat UI with the WisperBot web widget: branded header, compact tailed bubbles, persistent welcome bubble, muted canvas, borderless composer, circular send action, and powered-by footer.
+- Added `WisperBotConfig.useApiColors`: API colors remain enabled by default, disabling them selects the built-in `#FF762E` brand palette, and explicit custom theme colors always win.

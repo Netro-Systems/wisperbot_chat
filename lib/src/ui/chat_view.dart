@@ -140,29 +140,45 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
 
   @override
   Widget build(BuildContext context) {
+    final hostTheme = Theme.of(context);
     final colors = WisperBotResolvedTheme.resolve(
-      hostTheme: Theme.of(context),
+      hostTheme: hostTheme,
       server: _state.widget,
       override: widget.config.theme,
+      useApiColors: widget.config.useApiColors,
     );
-    return ColoredBox(
-      color: colors.background,
-      child: Column(
-        children: <Widget>[
-          if (widget.showHeader)
-            _ChatHeader(
-              state: _state,
-              colors: colors,
-              onClose: widget.onClose,
-            ),
-          if (_state.phase == WisperBotChatPhase.reconnecting)
-            _ConnectionBanner(colors: colors),
-          if (_state.supportAvailability ==
-              WisperBotSupportAvailability.unavailable)
-            _AvailabilityBanner(state: _state, colors: colors),
-          Expanded(child: _buildBody(colors)),
-          if (_canCompose(_state)) _buildComposer(colors),
-        ],
+    final sdkTheme = hostTheme.copyWith(
+      colorScheme: hostTheme.colorScheme.copyWith(
+        primary: colors.primary,
+        onPrimary: colors.onPrimary,
+      ),
+      textSelectionTheme: hostTheme.textSelectionTheme.copyWith(
+        cursorColor: colors.primary,
+        selectionColor: colors.primary.withValues(alpha: 0.24),
+        selectionHandleColor: colors.primary,
+      ),
+    );
+    return Theme(
+      data: sdkTheme,
+      child: ColoredBox(
+        color: colors.background,
+        child: Column(
+          children: <Widget>[
+            if (widget.showHeader)
+              _ChatHeader(
+                state: _state,
+                colors: colors,
+                onClose: widget.onClose,
+              ),
+            if (_state.phase == WisperBotChatPhase.reconnecting)
+              _ConnectionBanner(colors: colors),
+            if (_state.supportAvailability ==
+                WisperBotSupportAvailability.unavailable)
+              _AvailabilityBanner(state: _state, colors: colors),
+            Expanded(child: _buildBody(colors)),
+            if (_canCompose(_state)) _buildComposer(colors),
+          ],
+        ),
       ),
     );
   }
@@ -356,6 +372,7 @@ class _ChatHeader extends StatelessWidget {
         : 'Chat with us';
     final subtitle = _subtitle(state);
     return Material(
+      key: const ValueKey<String>('wisperbot-chat-header'),
       color: colors.primary,
       child: SafeArea(
         bottom: false,

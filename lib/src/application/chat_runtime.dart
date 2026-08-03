@@ -114,6 +114,7 @@ class WisperBotClient {
       apiBaseUrl: config.apiBaseUrl,
       user: user,
       theme: config.theme,
+      useApiColors: config.useApiColors,
       presentation: config.presentation,
       enableTyping: config.enableTyping,
       polling: config.polling,

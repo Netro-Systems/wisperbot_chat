@@ -5,14 +5,16 @@ import 'package:wisperbot_chat/wisperbot_chat.dart';
 Future<void> main() async {
   await dotenv.load(fileName: '.env');
   final config = WisperBotConfig(
-      widgetKey: dotenv.get('WISPERBOT_WIDGET_KEY').trim(),
-      apiBaseUrl: dotenv
-          .get(
-            'WISPERBOT_API_BASE_URL',
-            fallback: 'https://wisperbot.com',
-          )
-          .trim(),
-      user: const WisperBotUser(name: 'GG'),);
+    widgetKey: dotenv.get('WISPERBOT_WIDGET_KEY').trim(),
+    apiBaseUrl: dotenv
+        .get(
+          'WISPERBOT_API_BASE_URL',
+        )
+        .trim(),
+    user: const WisperBotUser(name: 'GG'),
+    theme: WisperBotThemeData(),
+    useApiColors: true,
+  );
   runApp(ExampleApp(config: config));
 }
 

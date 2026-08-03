@@ -119,6 +119,7 @@ class WisperBotConfig {
     this.apiBaseUrl = 'https://wisperbot.com',
     this.user,
     this.theme,
+    this.useApiColors = true,
     this.presentation = WisperBotPresentation.fullScreen,
     this.enableTyping = true,
     this.polling = const WisperBotPollingConfig(),
@@ -129,6 +130,7 @@ class WisperBotConfig {
   final String apiBaseUrl;
   final WisperBotUser? user;
   final WisperBotThemeData? theme;
+  final bool useApiColors;
   final WisperBotPresentation presentation;
   final bool enableTyping;
   final WisperBotPollingConfig polling;

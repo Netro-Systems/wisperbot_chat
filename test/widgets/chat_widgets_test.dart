@@ -210,6 +210,67 @@ void main() {
 
     expect(find.text('Test support'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
+    final header = tester.widget<Material>(
+      find.byKey(const ValueKey<String>('wisperbot-chat-header')),
+    );
+    expect(
+      header.color,
+      const Color(0xFF6258F9),
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets('built-in brand colors ignore API and host primary colors',
+      (tester) async {
+    const brandConfig = WisperBotConfig(
+      widgetKey: 'test-widget',
+      apiBaseUrl: 'https://chat.example.com',
+      useApiColors: false,
+      polling: WisperBotPollingConfig(
+        visibleInterval: Duration(minutes: 1),
+        idleInterval: Duration(minutes: 1),
+        failureMaxInterval: Duration(minutes: 1),
+      ),
+    );
+    final runtime = _runtime(
+      brandConfig,
+      MockClient(
+        (_) async => http.Response(jsonEncode(sessionResponse()), 200),
+      ),
+    );
+
+    await tester.pumpWidget(_app(
+      Stack(
+        children: <Widget>[
+          WisperBotChatView(
+            config: brandConfig,
+            controller: runtime.controller,
+          ),
+          WisperBotChatLauncher(
+            config: brandConfig,
+            controller: runtime.controller,
+          ),
+        ],
+      ),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    final header = tester.widget<Material>(
+      find.byKey(const ValueKey<String>('wisperbot-chat-header')),
+    );
+    expect(header.color, const Color(0xFFFF762E));
+    final canvases = tester.widgetList<ColoredBox>(find.byType(ColoredBox));
+    expect(
+      canvases.any((canvas) => canvas.color == const Color(0xFFF7F8FA)),
+      isTrue,
+    );
+    final launcher = tester.widget<FloatingActionButton>(
+      find.byType(FloatingActionButton),
+    );
+    expect(launcher.backgroundColor, const Color(0xFFFF762E));
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();
@@ -220,6 +281,7 @@ void main() {
     const themedConfig = WisperBotConfig(
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com',
+      useApiColors: false,
       theme: WisperBotThemeData(primaryColor: Color(0xFF087F5B)),
       polling: WisperBotPollingConfig(
         visibleInterval: Duration(minutes: 1),
@@ -245,11 +307,10 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    final materials = tester.widgetList<Material>(find.byType(Material));
-    expect(
-      materials.any((material) => material.color == const Color(0xFF087F5B)),
-      isTrue,
+    final header = tester.widget<Material>(
+      find.byKey(const ValueKey<String>('wisperbot-chat-header')),
     );
+    expect(header.color, const Color(0xFF087F5B));
     expect(find.text('Test support'), findsOneWidget);
     expect(find.byTooltip('Close chat'), findsOneWidget);
 

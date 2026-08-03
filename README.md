@@ -96,6 +96,31 @@ await client.close();
 
 When a view, screen, or launcher creates its controller, it owns and disposes the runtime. When you supply a controller, you retain ownership.
 
+## Colors and branding
+
+API colors are enabled by default. Disable them to use WisperBot's built-in
+orange brand palette:
+
+```dart
+final config = WisperBotConfig(
+  widgetKey: 'YOUR_WIDGET_KEY',
+  useApiColors: false,
+);
+```
+
+Custom theme colors always take precedence, whether API colors are enabled or
+not:
+
+```dart
+final config = WisperBotConfig(
+  widgetKey: 'YOUR_WIDGET_KEY',
+  useApiColors: false,
+  theme: const WisperBotThemeData(
+    primaryColor: Color(0xFF087F5B),
+  ),
+);
+```
+
 ## Verified users
 
 Generate the HMAC signature on your server. The SDK must never receive the widget identity secret.

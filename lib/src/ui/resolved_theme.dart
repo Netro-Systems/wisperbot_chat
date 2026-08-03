@@ -3,6 +3,12 @@ import 'package:flutter/material.dart';
 import '../domain/config.dart';
 import '../domain/models.dart';
 
+const _brandPrimary = Color(0xFFFF762E);
+const _brandBackground = Color(0xFFF7F8FA);
+const _brandSurface = Colors.white;
+const _brandSurfaceMuted = Color(0xFFF1F3F6);
+const _brandOnSurface = Color(0xFF1F2430);
+
 class WisperBotResolvedTheme {
   WisperBotResolvedTheme({
     required this.primary,
@@ -27,41 +33,45 @@ class WisperBotResolvedTheme {
     required ThemeData hostTheme,
     required WisperBotThemeData? override,
     required WisperBotWidgetConfig? server,
+    required bool useApiColors,
   }) {
-    final serverPrimary = _parseHex(server?.primaryColorHex);
+    final serverPrimary =
+        useApiColors ? _parseHex(server?.primaryColorHex) : null;
     final requestedBrightness = override?.brightness;
     final colorScheme = requestedBrightness == null
         ? hostTheme.colorScheme
         : ColorScheme.fromSeed(
-            seedColor: override?.primaryColor ??
-                serverPrimary ??
-                hostTheme.colorScheme.primary,
+            seedColor: override?.primaryColor ?? serverPrimary ?? _brandPrimary,
             brightness: requestedBrightness,
           );
-    final primary =
-        override?.primaryColor ?? serverPrimary ?? colorScheme.primary;
+    final primary = override?.primaryColor ?? serverPrimary ?? _brandPrimary;
     final isDark = colorScheme.brightness == Brightness.dark;
-    final surface = override?.surfaceColor ?? colorScheme.surface;
+    final surface = override?.surfaceColor ??
+        (isDark ? colorScheme.surface : _brandSurface);
     final background = override?.backgroundColor ??
-        Color.alphaBlend(
-          colorScheme.onSurface.withValues(alpha: isDark ? 0.05 : 0.025),
-          surface,
-        );
+        (isDark
+            ? Color.alphaBlend(
+                colorScheme.onSurface.withValues(alpha: 0.05),
+                surface,
+              )
+            : _brandBackground);
     final visitorBubble = override?.visitorBubbleColor ?? primary;
     final agentBubble = override?.agentBubbleColor ?? surface;
+    final onSurface = isDark ? colorScheme.onSurface : _brandOnSurface;
     return WisperBotResolvedTheme(
       primary: primary,
       onPrimary: _contrasting(primary),
       background: background,
       surface: surface,
-      surfaceMuted: colorScheme.surfaceContainerHigh,
+      surfaceMuted:
+          isDark ? colorScheme.surfaceContainerHigh : _brandSurfaceMuted,
       visitorBubble: visitorBubble,
       onVisitorBubble:
           override?.onVisitorBubbleColor ?? _contrasting(visitorBubble),
       agentBubble: agentBubble,
-      onAgentBubble: override?.onAgentBubbleColor ?? colorScheme.onSurface,
+      onAgentBubble: override?.onAgentBubbleColor ?? onSurface,
       error: override?.errorColor ?? colorScheme.error,
-      onSurface: colorScheme.onSurface,
+      onSurface: onSurface,
       onSurfaceMuted: isDark
           ? colorScheme.onSurface.withValues(alpha: 0.68)
           : const Color(0xFF687386),
