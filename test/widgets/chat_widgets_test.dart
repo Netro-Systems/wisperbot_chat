@@ -347,6 +347,49 @@ void main() {
     await runtime.dispose();
   });
 
+  testWidgets('bottom sheet uses nearly the full safe height', (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final runtime = _runtime(
+      config,
+      MockClient(
+        (_) async => http.Response(jsonEncode(sessionResponse()), 200),
+      ),
+    );
+
+    await tester.pumpWidget(_app(
+      Builder(
+        builder: (context) => ElevatedButton(
+          onPressed: () => unawaited(
+            WisperBotChat.open(
+              context,
+              config: config,
+              controller: runtime.controller,
+              presentation: WisperBotPresentation.bottomSheet,
+            ),
+          ),
+          child: const Text('Open bottom sheet'),
+        ),
+      ),
+    ));
+
+    await tester.tap(find.text('Open bottom sheet'));
+    await tester.pumpAndSettle();
+
+    final sheet = find.byKey(
+      const ValueKey<String>('wisperbot-bottom-sheet'),
+    );
+    expect(sheet, findsOneWidget);
+    expect(tester.getSize(sheet).height, closeTo(768, 0.1));
+
+    await tester.tap(find.byTooltip('Close chat'));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
   testWidgets('default layout fits a small phone at 200 percent text scale',
       (tester) async {
     tester.view.physicalSize = const Size(320, 720);

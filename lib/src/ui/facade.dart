@@ -89,7 +89,8 @@ abstract final class WisperBotChat {
             useSafeArea: true,
             backgroundColor: Colors.transparent,
             builder: (sheetContext) => FractionallySizedBox(
-              heightFactor: 0.92,
+              key: const ValueKey<String>('wisperbot-bottom-sheet'),
+              heightFactor: 0.96,
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(20),

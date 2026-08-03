@@ -16,3 +16,4 @@
 - Moved the example widget key and API base URL into a local `.env` file and disabled the example app's debug banner.
 - Aligned the default Flutter chat UI with the WisperBot web widget: branded header, compact tailed bubbles, persistent welcome bubble, muted canvas, borderless composer, circular send action, and powered-by footer.
 - Added `WisperBotConfig.useApiColors`: API colors remain enabled by default, disabling them selects the built-in `#FF762E` brand palette, and explicit custom theme colors always win.
+- Increased the bottom-sheet presentation to 96% of the available safe height for a roomier mobile conversation view.

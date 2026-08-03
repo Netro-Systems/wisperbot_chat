@@ -6,11 +6,6 @@ Future<void> main() async {
   await dotenv.load(fileName: '.env');
   final config = WisperBotConfig(
     widgetKey: dotenv.get('WISPERBOT_WIDGET_KEY').trim(),
-    apiBaseUrl: dotenv
-        .get(
-          'WISPERBOT_API_BASE_URL',
-        )
-        .trim(),
     user: const WisperBotUser(name: 'GG'),
     theme: WisperBotThemeData(),
     useApiColors: true,
@@ -26,7 +21,7 @@ class ExampleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'WisperBot Chat SDK',
+        title: 'WisperBot Chat',
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFFF762E)),
           useMaterial3: true,
@@ -45,7 +40,7 @@ class ExampleHome extends StatelessWidget {
         appBar: AppBar(title: const Text('WisperBot Chat SDK')),
         body: ListView(
           padding: const EdgeInsets.all(24),
-          children: <Widget>[
+          children: [
             const Text(
               'The widget key is loaded from .env. Try any integration style '
               'below.',
