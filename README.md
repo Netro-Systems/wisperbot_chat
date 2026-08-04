@@ -1,6 +1,6 @@
 # wisperbot_chat
 
-`wisperbot_chat` is a Flutter package for WisperBot's customer-facing chat. It owns secure visitor sessions, public widget API communication, polling, message reconciliation, lifecycle handling, typed state and errors, and an optional Material UI.
+`wisperbot_chat` is a Flutter package for WisperBot's customer-facing chat. It owns secure visitor sessions, public widget API communication, realtime delivery with polling recovery, message reconciliation, lifecycle handling, typed state and errors, and an optional Material UI.
 
 This is a `0.1.0-dev.1` preview. Use a controlled widget without a domain allowlist or required pre-chat until the corresponding native-client backend policy and configuration-bootstrap endpoints are available.
 
@@ -19,6 +19,8 @@ await WisperBotChat.open(context, config: config);
 The widget key routes chat and is not a secret. Never put WisperBot management credentials or a widget identity secret in a Flutter app.
 
 ## Installation
+
+The preview requires Flutter 3.24 or newer (Dart 3.5 or newer).
 
 Until the preview is published, use a Git or local path dependency:
 
@@ -146,7 +148,8 @@ Anonymous and correctly signed identities persist across launches. Unsigned prof
 |---|---:|---:|---:|
 | Anonymous and signed-user sessions | Yes | Yes* | Yes |
 | Text, image/audio transport | Yes | Yes | Yes |
-| Polling, typing, human handoff | Yes | Yes | Yes |
+| Pusher realtime with polling recovery | Yes | Yes | Polling fallback |
+| Typing and human handoff | Yes | Yes | Yes |
 | Prebuilt screen/view/launcher/modal UI | Yes | Yes | Yes |
 | Backward pagination and unread/read state | Backend pending | Backend pending | Backend pending |
 | Push notifications | Not included | Not included | Not included |
@@ -166,7 +169,8 @@ adapter.
 - Visitor tokens are bearer credentials stored through `WisperBotSessionStore`; the default implementation uses secure platform storage.
 - A send becomes `sent` only after a server response supplies a message ID.
 - A disconnected or timed-out send becomes `unconfirmed` and is not automatically retried, because the current backend has no client idempotency key.
-- Poll responses are serialized, ordered, and deduplicated by server ID. Polling stops without listeners and while the app is backgrounded.
+- Pusher delivers new bot/human messages immediately when the backend advertises realtime. A poll runs after subscription/reconnection and every 60 seconds while connected; normal polling resumes whenever realtime is unavailable.
+- Realtime events and poll responses are ordered and deduplicated by server ID. Only session/poll batches advance the receive cursor, preventing missed gaps.
 - Required pre-chat is surfaced as a typed configuration failure instead of silently creating the wrong visitor identity.
 - Diagnostics are structured and redacted; tokens, signatures, PII, message bodies, and attachment URLs are never included.
 

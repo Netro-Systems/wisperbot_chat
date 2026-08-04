@@ -247,6 +247,9 @@ void main() {
       ),
     );
     var uploadCount = 0;
+    final uploadedContentTypes = <String>[];
+    final uploadedFilenames = <String>[];
+    final uploadedBodies = <List<int>>[];
     final runtime = _runtime(
       mediaConfig,
       MockClient((request) async {
@@ -255,6 +258,15 @@ void main() {
         }
         if (request.method == 'POST' &&
             request.url.path.endsWith('/messages')) {
+          uploadedContentTypes.add(request.headers['content-type'] ?? '');
+          uploadedFilenames.add(
+            utf8.decode(
+              base64Decode(
+                request.headers['x-wisperbot-filename-b64'] ?? '',
+              ),
+            ),
+          );
+          uploadedBodies.add(request.bodyBytes);
           uploadCount++;
           final type = uploadCount == 1 ? 'image' : 'audio';
           return http.Response(
@@ -304,6 +316,12 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(uploadCount, 1);
+    expect(uploadedContentTypes, <String>['image/png']);
+    expect(uploadedFilenames, <String>['photo.png']);
+    expect(
+      uploadedBodies.single.take(8),
+      <int>[137, 80, 78, 71, 13, 10, 26, 10],
+    );
     expect(preview, findsNothing);
 
     await tester.tap(find.byTooltip('Record voice message'));
@@ -319,6 +337,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(mediaAdapter.recordingStops, 1);
     expect(uploadCount, 2);
+    expect(
+      uploadedContentTypes,
+      <String>['image/png', 'audio/wav'],
+    );
+    expect(uploadedFilenames, <String>['photo.png', 'voice.wav']);
+    expect(uploadedBodies.last, <int>[1, 2, 3, 4]);
     expect(find.text('Recording… tap stop to send'), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());

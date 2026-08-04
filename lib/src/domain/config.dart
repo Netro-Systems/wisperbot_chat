@@ -94,6 +94,7 @@ enum WisperBotDiagnosticKind {
   poll,
   send,
   capability,
+  realtime,
 }
 
 @immutable

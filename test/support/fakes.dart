@@ -38,6 +38,7 @@ Map<String, Object?> sessionResponse({
   Map<String, Object?>? capabilities,
   String? avatarUrl,
   String? launcherLogoUrl,
+  Map<String, Object?>? realtime,
 }) =>
     <String, Object?>{
       'visitor_id': visitorId,
@@ -67,6 +68,7 @@ Map<String, Object?> sessionResponse({
         'status': 'bot',
       },
       if (capabilities != null) 'capabilities': capabilities,
+      if (realtime != null) 'realtime': realtime,
       'unknown_root_field': <String, Object?>{'safe': true},
     };
 

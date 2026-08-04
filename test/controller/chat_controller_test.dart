@@ -629,4 +629,98 @@ void main() {
       await client.close();
     }
   });
+
+  test('realtime delivers messages and polling alone advances the cursor',
+      () async {
+    final transport = _FakeRealtimeTransport();
+    final pollAfter = <String?>[];
+    var authCalls = 0;
+    final httpClient = MockClient((request) async {
+      if (request.url.path.endsWith('/session')) {
+        return http.Response(
+          jsonEncode(
+            sessionResponse(
+              capabilities: <String, Object?>{'realtime': true},
+              realtime: <String, Object?>{
+                'provider': 'pusher',
+                'key': 'public-key',
+                'cluster': 'mt1',
+                'channel': 'private-widget.opaque',
+                'auth_endpoint': '/widget/v1/broadcasting/auth',
+              },
+            ),
+          ),
+          200,
+        );
+      }
+      if (request.url.path.endsWith('/broadcasting/auth')) {
+        authCalls++;
+        expect(request.headers['X-Widget-Token'], 'token-1');
+        return http.Response(
+            jsonEncode(<String, String>{'auth': 'signed'}), 200);
+      }
+      pollAfter.add(request.url.queryParameters['after']);
+      return http.Response(jsonEncode(pollResponse()), 200);
+    });
+    final client = WisperBotClient(
+      config: config,
+      httpClient: httpClient,
+      sessionStore: MemorySessionStore(),
+      realtimeTransport: transport,
+    );
+    final controller = WisperBotChatController(client: client);
+    final subscription = controller.states.listen((_) {});
+
+    await controller.initialize();
+    await Future<void>.delayed(Duration.zero);
+    expect(authCalls, 1);
+    expect(controller.state.realtime, WisperBotRealtimeStatus.connected);
+
+    transport.emit(
+      WisperBotRealtimeEvent(
+        name: 'WidgetMessageSent',
+        data: jsonEncode(message(id: 9, body: 'Realtime reply')),
+      ),
+    );
+    expect(controller.state.messages.single.body, 'Realtime reply');
+
+    await controller.refresh();
+    expect(pollAfter, isNotEmpty);
+    expect(pollAfter.every((value) => value == '0'), isTrue);
+
+    await subscription.cancel();
+    await Future<void>.delayed(Duration.zero);
+    expect(transport.connection.closed, isTrue);
+    await controller.dispose();
+    await client.close();
+  });
+}
+
+class _FakeRealtimeTransport implements WisperBotRealtimeTransport {
+  late void Function(WisperBotRealtimeEvent event) _onEvent;
+  final _FakeRealtimeConnection connection = _FakeRealtimeConnection();
+
+  @override
+  Future<WisperBotRealtimeConnection> connect({
+    required WisperBotRealtimeSettings settings,
+    required WisperBotRealtimeAuthorizer authorize,
+    required void Function(WisperBotRealtimeEvent event) onEvent,
+    required void Function(WisperBotRealtimeStatus status) onStatus,
+  }) async {
+    _onEvent = onEvent;
+    expect(settings.channel, 'private-widget.opaque');
+    final authorization = await authorize('1234.5678', settings.channel);
+    expect(authorization.auth, 'signed');
+    onStatus(WisperBotRealtimeStatus.connected);
+    return connection;
+  }
+
+  void emit(WisperBotRealtimeEvent event) => _onEvent(event);
+}
+
+class _FakeRealtimeConnection implements WisperBotRealtimeConnection {
+  bool closed = false;
+
+  @override
+  Future<void> close() async => closed = true;
 }

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../domain/config.dart';
 import '../domain/errors.dart';
 import '../domain/models.dart';
+import '../domain/realtime.dart';
 import 'session_store.dart';
 
 class WidgetSessionResult {
@@ -18,6 +19,7 @@ class WidgetSessionResult {
     required this.messages,
     required this.supportAvailability,
     required this.handoff,
+    required this.realtime,
   });
 
   final WisperBotStoredSession session;
@@ -27,6 +29,7 @@ class WidgetSessionResult {
   final List<WisperBotMessage> messages;
   final WisperBotSupportAvailability supportAvailability;
   final WisperBotHandoffState handoff;
+  final WisperBotRealtimeSettings? realtime;
 }
 
 class WidgetPollResult {
@@ -105,7 +108,43 @@ class WidgetApiClient {
       messages: messages,
       supportAvailability: _parseAvailability(json['online']),
       handoff: _parseHandoff(json['handoff']),
+      realtime: _parseRealtime(json['realtime'], _baseUrl),
     );
+  }
+
+  Future<WisperBotRealtimeAuthorization> authorizeRealtime({
+    required String widgetKey,
+    required String token,
+    required Uri endpoint,
+    required String socketId,
+    required String channelName,
+  }) async {
+    final response = await _execute(
+      () => _httpClient
+          .post(
+            endpoint,
+            headers: _headers(token: token),
+            body: jsonEncode(<String, Object>{
+              'key': widgetKey,
+              'socket_id': socketId,
+              'channel_name': channelName,
+            }),
+          )
+          .timeout(requestTimeout),
+      sessionRequest: false,
+    );
+    return WisperBotRealtimeAuthorization(
+      auth: _requiredString(_decodeObject(response), 'auth'),
+    );
+  }
+
+  WisperBotMessage? parseRealtimeMessage(String data) {
+    try {
+      final decoded = jsonDecode(data);
+      return decoded is Map<String, dynamic> ? _parseMessage(decoded) : null;
+    } on Object {
+      return null;
+    }
   }
 
   Future<WidgetPollResult> poll({
@@ -163,24 +202,29 @@ class WidgetApiClient {
     String? caption,
   }) async {
     _validateUpload(upload, type);
-    final request = http.MultipartRequest('POST', _endpoint('messages'))
-      ..headers.addAll(_headers(token: token, includeContentType: false))
-      ..fields['key'] = widgetKey
-      ..fields['type'] = type == WisperBotMessageType.image ? 'image' : 'audio';
-    if (caption != null && caption.trim().isNotEmpty) {
-      request.fields['message'] = caption.trim();
-    }
-    request.files.add(
-      http.MultipartFile.fromBytes(
-        'attachment',
-        upload.bytes,
-        filename: upload.filename,
-      ),
-    );
+    final parameters = <String, String>{
+      'key': widgetKey,
+      'type': type == WisperBotMessageType.image ? 'image' : 'audio',
+    };
+    final uri = _endpoint('messages').replace(queryParameters: parameters);
     final response = await _execute(
-      () async => http.Response.fromStream(
-        await _httpClient.send(request).timeout(requestTimeout),
-      ),
+      () => _httpClient
+          .post(
+            uri,
+            headers: <String, String>{
+              ..._headers(token: token, includeContentType: false),
+              'Content-Type': upload.mimeType.toLowerCase(),
+              'X-WisperBot-Filename-B64': base64Encode(
+                utf8.encode(upload.filename),
+              ),
+              if (caption != null && caption.trim().isNotEmpty)
+                'X-WisperBot-Caption-B64': base64Encode(
+                  utf8.encode(caption.trim()),
+                ),
+            },
+            body: upload.bytes,
+          )
+          .timeout(requestTimeout),
       sessionRequest: false,
     );
     return _parseSendResult(response);
@@ -536,6 +580,28 @@ WisperBotCapabilities _parseCapabilities(Object? value) {
     readReceipts: json['read_receipts'] == true,
     realtime: json['realtime'] == true,
     push: json['push'] == true,
+  );
+}
+
+WisperBotRealtimeSettings? _parseRealtime(Object? value, Uri baseUrl) {
+  final json = _objectOrNull(value);
+  if (json == null || json['provider'] != 'pusher') return null;
+  final key = _stringOrNull(json['key']);
+  final cluster = _stringOrNull(json['cluster']);
+  final channel = _stringOrNull(json['channel']);
+  final endpointValue = _stringOrNull(json['auth_endpoint']);
+  if (key == null ||
+      cluster == null ||
+      channel == null ||
+      endpointValue == null) {
+    return null;
+  }
+  final endpoint = Uri.parse(endpointValue);
+  return WisperBotRealtimeSettings(
+    apiKey: key,
+    cluster: cluster,
+    channel: channel,
+    authEndpoint: endpoint.isAbsolute ? endpoint : baseUrl.resolveUri(endpoint),
   );
 }
 

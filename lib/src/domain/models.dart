@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'errors.dart';
+import 'realtime.dart';
 
 enum WisperBotChatPhase {
   idle,
@@ -257,6 +258,7 @@ class WisperBotChatState {
     required this.phase,
     required List<WisperBotMessage> messages,
     required this.connection,
+    this.realtime = WisperBotRealtimeStatus.disabled,
     required this.widget,
     required this.capabilities,
     required this.identity,
@@ -273,6 +275,7 @@ class WisperBotChatState {
         phase: WisperBotChatPhase.idle,
         messages: const <WisperBotMessage>[],
         connection: WisperBotConnectionState.disconnected,
+        realtime: WisperBotRealtimeStatus.disabled,
         widget: null,
         capabilities: const WisperBotCapabilities.none(),
         identity: WisperBotIdentityStatus.unknown,
@@ -287,6 +290,7 @@ class WisperBotChatState {
   final WisperBotChatPhase phase;
   final List<WisperBotMessage> messages;
   final WisperBotConnectionState connection;
+  final WisperBotRealtimeStatus realtime;
   final WisperBotWidgetConfig? widget;
   final WisperBotCapabilities capabilities;
   final WisperBotIdentityStatus identity;
@@ -302,6 +306,7 @@ class WisperBotChatState {
     WisperBotChatPhase? phase,
     List<WisperBotMessage>? messages,
     WisperBotConnectionState? connection,
+    WisperBotRealtimeStatus? realtime,
     Object? widget = _notProvided,
     WisperBotCapabilities? capabilities,
     WisperBotIdentityStatus? identity,
@@ -317,6 +322,7 @@ class WisperBotChatState {
         phase: phase ?? this.phase,
         messages: messages ?? this.messages,
         connection: connection ?? this.connection,
+        realtime: realtime ?? this.realtime,
         widget: identical(widget, _notProvided)
             ? this.widget
             : widget as WisperBotWidgetConfig?,

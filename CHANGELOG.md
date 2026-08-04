@@ -2,6 +2,9 @@
 
 ## 0.1.0-dev.1
 
+- Added optional Pusher visitor realtime delivery with secure private-channel authorization, lifecycle management, and polling reconciliation/fallback.
+- Added typed realtime transport/status APIs and raised the minimum to Dart 3.5 / Flutter 3.24.
+- Backend AI auto-replies now run through the queue so visitor sends can be acknowledged immediately.
 - Converted the repository from a Flutter application scaffold to a reusable Flutter package with a cross-platform example app.
 - Added secure, identity-scoped visitor session persistence with injectable storage and HTTP transport.
 - Added anonymous and verified-user session initialization, controlled token restoration, identity switching, and logout/reset behavior.

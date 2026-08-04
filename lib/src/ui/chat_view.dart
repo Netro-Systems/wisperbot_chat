@@ -484,7 +484,7 @@ class _LoadingSkeleton extends StatelessWidget {
                     padding: EdgeInsets.symmetric(horizontal: 12),
                     child: _ShimmerBlock(
                       key: ValueKey<String>('wisperbot-loading-appbar-line'),
-                      height: 3,
+                      height: 1,
                       radius: 1.5,
                     ),
                   ),
