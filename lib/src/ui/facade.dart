@@ -88,18 +88,23 @@ abstract final class WisperBotChat {
             isScrollControlled: true,
             useSafeArea: true,
             backgroundColor: Colors.transparent,
-            builder: (sheetContext) => FractionallySizedBox(
-              key: const ValueKey<String>('wisperbot-bottom-sheet'),
-              heightFactor: 0.96,
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
-                ),
-                child: Material(
-                  child: WisperBotChatView(
-                    config: config,
-                    controller: controller,
-                    onClose: () => Navigator.of(sheetContext).pop(),
+            builder: (sheetContext) => Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+              ),
+              child: FractionallySizedBox(
+                key: const ValueKey<String>('wisperbot-bottom-sheet'),
+                heightFactor: 0.96,
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
+                  child: Material(
+                    child: WisperBotChatView(
+                      config: config,
+                      controller: controller,
+                      onClose: () => Navigator.of(sheetContext).pop(),
+                    ),
                   ),
                 ),
               ),

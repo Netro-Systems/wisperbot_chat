@@ -7,6 +7,7 @@ export 'src/data/session_store.dart'
 export 'src/domain/config.dart';
 export 'src/domain/errors.dart';
 export 'src/domain/events.dart';
+export 'src/domain/media_adapter.dart';
 export 'src/domain/models.dart';
 export 'src/ui/chat_screen.dart' show WisperBotChatScreen;
 export 'src/ui/chat_view.dart'

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,7 +22,7 @@ void main() {
     ),
   );
 
-  testWidgets('embedded view exposes an accessible loading state',
+  testWidgets('embedded view shows only an accessible neutral shimmer',
       (tester) async {
     final response = Completer<http.Response>();
     final runtime = _runtime(
@@ -33,13 +34,121 @@ void main() {
       WisperBotChatView(config: config, controller: runtime.controller),
     ));
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(Text), findsNothing);
+    expect(find.byType(Icon), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('wisperbot-loading-shimmer')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('wisperbot-loading-header')),
+      findsOneWidget,
+    );
+    final appBarLine = find.byKey(
+      const ValueKey<String>('wisperbot-loading-appbar-line'),
+    );
+    expect(appBarLine, findsOneWidget);
+    expect(tester.getSize(appBarLine).height, 3);
+    expect(
+      find.byKey(const ValueKey<String>('wisperbot-loading-message-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('wisperbot-loading-composer')),
+      findsOneWidget,
+    );
+    final canvasBottom = tester
+        .getBottomRight(
+          find.byKey(const ValueKey<String>('wisperbot-loading-canvas')),
+        )
+        .dy;
+    final composerBottom = tester
+        .getBottomRight(
+          find.byKey(const ValueKey<String>('wisperbot-loading-composer')),
+        )
+        .dy;
+    expect(canvasBottom - composerBottom, greaterThanOrEqualTo(28));
     expect(find.bySemanticsLabel('Connecting to chat'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    response.complete(http.Response(jsonEncode(sessionResponse()), 200));
+    await tester.pump();
+    await runtime.dispose();
+  });
+
+  testWidgets('loading shimmer becomes static when motion is reduced',
+      (tester) async {
+    final response = Completer<http.Response>();
+    final runtime = _runtime(
+      config,
+      MockClient((_) => response.future),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: WisperBotChatView(
+            config: config,
+            controller: runtime.controller,
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey<String>('wisperbot-loading-shimmer'),
+        ),
+        matching: find.byType(ShaderMask),
+      ),
+      findsNothing,
+    );
+    expect(find.byType(CircularProgressIndicator), findsNothing);
 
     response.complete(http.Response(jsonEncode(sessionResponse()), 200));
     await tester.pump();
     await tester.pump();
     await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets('loading shimmer fits a short embedded container',
+      (tester) async {
+    final response = Completer<http.Response>();
+    final runtime = _runtime(
+      config,
+      MockClient((_) => response.future),
+    );
+
+    await tester.pumpWidget(_app(
+      Align(
+        alignment: Alignment.topCenter,
+        child: SizedBox(
+          width: 240,
+          height: 180,
+          child: WisperBotChatView(
+            config: config,
+            controller: runtime.controller,
+          ),
+        ),
+      ),
+    ));
+
+    expect(tester.takeException(), isNull);
+    expect(
+      find.byKey(const ValueKey<String>('wisperbot-loading-shimmer')),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    response.complete(http.Response(jsonEncode(sessionResponse()), 200));
+    await tester.pump();
     await runtime.dispose();
   });
 
@@ -124,6 +233,148 @@ void main() {
     await runtime.dispose();
   });
 
+  testWidgets('default composer picks images and records voice through adapter',
+      (tester) async {
+    final mediaAdapter = _FakeMediaAdapter();
+    final mediaConfig = WisperBotConfig(
+      widgetKey: 'test-widget',
+      apiBaseUrl: 'https://chat.example.com',
+      mediaAdapter: mediaAdapter,
+      polling: const WisperBotPollingConfig(
+        visibleInterval: Duration(minutes: 1),
+        idleInterval: Duration(minutes: 1),
+        failureMaxInterval: Duration(minutes: 1),
+      ),
+    );
+    var uploadCount = 0;
+    final runtime = _runtime(
+      mediaConfig,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          return http.Response(jsonEncode(sessionResponse()), 200);
+        }
+        if (request.method == 'POST' &&
+            request.url.path.endsWith('/messages')) {
+          uploadCount++;
+          final type = uploadCount == 1 ? 'image' : 'audio';
+          return http.Response(
+            jsonEncode(<String, Object?>{
+              'message': message(
+                id: uploadCount,
+                role: 'visitor',
+                type: type,
+                body: type == 'image' ? 'Image attachment' : 'Voice message',
+                sentBy: 'human',
+              ),
+              'handoff': <String, Object?>{
+                'enabled': true,
+                'eligible': false,
+                'status': 'bot',
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode(pollResponse()), 200);
+      }),
+    );
+
+    await tester.pumpWidget(_app(
+      WisperBotChatView(
+        config: mediaConfig,
+        controller: runtime.controller,
+      ),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byTooltip('Attach image'), findsOneWidget);
+    expect(find.byTooltip('Record voice message'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Attach image'));
+    await tester.pumpAndSettle();
+    expect(mediaAdapter.imagePicks, 1);
+    final preview = find.byKey(
+      const ValueKey<String>('wisperbot-image-preview'),
+    );
+    expect(preview, findsOneWidget);
+
+    await tester.tap(
+      find.descendant(of: preview, matching: find.text('Send')),
+    );
+    await tester.pumpAndSettle();
+    expect(uploadCount, 1);
+    expect(preview, findsNothing);
+
+    await tester.tap(find.byTooltip('Record voice message'));
+    await tester.pumpAndSettle();
+    expect(mediaAdapter.recordingStarts, 1);
+    expect(
+      find.bySemanticsLabel(RegExp('Recording voice message')),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Stop and send voice message'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Stop and send voice message'));
+    await tester.pumpAndSettle();
+    expect(mediaAdapter.recordingStops, 1);
+    expect(uploadCount, 2);
+    expect(find.text('Recording… tap stop to send'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets('eligible handoff uses the human-agent prompt and connects',
+      (tester) async {
+    var handoffCalls = 0;
+    final runtime = _runtime(
+      config,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          final response = sessionResponse();
+          response['handoff'] = <String, Object?>{
+            'enabled': true,
+            'eligible': true,
+            'status': 'bot',
+          };
+          return http.Response(jsonEncode(response), 200);
+        }
+        if (request.url.path.endsWith('/handoff')) {
+          handoffCalls++;
+          return http.Response(
+            jsonEncode(<String, Object?>{
+              'handoff': <String, Object?>{
+                'enabled': true,
+                'eligible': false,
+                'status': 'connected',
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode(pollResponse()), 200);
+      }),
+    );
+
+    await tester.pumpWidget(_app(
+      WisperBotChatView(config: config, controller: runtime.controller),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Prefer a person?'), findsOneWidget);
+    expect(find.text('Human Agent'), findsOneWidget);
+    await tester.tap(find.text('Human Agent'));
+    await tester.pumpAndSettle();
+
+    expect(handoffCalls, 1);
+    expect(find.text('Connected to a human agent'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
   testWidgets('terminal server failure is actionable and hides composer',
       (tester) async {
     final runtime = _runtime(
@@ -188,8 +439,7 @@ void main() {
         ],
       ),
     ));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.bySemanticsLabel('Open chat'), findsWidgets);
     final size = tester.getSize(find.byType(FloatingActionButton));
@@ -201,6 +451,147 @@ void main() {
     final logoAsset = logo.image as AssetImage;
     expect(logoAsset.assetName, 'assets/images/logo.png');
     expect(logoAsset.package, 'wisperbot_chat');
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  for (final alignment in <Alignment?>[null, Alignment.topLeft]) {
+    final alignmentName = alignment == null ? 'server' : 'custom';
+    testWidgets('launcher zoom stays fixed with $alignmentName alignment',
+        (tester) async {
+      final response = Completer<http.Response>();
+      final runtime = _runtime(
+        config,
+        MockClient((_) => response.future),
+      );
+
+      await tester.pumpWidget(_app(
+        Stack(
+          children: <Widget>[
+            const SizedBox.expand(),
+            WisperBotChatLauncher(
+              config: config,
+              controller: runtime.controller,
+              alignment: alignment,
+            ),
+          ],
+        ),
+      ));
+
+      expect(find.byType(FloatingActionButton), findsNothing);
+      expect(find.bySemanticsLabel('Open chat'), findsNothing);
+
+      response.complete(http.Response(jsonEncode(sessionResponse()), 200));
+      await tester.pump();
+
+      final loadedLauncher = find.byKey(
+        const ValueKey<String>('wisperbot-launcher-loaded'),
+      );
+      final transition = find.byKey(
+        const ValueKey<String>('wisperbot-launcher-transition'),
+      );
+      final zoom = find.byKey(
+        const ValueKey<String>('wisperbot-launcher-zoom'),
+      );
+      final fab = find.byType(FloatingActionButton);
+      expect(loadedLauncher, findsOneWidget);
+      expect(fab, findsOneWidget);
+      expect(
+        find.descendant(
+          of: transition,
+          matching: find.byType(FadeTransition),
+        ),
+        findsNothing,
+      );
+
+      final initialScale = tester.widget<ScaleTransition>(zoom);
+      expect(initialScale.scale.value, 0);
+      expect(initialScale.alignment, Alignment.center);
+      final fixedCenter = tester.getCenter(fab);
+
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(
+        tester.widget<ScaleTransition>(zoom).scale.value,
+        inExclusiveRange(0, 1),
+      );
+      expect(
+        tester.getCenter(fab),
+        offsetMoreOrLessEquals(fixedCenter, epsilon: 0.01),
+      );
+
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(tester.widget<ScaleTransition>(zoom).scale.value, 1);
+      expect(
+        tester.getCenter(fab),
+        offsetMoreOrLessEquals(fixedCenter, epsilon: 0.01),
+      );
+      expect(find.bySemanticsLabel('Open chat'), findsWidgets);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await runtime.dispose();
+    });
+  }
+
+  testWidgets('custom launcher builder retains loading-state control',
+      (tester) async {
+    final response = Completer<http.Response>();
+    final runtime = _runtime(
+      config,
+      MockClient((_) => response.future),
+    );
+
+    await tester.pumpWidget(_app(
+      WisperBotChatLauncher(
+        config: config,
+        controller: runtime.controller,
+        builder: (_, __, ___) => const Text('Custom launcher'),
+      ),
+    ));
+
+    expect(find.text('Custom launcher'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    response.complete(http.Response(jsonEncode(sessionResponse()), 200));
+    await tester.pump();
+    await runtime.dispose();
+  });
+
+  testWidgets('launcher skips its entrance transition for reduced motion',
+      (tester) async {
+    final response = Completer<http.Response>();
+    final runtime = _runtime(
+      config,
+      MockClient((_) => response.future),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: WisperBotChatLauncher(
+            config: config,
+            controller: runtime.controller,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(FloatingActionButton), findsNothing);
+
+    response.complete(http.Response(jsonEncode(sessionResponse()), 200));
+    await tester.pump();
+
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('wisperbot-launcher-transition')),
+      findsNothing,
+    );
+    expect(find.bySemanticsLabel('Open chat'), findsWidgets);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();
@@ -404,11 +795,13 @@ void main() {
     await runtime.dispose();
   });
 
-  testWidgets('bottom sheet uses nearly the full safe height', (tester) async {
+  testWidgets('bottom sheet tracks keyboard and restores its safe height',
+      (tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetViewInsets);
     final runtime = _runtime(
       config,
       MockClient(
@@ -440,6 +833,22 @@ void main() {
     );
     expect(sheet, findsOneWidget);
     expect(tester.getSize(sheet).height, closeTo(768, 0.1));
+    expect(find.byType(TextField), findsOneWidget);
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await tester.pump();
+
+    expect(tester.getSize(sheet).height, closeTo(480, 0.1));
+    expect(
+      tester.getBottomRight(find.byType(TextField)).dy,
+      lessThanOrEqualTo(500),
+    );
+
+    tester.view.viewInsets = FakeViewPadding.zero;
+    await tester.pump();
+
+    expect(tester.getSize(sheet).height, closeTo(768, 0.1));
+    expect(find.byType(TextField), findsOneWidget);
 
     await tester.tap(find.byTooltip('Close chat'));
     await tester.pumpAndSettle();
@@ -509,5 +918,46 @@ class _TestRuntime {
   Future<void> dispose() async {
     await controller.dispose();
     await client.close();
+  }
+}
+
+class _FakeMediaAdapter implements WisperBotMediaAdapter {
+  int imagePicks = 0;
+  int recordingStarts = 0;
+  int recordingStops = 0;
+  int recordingCancels = 0;
+
+  @override
+  Future<WisperBotUpload?> pickImage() async {
+    imagePicks++;
+    return WisperBotUpload(
+      bytes: Uint8List.fromList(
+        base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=',
+        ),
+      ),
+      filename: 'photo.png',
+      mimeType: 'image/png',
+    );
+  }
+
+  @override
+  Future<void> startAudioRecording() async {
+    recordingStarts++;
+  }
+
+  @override
+  Future<WisperBotUpload?> stopAudioRecording() async {
+    recordingStops++;
+    return WisperBotUpload(
+      bytes: Uint8List.fromList(<int>[1, 2, 3, 4]),
+      filename: 'voice.wav',
+      mimeType: 'audio/wav',
+    );
+  }
+
+  @override
+  Future<void> cancelAudioRecording() async {
+    recordingCancels++;
   }
 }

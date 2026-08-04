@@ -155,7 +155,11 @@ Anonymous and correctly signed identities persist across launches. Unsigned prof
 
 \* Web secure storage requires HTTPS or localhost and is scoped to the browser origin.
 
-The core upload API accepts validated bytes through `WisperBotUpload`; media pickers, recorders, and audio players remain optional host concerns rather than runtime dependencies.
+The core upload API accepts validated bytes through `WisperBotUpload`. Supply a
+`WisperBotMediaAdapter` in `WisperBotConfig` to enable the default composer's
+image and microphone controls while keeping picker/recorder plugins out of the
+core runtime. The example app contains a working `image_picker` + `record`
+adapter.
 
 ## Delivery and error behavior
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'errors.dart';
+import 'media_adapter.dart';
 
 enum WisperBotPresentation { fullScreen, bottomSheet, dialog }
 
@@ -122,6 +123,7 @@ class WisperBotConfig {
     this.useApiColors = true,
     this.presentation = WisperBotPresentation.fullScreen,
     this.enableTyping = true,
+    this.mediaAdapter,
     this.polling = const WisperBotPollingConfig(),
     this.diagnostics,
   });
@@ -133,6 +135,7 @@ class WisperBotConfig {
   final bool useApiColors;
   final WisperBotPresentation presentation;
   final bool enableTyping;
+  final WisperBotMediaAdapter? mediaAdapter;
   final WisperBotPollingConfig polling;
   final WisperBotDiagnosticsCallback? diagnostics;
 }

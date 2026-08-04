@@ -69,6 +69,52 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
     final custom = widget.builder;
     if (custom != null) return custom(context, _state, open);
 
+    final isConfigurationLoaded = _state.widget != null;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) {
+      if (!isConfigurationLoaded) return const SizedBox.shrink();
+      return _buildPositionedLauncher(
+        context,
+        child: _buildDefaultLauncherButton(context, open),
+      );
+    }
+
+    return _buildPositionedLauncher(
+      context,
+      child: AnimatedSwitcher(
+        key: const ValueKey<String>('wisperbot-launcher-transition'),
+        duration: const Duration(milliseconds: 140),
+        transitionBuilder: _buildZoomTransition,
+        child: isConfigurationLoaded
+            ? KeyedSubtree(
+                key: const ValueKey<String>('wisperbot-launcher-loaded'),
+                child: _buildDefaultLauncherButton(context, open),
+              )
+            : const SizedBox.shrink(
+                key: ValueKey<String>('wisperbot-launcher-loading'),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildPositionedLauncher(
+    BuildContext context, {
+    required Widget child,
+  }) =>
+      Align(
+        alignment: widget.alignment ?? _serverAlignment(_state),
+        child: SafeArea(
+          minimum: (widget.margin ?? const EdgeInsets.all(16))
+              .resolve(Directionality.of(context)),
+          child: child,
+        ),
+      );
+
+  Widget _buildDefaultLauncherButton(
+    BuildContext context,
+    VoidCallback open,
+  ) {
     final colors = WisperBotResolvedTheme.resolve(
       hostTheme: Theme.of(context),
       server: _state.widget,
@@ -79,40 +125,53 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
     final label = unread != null && unread > 0
         ? 'Open chat, $unread unread ${unread == 1 ? 'message' : 'messages'}'
         : 'Open chat';
-    return Align(
-      alignment: widget.alignment ?? _serverAlignment(_state),
-      child: SafeArea(
-        minimum: (widget.margin ?? const EdgeInsets.all(16))
-            .resolve(Directionality.of(context)),
-        child: Semantics(
-          button: true,
-          label: label,
-          child: SizedBox.square(
-            dimension: colors.launcherSize,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: <Widget>[
-                Positioned.fill(
-                  child: FloatingActionButton(
-                    heroTag: null,
-                    tooltip: label,
-                    onPressed: open,
-                    backgroundColor: colors.primary,
-                    foregroundColor: colors.onPrimary,
-                    child: _launcherIcon(_state, colors.launcherSize),
-                  ),
-                ),
-                if (unread != null && unread > 0)
-                  PositionedDirectional(
-                    top: -6,
-                    end: -6,
-                    child: _UnreadBadge(count: unread),
-                  ),
-              ],
+    return Semantics(
+      button: true,
+      label: label,
+      child: SizedBox.square(
+        dimension: colors.launcherSize,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            Positioned.fill(
+              child: FloatingActionButton(
+                heroTag: null,
+                tooltip: label,
+                onPressed: open,
+                backgroundColor: colors.primary,
+                foregroundColor: colors.onPrimary,
+                child: _launcherIcon(_state, colors.launcherSize),
+              ),
             ),
-          ),
+            if (unread != null && unread > 0)
+              PositionedDirectional(
+                top: -6,
+                end: -6,
+                child: _UnreadBadge(count: unread),
+              ),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildZoomTransition(
+    Widget child,
+    Animation<double> animation,
+  ) {
+    final scale = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+      ),
+    );
+    return ScaleTransition(
+      key: child.key == const ValueKey<String>('wisperbot-launcher-loaded')
+          ? const ValueKey<String>('wisperbot-launcher-zoom')
+          : null,
+      scale: scale,
+      alignment: Alignment.center,
+      child: child,
     );
   }
 

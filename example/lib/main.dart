@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 
+import 'src/example_media_adapter.dart';
 import 'src/theme/example_theme.dart';
 import 'src/widgets/example_brand_header.dart';
 import 'src/widgets/example_hero_card.dart';
@@ -9,25 +12,41 @@ import 'src/widgets/integration_card.dart';
 
 Future<void> main() async {
   await dotenv.load(fileName: '.env');
-  final config = WisperBotConfig(
-      widgetKey: dotenv.get('WISPERBOT_WIDGET_KEY').trim(),
-      user: const WisperBotUser(name: 'Demo User', email: "user@demo.com"),
-      useApiColors: false);
-  runApp(ExampleApp(config: config));
+  runApp(
+    ExampleApp(widgetKey: dotenv.get('WISPERBOT_WIDGET_KEY').trim()),
+  );
 }
 
-class ExampleApp extends StatelessWidget {
-  const ExampleApp({super.key, required this.config});
+class ExampleApp extends StatefulWidget {
+  const ExampleApp({super.key, required this.widgetKey});
 
-  final WisperBotConfig config;
+  final String widgetKey;
+
+  @override
+  State<ExampleApp> createState() => _ExampleAppState();
+}
+
+class _ExampleAppState extends State<ExampleApp> {
+  late final ExampleMediaAdapter _mediaAdapter = ExampleMediaAdapter();
+  late final WisperBotConfig _config = WisperBotConfig(
+    widgetKey: widget.widgetKey,
+    user: const WisperBotUser(name: 'Demo User', email: 'user@demo.com'),
+    mediaAdapter: _mediaAdapter,
+  );
 
   @override
   Widget build(BuildContext context) => MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'WisperBot Chat',
         theme: buildExampleTheme(),
-        home: ExampleHome(config: config),
+        home: ExampleHome(config: _config),
       );
+
+  @override
+  void dispose() {
+    unawaited(_mediaAdapter.dispose());
+    super.dispose();
+  }
 }
 
 class ExampleHome extends StatelessWidget {
