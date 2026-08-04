@@ -84,6 +84,12 @@ void main() {
     expect(find.text('Welcome to the test chat'), findsOneWidget);
     expect(find.text('Powered by WisperBot'), findsOneWidget);
     expect(find.bySemanticsLabel('Support avatar'), findsWidgets);
+    final supportLogo = tester.widget<Image>(
+      find.byKey(const ValueKey<String>('wisperbot-support-logo')).first,
+    );
+    final supportLogoAsset = supportLogo.image as AssetImage;
+    expect(supportLogoAsset.assetName, 'assets/images/logo.png');
+    expect(supportLogoAsset.package, 'wisperbot_chat');
     expect(find.bySemanticsLabel('Send message'), findsOneWidget);
     expect(
       find.widgetWithText(TextField, 'Type your message…'),
@@ -189,6 +195,12 @@ void main() {
     final size = tester.getSize(find.byType(FloatingActionButton));
     expect(size.width, greaterThanOrEqualTo(48));
     expect(size.height, greaterThanOrEqualTo(48));
+    final logo = tester.widget<Image>(
+      find.byKey(const ValueKey<String>('wisperbot-launcher-logo')),
+    );
+    final logoAsset = logo.image as AssetImage;
+    expect(logoAsset.assetName, 'assets/images/logo.png');
+    expect(logoAsset.package, 'wisperbot_chat');
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();
@@ -232,7 +244,7 @@ void main() {
     ];
     expect(sizes.map((size) => size.width), contains(closeTo(20.16, 0.01)));
     expect(sizes.map((size) => size.width), contains(closeTo(15.68, 0.01)));
-    expect(sizes.map((size) => size.width), contains(closeTo(24, 0.01)));
+    expect(sizes.map((size) => size.width), contains(closeTo(32, 0.01)));
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();

@@ -1,10 +1,28 @@
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wisperbot_chat_example/src/widgets/example_brand_header.dart';
 
 void main() {
-  testWidgets('bundles the example brand logo', (_) async {
-    final logo = await rootBundle.load('assets/images/logo.png');
+  testWidgets('example header targets the package-owned brand logo',
+      (tester) async {
+    await tester.pumpWidget(
+      DefaultAssetBundle(
+        bundle: _TestAssetBundle(),
+        child: const MaterialApp(home: ExampleBrandHeader()),
+      ),
+    );
 
-    expect(logo.lengthInBytes, greaterThan(0));
+    final image = tester.widget<Image>(find.byType(Image));
+    final logo = image.image as AssetImage;
+    expect(logo.assetName, 'assets/images/logo.png');
+    expect(logo.package, 'wisperbot_chat');
   });
+}
+
+class _TestAssetBundle extends CachingAssetBundle {
+  @override
+  Future<ByteData> load(String key) => rootBundle.load(
+        key == 'AssetManifest.bin' ? key : 'assets/images/app_logo.png',
+      );
 }

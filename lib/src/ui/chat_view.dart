@@ -7,6 +7,7 @@ import '../application/chat_runtime.dart';
 import '../domain/config.dart';
 import '../domain/errors.dart';
 import '../domain/models.dart';
+import 'brand_logo.dart';
 import 'remote_image.dart';
 import 'resolved_theme.dart';
 
@@ -385,7 +386,6 @@ class _ChatHeader extends StatelessWidget {
                 avatarUrl: widgetConfig?.avatarUrl,
                 size: 36,
                 backgroundColor: colors.onPrimary.withValues(alpha: 0.18),
-                foregroundColor: colors.onPrimary,
                 borderColor: colors.onPrimary.withValues(alpha: 0.62),
               ),
               const SizedBox(width: 9),
@@ -568,7 +568,6 @@ class _BubbleLayout extends StatelessWidget {
                       avatarUrl: widgetConfig?.avatarUrl,
                       size: 28,
                       backgroundColor: colors.primary,
-                      foregroundColor: colors.onPrimary,
                     ),
                     const SizedBox(width: 8),
                   ],
@@ -613,24 +612,23 @@ class _SupportAvatar extends StatelessWidget {
     required this.avatarUrl,
     required this.size,
     required this.backgroundColor,
-    required this.foregroundColor,
     this.borderColor,
   });
 
   final Uri? avatarUrl;
   final double size;
   final Color backgroundColor;
-  final Color foregroundColor;
   final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
     final assetSize = size * 0.56;
     final fallback = Center(
-      child: Icon(
-        Icons.support_agent_rounded,
-        size: assetSize,
-        color: foregroundColor,
+      child: SizedBox.square(
+        dimension: assetSize,
+        child: const WisperBotBrandLogo(
+          imageKey: ValueKey<String>('wisperbot-support-logo'),
+        ),
       ),
     );
     return Semantics(

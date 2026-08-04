@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../application/chat_runtime.dart';
 import '../domain/config.dart';
 import '../domain/models.dart';
+import 'brand_logo.dart';
 import 'facade.dart';
 import 'remote_image.dart';
 import 'resolved_theme.dart';
@@ -117,16 +118,21 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
 
   Widget _launcherIcon(WisperBotChatState state, double launcherSize) {
     final logo = state.widget?.launcherLogoUrl;
-    if (logo == null) return const Icon(Icons.chat_bubble_outline);
     return SizedBox.square(
-      dimension: launcherSize * 3 / 7,
-      child: WisperBotRemoteImage(
-        url: logo,
-        fit: BoxFit.contain,
-        errorBuilder: (_) => const Icon(Icons.chat_bubble_outline),
-      ),
+      dimension: launcherSize * 4 / 7,
+      child: logo == null
+          ? _builtInLauncherLogo()
+          : WisperBotRemoteImage(
+              url: logo,
+              fit: BoxFit.contain,
+              errorBuilder: (_) => _builtInLauncherLogo(),
+            ),
     );
   }
+
+  Widget _builtInLauncherLogo() => const WisperBotBrandLogo(
+        imageKey: ValueKey<String>('wisperbot-launcher-logo'),
+      );
 
   Alignment _serverAlignment(WisperBotChatState state) =>
       state.widget?.launcherPosition == WisperBotLauncherPosition.bottomLeft
