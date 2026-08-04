@@ -7,6 +7,7 @@ import '../application/chat_runtime.dart';
 import '../domain/config.dart';
 import '../domain/errors.dart';
 import '../domain/models.dart';
+import 'remote_image.dart';
 import 'resolved_theme.dart';
 
 typedef WisperBotChatStateBuilder = Widget Function(
@@ -624,10 +625,11 @@ class _SupportAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final assetSize = size * 0.56;
     final fallback = Center(
       child: Icon(
         Icons.support_agent_rounded,
-        size: size * 0.56,
+        size: assetSize,
         color: foregroundColor,
       ),
     );
@@ -647,10 +649,15 @@ class _SupportAvatar extends StatelessWidget {
         ),
         child: avatarUrl == null
             ? fallback
-            : Image.network(
-                avatarUrl.toString(),
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => fallback,
+            : Center(
+                child: SizedBox.square(
+                  dimension: assetSize,
+                  child: WisperBotRemoteImage(
+                    url: avatarUrl!,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_) => fallback,
+                  ),
+                ),
               ),
       ),
     );
@@ -834,11 +841,11 @@ class _MessageContent extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 8),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
-              child: Image.network(
-                attachment.url.toString(),
+              child: WisperBotRemoteImage(
+                url: attachment.url,
                 fit: BoxFit.cover,
                 semanticLabel: attachment.filename ?? 'Image attachment',
-                errorBuilder: (_, __, ___) => const SizedBox(
+                errorBuilder: (_) => const SizedBox(
                   height: 96,
                   child: Center(child: Icon(Icons.broken_image_outlined)),
                 ),

@@ -36,6 +36,8 @@ Map<String, Object?> sessionResponse({
   bool requirePreChat = false,
   bool online = true,
   Map<String, Object?>? capabilities,
+  String? avatarUrl,
+  String? launcherLogoUrl,
 }) =>
     <String, Object?>{
       'visitor_id': visitorId,
@@ -46,9 +48,11 @@ Map<String, Object?> sessionResponse({
         'subtitle': 'Usually replies quickly',
         'welcome_message': 'Welcome to the test chat',
         'agent_name': 'Support',
+        if (avatarUrl != null) 'avatar_url': avatarUrl,
         'primary_color': '#6258f9',
         'position': 'bottom_right',
         'footer_company_name': 'WisperBot',
+        if (launcherLogoUrl != null) 'launcher_logo_url': launcherLogoUrl,
         'team_members': <Object?>[],
         'ai_enabled': true,
         'require_prechat': requirePreChat,

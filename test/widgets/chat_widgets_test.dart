@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
+import 'package:wisperbot_chat/src/ui/remote_image.dart';
 
 import '../support/fakes.dart';
 
@@ -188,6 +189,50 @@ void main() {
     final size = tester.getSize(find.byType(FloatingActionButton));
     expect(size.width, greaterThanOrEqualTo(48));
     expect(size.height, greaterThanOrEqualTo(48));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets('remote brand assets use contained web-widget sizing',
+      (tester) async {
+    final runtime = _runtime(
+      config,
+      MockClient(
+        (_) async => http.Response(
+          jsonEncode(
+            sessionResponse(
+              avatarUrl: 'https://chat.example.com/support.png',
+              launcherLogoUrl: 'https://chat.example.com/launcher.png',
+            ),
+          ),
+          200,
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(_app(
+      Stack(
+        children: <Widget>[
+          WisperBotChatView(config: config, controller: runtime.controller),
+          WisperBotChatLauncher(
+            config: config,
+            controller: runtime.controller,
+          ),
+        ],
+      ),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    final images = find.byType(WisperBotRemoteImage);
+    expect(images, findsNWidgets(3));
+    final sizes = <Size>[
+      for (var index = 0; index < 3; index++) tester.getSize(images.at(index)),
+    ];
+    expect(sizes.map((size) => size.width), contains(closeTo(20.16, 0.01)));
+    expect(sizes.map((size) => size.width), contains(closeTo(15.68, 0.01)));
+    expect(sizes.map((size) => size.width), contains(closeTo(24, 0.01)));
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();

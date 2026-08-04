@@ -38,8 +38,8 @@ class ExampleApp extends StatelessWidget {
         colorScheme: colorScheme,
         scaffoldBackgroundColor: const Color(0xFFFFFFFF),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFFFF8F4),
-          foregroundColor: Color(0xFF211A17),
+          backgroundColor: Color(0xFFFFFFFF),
+          foregroundColor: Color(0xFF000000),
           elevation: 0,
           scrolledUnderElevation: 0,
           surfaceTintColor: Colors.transparent,
@@ -142,7 +142,6 @@ class ExampleHome extends StatelessWidget {
                   icon: Icons.fullscreen_rounded,
                   title: 'Full-screen chat',
                   subtitle: 'An immersive support experience',
-                  featured: true,
                   onTap: () => WisperBotChat.open(
                     context,
                     config: config,
@@ -182,12 +181,18 @@ class ExampleHome extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
-                const _LauncherNotice(),
               ],
             ),
           ),
         ),
-        floatingActionButton: WisperBotChatLauncher(config: config),
+        floatingActionButton: WisperBotChatLauncher(
+          config: config,
+          builder: (context, state, openChat) => _LogoLauncher(
+            config: config,
+            state: state,
+            onPressed: openChat,
+          ),
+        ),
       );
 }
 
@@ -209,7 +214,7 @@ class _BrandMark extends StatelessWidget {
             ),
           ],
         ),
-        child: const Icon(Icons.forum_rounded, color: Colors.white, size: 22),
+        child: Image.asset('assets/images/logo.png'),
       );
 }
 
@@ -223,7 +228,7 @@ class _HeroCard extends StatelessWidget {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFFF762E), Color(0xFFFF9A65)],
+            colors: [Color(0xFFFF762E), Color(0xFFF0642A)],
           ),
           borderRadius: BorderRadius.circular(26),
           boxShadow: const [
@@ -301,32 +306,27 @@ class _IntegrationCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
-    this.featured = false,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-  final bool featured;
 
   @override
   Widget build(BuildContext context) {
-    final foreground = featured ? Colors.white : const Color(0xFF211A17);
-    final muted = featured ? const Color(0xFFFFE8DC) : const Color(0xFF7B6A62);
-
     return Material(
-      color: featured ? _wisperBotOrange : Colors.white,
-      elevation: featured ? 5 : 0,
+      color: Colors.white,
+      elevation: 0,
       shadowColor: const Color(0x44FF762E),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: featured
-            ? BorderSide.none
-            : const BorderSide(color: Color(0xFFFFDFCE)),
+        side: const BorderSide(color: Color(0xB3FFB186)),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
+        splashColor: Color(0xFFFF762E).withValues(alpha: 0.2),
+        highlightColor: Color(0xFFFF762E).withValues(alpha: 0.2),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -336,14 +336,12 @@ class _IntegrationCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: featured
-                      ? const Color(0x33FFFFFF)
-                      : const Color(0xFFFFEEE5),
+                  color: const Color(0xFFFFEEE5),
                   borderRadius: BorderRadius.circular(15),
                 ),
                 child: Icon(
                   icon,
-                  color: featured ? Colors.white : _wisperBotOrange,
+                  color: _wisperBotOrange,
                   size: 24,
                 ),
               ),
@@ -354,8 +352,8 @@ class _IntegrationCard extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: TextStyle(
-                        color: foreground,
+                      style: const TextStyle(
+                        color: Color(0xFF211A17),
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                       ),
@@ -363,8 +361,8 @@ class _IntegrationCard extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       subtitle,
-                      style: TextStyle(
-                        color: muted,
+                      style: const TextStyle(
+                        color: Color(0xFF7B6A62),
                         fontSize: 12,
                         height: 1.35,
                       ),
@@ -374,17 +372,15 @@ class _IntegrationCard extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: featured
-                      ? const Color(0xFFFFFFFF)
-                      : const Color(0xFFFFF3ED),
+                width: 46,
+                height: 46,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFF762E),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.arrow_forward_rounded,
-                  color: featured ? _wisperBotOrange : const Color(0xFFB54A16),
+                  color: Color(0xFFFFFFFF),
                   size: 19,
                 ),
               ),
@@ -396,66 +392,96 @@ class _IntegrationCard extends StatelessWidget {
   }
 }
 
-class _LauncherNotice extends StatelessWidget {
-  const _LauncherNotice();
+class _LogoLauncher extends StatelessWidget {
+  const _LogoLauncher({
+    required this.config,
+    required this.state,
+    required this.onPressed,
+  });
+
+  final WisperBotConfig config;
+  final WisperBotChatState state;
+  final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFEDE4),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: const Row(
+  Widget build(BuildContext context) {
+    final unread = state.unreadCount;
+    final label = unread != null && unread > 0
+        ? 'Open chat, $unread unread ${unread == 1 ? 'message' : 'messages'}'
+        : 'Open chat';
+    final primary = config.theme?.primaryColor ??
+        (config.useApiColors
+            ? _parseHexColor(state.widget?.primaryColorHex)
+            : null) ??
+        _wisperBotOrange;
+
+    return Semantics(
+      button: true,
+      label: label,
+      child: SizedBox.square(
+        dimension: config.theme?.launcherSize ?? 56,
+        child: Stack(
+          clipBehavior: Clip.none,
           children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Icon(
-                  Icons.chat_bubble_rounded,
-                  color: _wisperBotOrange,
-                  size: 26,
-                ),
-                Positioned(
-                  right: -3,
-                  top: -3,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Color(0xFF27C97B),
-                      shape: BoxShape.circle,
-                    ),
-                    child: SizedBox(width: 9, height: 9),
+            Positioned.fill(
+              child: FloatingActionButton(
+                heroTag: null,
+                tooltip: label,
+                onPressed: onPressed,
+                backgroundColor: primary,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    fit: BoxFit.contain,
                   ),
                 ),
-              ],
-            ),
-            SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Floating launcher is active',
-                    style: TextStyle(
-                      color: Color(0xFF392B25),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Try it from the bottom corner.',
-                    style: TextStyle(
-                      color: Color(0xFF806C63),
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
               ),
             ),
+            if (unread != null && unread > 0)
+              PositionedDirectional(
+                top: -6,
+                end: -6,
+                child: Container(
+                  constraints: const BoxConstraints(
+                    minWidth: 22,
+                    minHeight: 22,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.error,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.surface,
+                      width: 2,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    unread > 99 ? '99+' : '$unread',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onError,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+              ),
           ],
         ),
-      );
+      ),
+    );
+  }
+}
+
+Color? _parseHexColor(String? value) {
+  if (value == null) return null;
+  final hex = value.trim().replaceFirst('#', '');
+  if (hex.length != 6) return null;
+  final parsed = int.tryParse(hex, radix: 16);
+  return parsed == null ? null : Color(0xFF000000 | parsed);
 }
 
 class EmbeddedExample extends StatelessWidget {

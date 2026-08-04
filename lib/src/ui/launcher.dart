@@ -6,6 +6,7 @@ import '../application/chat_runtime.dart';
 import '../domain/config.dart';
 import '../domain/models.dart';
 import 'facade.dart';
+import 'remote_image.dart';
 import 'resolved_theme.dart';
 
 typedef WisperBotLauncherBuilder = Widget Function(
@@ -97,7 +98,7 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
                     onPressed: open,
                     backgroundColor: colors.primary,
                     foregroundColor: colors.onPrimary,
-                    child: _launcherIcon(_state),
+                    child: _launcherIcon(_state, colors.launcherSize),
                   ),
                 ),
                 if (unread != null && unread > 0)
@@ -114,14 +115,15 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
     );
   }
 
-  Widget _launcherIcon(WisperBotChatState state) {
+  Widget _launcherIcon(WisperBotChatState state, double launcherSize) {
     final logo = state.widget?.launcherLogoUrl;
     if (logo == null) return const Icon(Icons.chat_bubble_outline);
-    return ClipOval(
-      child: Image.network(
-        logo.toString(),
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => const Icon(Icons.chat_bubble_outline),
+    return SizedBox.square(
+      dimension: launcherSize * 3 / 7,
+      child: WisperBotRemoteImage(
+        url: logo,
+        fit: BoxFit.contain,
+        errorBuilder: (_) => const Icon(Icons.chat_bubble_outline),
       ),
     );
   }
