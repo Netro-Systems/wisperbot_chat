@@ -1,8 +1,8 @@
 # wisperbot_chat
 
-`wisperbot_chat` is a Flutter package for WisperBot's customer-facing chat. It owns secure visitor sessions, public widget API communication, realtime delivery with polling recovery, message reconciliation, lifecycle handling, typed state and errors, and an optional Material UI.
+`wisperbot_chat` is a Flutter package for WisperBot's customer-facing chat. It owns secure visitor sessions, public widget API communication, polling, message reconciliation, lifecycle handling, typed state and errors, and an optional Material UI.
 
-This is a `0.1.0-dev.1` preview. Use a controlled widget without a domain allowlist or required pre-chat until the corresponding native-client backend policy and configuration-bootstrap endpoints are available.
+This is a `0.1.0-dev.1` preview. Native requests work only for widgets whose browser domain allowlist is empty; the SDK never spoofs browser `Origin` or `Referer` headers.
 
 ## Quick start
 
@@ -148,12 +148,10 @@ Anonymous and correctly signed identities persist across launches. Unsigned prof
 |---|---:|---:|---:|
 | Anonymous and signed-user sessions | Yes | Yes* | Yes |
 | Text, image/audio transport | Yes | Yes | Yes |
-| Pusher realtime with polling recovery | Yes | Yes | Polling fallback |
+| Foreground polling | Yes | Yes | Yes |
 | Typing and human handoff | Yes | Yes | Yes |
 | Prebuilt screen/view/launcher/modal UI | Yes | Yes | Yes |
-| Backward pagination and unread/read state | Backend pending | Backend pending | Backend pending |
-| Push notifications | Not included | Not included | Not included |
-| Required pre-chat | Bootstrap endpoint pending | Bootstrap endpoint pending | Bootstrap endpoint pending |
+| Required name/email pre-chat | Yes | Yes | Yes |
 | Widget domain allowlist from native apps | Native policy pending | Supported by browser origin | Native policy pending |
 
 \* Web secure storage requires HTTPS or localhost and is scoped to the browser origin.
@@ -164,14 +162,19 @@ image and microphone controls while keeping picker/recorder plugins out of the
 core runtime. The example app contains a working `image_picker` + `record`
 adapter.
 
+When the widget requires pre-chat, the built-in UI collects the configured name
+and/or email fields. Headless integrations submit them with
+`controller.submitPreChat(const WisperBotPreChatData(...))`. The SDK reuses the
+token-bound session and stores only a completion flag, never the submitted PII.
+
 ## Delivery and error behavior
 
 - Visitor tokens are bearer credentials stored through `WisperBotSessionStore`; the default implementation uses secure platform storage.
 - A send becomes `sent` only after a server response supplies a message ID.
 - A disconnected or timed-out send becomes `unconfirmed` and is not automatically retried, because the current backend has no client idempotency key.
-- Pusher delivers new bot/human messages immediately when the backend advertises realtime. A poll runs after subscription/reconnection and every 60 seconds while connected; normal polling resumes whenever realtime is unavailable.
-- Realtime events and poll responses are ordered and deduplicated by server ID. Only session/poll batches advance the receive cursor, preventing missed gaps.
-- Required pre-chat is surfaced as a typed configuration failure instead of silently creating the wrong visitor identity.
+- Foreground polling delivers bot/human replies and pauses when the app is backgrounded or no synchronization listener exists.
+- Session and poll responses are ordered and deduplicated by server ID. Send responses never advance the receive cursor, preventing missed gaps.
+- Required pre-chat uses a second authenticated session request after configuration is loaded.
 - Diagnostics are structured and redacted; tokens, signatures, PII, message bodies, and attachment URLs are never included.
 
 ## Development

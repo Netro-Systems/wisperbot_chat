@@ -7,29 +7,22 @@ import 'package:http/http.dart' as http;
 import '../domain/config.dart';
 import '../domain/errors.dart';
 import '../domain/models.dart';
-import '../domain/realtime.dart';
 import 'session_store.dart';
 
 class WidgetSessionResult {
   WidgetSessionResult({
     required this.session,
     required this.widget,
-    required this.capabilities,
-    required this.identity,
     required this.messages,
     required this.supportAvailability,
     required this.handoff,
-    required this.realtime,
   });
 
   final WisperBotStoredSession session;
   final WisperBotWidgetConfig widget;
-  final WisperBotCapabilities capabilities;
-  final WisperBotIdentityStatus identity;
   final List<WisperBotMessage> messages;
   final WisperBotSupportAvailability supportAvailability;
   final WisperBotHandoffState handoff;
-  final WisperBotRealtimeSettings? realtime;
 }
 
 class WidgetPollResult {
@@ -61,8 +54,6 @@ class WidgetApiClient {
   })  : _baseUrl = baseUrl,
         _httpClient = httpClient;
 
-  static const String sdkVersion = '0.1.0-dev.1';
-
   final Uri _baseUrl;
   final http.Client _httpClient;
   final Duration requestTimeout;
@@ -71,6 +62,7 @@ class WidgetApiClient {
     required String widgetKey,
     required WisperBotUser? user,
     required WisperBotStoredSession? storedSession,
+    bool preChatCompleted = false,
   }) async {
     final body = <String, Object>{'key': widgetKey};
     if (storedSession != null) {
@@ -88,63 +80,24 @@ class WidgetApiClient {
       'session',
       body,
       token: storedSession?.token,
-      sessionRequest: true,
+      operation: _WidgetOperation.session,
     );
     final json = _decodeObject(response);
     final visitorId = _requiredString(json, 'visitor_id');
     final token = _requiredString(json, 'token');
     final configJson = _requiredObject(json, 'config');
-    final messages = _parseMessages(json['messages']);
-    final identity = _parseIdentity(json['identity'], user: user);
     return WidgetSessionResult(
       session: WisperBotStoredSession(
         visitorId: visitorId,
         token: token,
         savedAt: DateTime.now().toUtc(),
+        preChatCompleted: preChatCompleted,
       ),
       widget: _parseWidgetConfig(configJson),
-      capabilities: _parseCapabilities(json['capabilities']),
-      identity: identity,
-      messages: messages,
-      supportAvailability: _parseAvailability(json['online']),
+      messages: _parseMessages(json['messages']),
+      supportAvailability: _parseAvailability(_requiredBool(json, 'online')),
       handoff: _parseHandoff(json['handoff']),
-      realtime: _parseRealtime(json['realtime'], _baseUrl),
     );
-  }
-
-  Future<WisperBotRealtimeAuthorization> authorizeRealtime({
-    required String widgetKey,
-    required String token,
-    required Uri endpoint,
-    required String socketId,
-    required String channelName,
-  }) async {
-    final response = await _execute(
-      () => _httpClient
-          .post(
-            endpoint,
-            headers: _headers(token: token),
-            body: jsonEncode(<String, Object>{
-              'key': widgetKey,
-              'socket_id': socketId,
-              'channel_name': channelName,
-            }),
-          )
-          .timeout(requestTimeout),
-      sessionRequest: false,
-    );
-    return WisperBotRealtimeAuthorization(
-      auth: _requiredString(_decodeObject(response), 'auth'),
-    );
-  }
-
-  WisperBotMessage? parseRealtimeMessage(String data) {
-    try {
-      final decoded = jsonDecode(data);
-      return decoded is Map<String, dynamic> ? _parseMessage(decoded) : null;
-    } on Object {
-      return null;
-    }
   }
 
   Future<WidgetPollResult> poll({
@@ -160,19 +113,23 @@ class WidgetApiClient {
     );
     final response = await _execute(
       () => _httpClient
-          .get(uri, headers: _headers(token: token))
+          .get(uri, headers: _headers(token: token, jsonBody: false))
           .timeout(requestTimeout),
-      sessionRequest: false,
+      operation: _WidgetOperation.poll,
     );
     final json = _decodeObject(response);
-    final typing = _objectOrNull(json['agent_typing']);
+    final typing = _requiredObject(json, 'agent_typing');
+    final isTyping = _requiredBool(typing, 'is_typing');
+    final typingName = typing['name'];
+    if (typingName != null && typingName is! String) {
+      throw _invalidResponse();
+    }
     return WidgetPollResult(
       messages: _parseMessages(json['messages']),
-      supportAvailability: _parseAvailability(json['online']),
+      supportAvailability: _parseAvailability(_requiredBool(json, 'online')),
       handoff: _parseHandoff(json['handoff']),
-      agentTyping: typing != null && typing['is_typing'] == true
-          ? WisperBotAgentTyping(name: _stringOrNull(typing['name']))
-          : null,
+      agentTyping:
+          isTyping ? WisperBotAgentTyping(name: typingName as String?) : null,
     );
   }
 
@@ -183,13 +140,9 @@ class WidgetApiClient {
   }) async {
     final response = await _postJson(
       'messages',
-      <String, Object>{
-        'key': widgetKey,
-        'message': text,
-        'type': 'text',
-      },
+      <String, Object>{'key': widgetKey, 'message': text},
       token: token,
-      sessionRequest: false,
+      operation: _WidgetOperation.sendText,
     );
     return _parseSendResult(response);
   }
@@ -202,30 +155,27 @@ class WidgetApiClient {
     String? caption,
   }) async {
     _validateUpload(upload, type);
-    final parameters = <String, String>{
-      'key': widgetKey,
-      'type': type == WisperBotMessageType.image ? 'image' : 'audio',
-    };
-    final uri = _endpoint('messages').replace(queryParameters: parameters);
+    final request = http.MultipartRequest('POST', _endpoint('messages'))
+      ..headers.addAll(_headers(token: token, jsonBody: false))
+      ..fields['key'] = widgetKey
+      ..fields['type'] = type == WisperBotMessageType.image ? 'image' : 'audio'
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          'attachment',
+          upload.bytes,
+          filename: upload.filename,
+        ),
+      );
+    if (caption != null && caption.trim().isNotEmpty) {
+      request.fields['message'] = caption.trim();
+    }
     final response = await _execute(
-      () => _httpClient
-          .post(
-            uri,
-            headers: <String, String>{
-              ..._headers(token: token, includeContentType: false),
-              'Content-Type': upload.mimeType.toLowerCase(),
-              'X-WisperBot-Filename-B64': base64Encode(
-                utf8.encode(upload.filename),
-              ),
-              if (caption != null && caption.trim().isNotEmpty)
-                'X-WisperBot-Caption-B64': base64Encode(
-                  utf8.encode(caption.trim()),
-                ),
-            },
-            body: upload.bytes,
-          )
-          .timeout(requestTimeout),
-      sessionRequest: false,
+      () async {
+        final streamed =
+            await _httpClient.send(request).timeout(requestTimeout);
+        return http.Response.fromStream(streamed).timeout(requestTimeout);
+      },
+      operation: _WidgetOperation.sendMedia,
     );
     return _parseSendResult(response);
   }
@@ -239,7 +189,7 @@ class WidgetApiClient {
       'typing',
       <String, Object>{'key': widgetKey, 'is_typing': isTyping},
       token: token,
-      sessionRequest: false,
+      operation: _WidgetOperation.typing,
     );
   }
 
@@ -251,7 +201,7 @@ class WidgetApiClient {
       'handoff',
       <String, Object>{'key': widgetKey},
       token: token,
-      sessionRequest: false,
+      operation: _WidgetOperation.handoff,
     );
     return _parseHandoff(_decodeObject(response)['handoff']);
   }
@@ -260,7 +210,7 @@ class WidgetApiClient {
     String path,
     Map<String, Object> body, {
     String? token,
-    required bool sessionRequest,
+    required _WidgetOperation operation,
   }) =>
       _execute(
         () => _httpClient
@@ -270,17 +220,17 @@ class WidgetApiClient {
               body: jsonEncode(body),
             )
             .timeout(requestTimeout),
-        sessionRequest: sessionRequest,
+        operation: operation,
       );
 
   Future<http.Response> _execute(
     Future<http.Response> Function() request, {
-    required bool sessionRequest,
+    required _WidgetOperation operation,
   }) async {
     try {
       final response = await request();
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw _mapHttpError(response, sessionRequest: sessionRequest);
+        throw _mapHttpError(response, operation: operation);
       }
       return response;
     } on WisperBotException {
@@ -332,15 +282,16 @@ class WidgetApiClient {
 
   Map<String, String> _headers({
     String? token,
-    bool includeContentType = true,
+    bool jsonBody = true,
   }) =>
       <String, String>{
         'Accept': 'application/json',
-        'X-WisperBot-SDK': 'flutter/$sdkVersion',
-        if (includeContentType) 'Content-Type': 'application/json',
+        if (jsonBody) 'Content-Type': 'application/json',
         if (token != null && token.isNotEmpty) 'X-Widget-Token': token,
       };
 }
+
+enum _WidgetOperation { session, poll, sendText, sendMedia, typing, handoff }
 
 Map<String, dynamic> _decodeObject(http.Response response) {
   try {
@@ -359,9 +310,10 @@ Map<String, dynamic> _decodeObject(http.Response response) {
 
 WisperBotException _mapHttpError(
   http.Response response, {
-  required bool sessionRequest,
+  required _WidgetOperation operation,
 }) {
   final status = response.statusCode;
+  final sessionRequest = operation == _WidgetOperation.session;
   final fieldErrors = _safeFieldErrors(response);
   final retryAfterSeconds = int.tryParse(response.headers['retry-after'] ?? '');
   return switch (status) {
@@ -395,8 +347,12 @@ WisperBotException _mapHttpError(
         httpStatus: status,
       ),
     422 => WisperBotException(
-        code: WisperBotErrorCode.validation,
-        message: 'The request could not be validated.',
+        code: operation == _WidgetOperation.sendMedia
+            ? WisperBotErrorCode.attachmentRejected
+            : WisperBotErrorCode.validation,
+        message: operation == _WidgetOperation.sendMedia
+            ? 'The attachment was rejected by WisperBot.'
+            : 'The request could not be validated.',
         retryable: false,
         httpStatus: status,
         fieldErrors: fieldErrors,
@@ -447,12 +403,33 @@ Map<String, List<String>> _safeFieldErrors(http.Response response) {
 }
 
 List<WisperBotMessage> _parseMessages(Object? value) {
-  if (value is! List<dynamic>) return const <WisperBotMessage>[];
-  return value
-      .whereType<Map<String, dynamic>>()
-      .map(_parseMessage)
-      .whereType<WisperBotMessage>()
-      .toList();
+  if (value is! List<dynamic>) {
+    throw const WisperBotException(
+      code: WisperBotErrorCode.server,
+      message: 'WisperBot returned an incomplete response.',
+      retryable: false,
+    );
+  }
+  final messages = <WisperBotMessage>[];
+  for (final item in value) {
+    if (item is! Map<String, dynamic>) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.server,
+        message: 'WisperBot returned an invalid message.',
+        retryable: false,
+      );
+    }
+    final message = _parseMessage(item);
+    if (message == null) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.server,
+        message: 'WisperBot returned an invalid message.',
+        retryable: false,
+      );
+    }
+    messages.add(message);
+  }
+  return messages;
 }
 
 WisperBotMessage? _parseMessage(Map<String, dynamic> json) {
@@ -461,7 +438,8 @@ WisperBotMessage? _parseMessage(Map<String, dynamic> json) {
     String value => int.tryParse(value),
     _ => null,
   };
-  if (id == null) return null;
+  final createdAt = DateTime.tryParse(_stringOrNull(json['created_at']) ?? '');
+  if (id == null || createdAt == null || json['body'] is! String) return null;
   final role = switch (json['role']) {
     'visitor' => WisperBotMessageRole.visitor,
     'agent' => WisperBotMessageRole.agent,
@@ -478,7 +456,9 @@ WisperBotMessage? _parseMessage(Map<String, dynamic> json) {
       ? WisperBotSenderKind.visitor
       : switch (json['sent_by']) {
           'human' => WisperBotSenderKind.human,
-          'bot' || 'automation' => WisperBotSenderKind.bot,
+          'bot' => WisperBotSenderKind.bot,
+          'automation' => WisperBotSenderKind.automation,
+          'broadcast' => WisperBotSenderKind.broadcast,
           _ => WisperBotSenderKind.unknown,
         };
   final attachmentUri = _safeRemoteUri(json['attachment_url']);
@@ -487,16 +467,15 @@ WisperBotMessage? _parseMessage(Map<String, dynamic> json) {
     serverId: id,
     role: role,
     type: type,
-    body: _stringOrNull(json['body']) ?? '',
+    body: json['body'] as String,
     status: WisperBotMessageStatus.sent,
-    createdAt:
-        DateTime.tryParse(_stringOrNull(json['created_at']) ?? '')?.toLocal() ??
-            DateTime.now(),
+    createdAt: createdAt.toLocal(),
     attachment: attachmentUri == null
         ? null
         : WisperBotAttachment(
             url: attachmentUri,
             filename: _stringOrNull(json['filename']),
+            mimeType: _stringOrNull(json['mime_type']),
           ),
     senderName: role == WisperBotMessageRole.agent
         ? _stringOrNull(json['agent_name'])
@@ -523,16 +502,15 @@ WisperBotWidgetConfig _parseWidgetConfig(Map<String, dynamic> json) {
   }
   final preChatFields = <WisperBotPreChatField>[];
   final rawFields = json['prechat_fields'];
-  if (rawFields is List<dynamic>) {
-    for (final field in rawFields) {
-      preChatFields.add(
-        switch (field) {
-          'name' => WisperBotPreChatField.name,
-          'email' => WisperBotPreChatField.email,
-          _ => WisperBotPreChatField.unknown,
-        },
-      );
-    }
+  if (rawFields is! List<dynamic>) throw _invalidResponse();
+  for (final field in rawFields) {
+    preChatFields.add(
+      switch (field) {
+        'name' => WisperBotPreChatField.name,
+        'email' => WisperBotPreChatField.email,
+        _ => WisperBotPreChatField.unknown,
+      },
+    );
   }
   final rawColor = _stringOrNull(json['primary_color']) ?? '#ff762e';
   final color =
@@ -556,81 +534,27 @@ WisperBotWidgetConfig _parseWidgetConfig(Map<String, dynamic> json) {
     footerCompanyName:
         _stringOrNull(json['footer_company_name']) ?? 'WisperBot',
     teamMembers: members,
-    aiEnabled: json['ai_enabled'] == true,
-    requiresPreChat: json['require_prechat'] == true,
+    aiEnabled: _requiredBool(json, 'ai_enabled'),
+    requiresPreChat: _requiredBool(json, 'require_prechat'),
     preChatFields: preChatFields,
     offlineMessage: _stringOrNull(json['offline_message']),
   );
 }
 
-WisperBotCapabilities _parseCapabilities(Object? value) {
-  final json = _objectOrNull(value);
-  if (json == null) return const WisperBotCapabilities.currentV1();
-  final typing = json['typing'];
-  return WisperBotCapabilities(
-    text: json['text'] != false,
-    images: json['images'] != false,
-    audio: json['audio'] != false,
-    visitorTyping: json['visitor_typing'] == true || typing == true,
-    agentTyping: json['agent_typing'] == true || typing == true,
-    handoff: json['handoff'] == true,
-    backwardPagination: json['backward_pagination'] == true,
-    idempotentSends: json['idempotent_sends'] == true,
-    unread: json['unread'] == true,
-    readReceipts: json['read_receipts'] == true,
-    realtime: json['realtime'] == true,
-    push: json['push'] == true,
-  );
-}
-
-WisperBotRealtimeSettings? _parseRealtime(Object? value, Uri baseUrl) {
-  final json = _objectOrNull(value);
-  if (json == null || json['provider'] != 'pusher') return null;
-  final key = _stringOrNull(json['key']);
-  final cluster = _stringOrNull(json['cluster']);
-  final channel = _stringOrNull(json['channel']);
-  final endpointValue = _stringOrNull(json['auth_endpoint']);
-  if (key == null ||
-      cluster == null ||
-      channel == null ||
-      endpointValue == null) {
-    return null;
-  }
-  final endpoint = Uri.parse(endpointValue);
-  return WisperBotRealtimeSettings(
-    apiKey: key,
-    cluster: cluster,
-    channel: channel,
-    authEndpoint: endpoint.isAbsolute ? endpoint : baseUrl.resolveUri(endpoint),
-  );
-}
-
-WisperBotIdentityStatus _parseIdentity(
-  Object? value, {
-  required WisperBotUser? user,
-}) {
-  final json = _objectOrNull(value);
-  return switch (json?['status']) {
-    'anonymous' => WisperBotIdentityStatus.anonymous,
-    'verified' => WisperBotIdentityStatus.verified,
-    'rejected' => WisperBotIdentityStatus.rejected,
-    _ => user == null
-        ? WisperBotIdentityStatus.anonymous
-        : WisperBotIdentityStatus.unknown,
-  };
-}
-
 WisperBotHandoffState _parseHandoff(Object? value) {
-  final json = _objectOrNull(value);
-  if (json == null || json['enabled'] != true) {
+  if (value is! Map<String, dynamic>) throw _invalidResponse();
+  final enabled = _requiredBool(value, 'enabled');
+  final eligible = _requiredBool(value, 'eligible');
+  if (value['status'] is! String) throw _invalidResponse();
+  if (!enabled) {
     return const WisperBotHandoffState.unavailable();
   }
-  if (json['status'] == 'connected') {
+  if (value['status'] == 'connected') {
     return const WisperBotHandoffState(
       status: WisperBotHandoffStatus.connected,
     );
   }
-  if (json['eligible'] == true) {
+  if (eligible) {
     return const WisperBotHandoffState(
       status: WisperBotHandoffStatus.eligible,
     );
@@ -655,24 +579,12 @@ void _validateUpload(WisperBotUpload upload, WisperBotMessageType type) {
       retryable: false,
     );
   }
-  final mime = upload.mimeType.toLowerCase();
-  final allowed = type == WisperBotMessageType.image
-      ? const <String>{'image/jpeg', 'image/png', 'image/webp'}
-      : const <String>{
-          'audio/mpeg',
-          'audio/aac',
-          'audio/mp4',
-          'audio/amr',
-          'audio/ogg',
-          'audio/wav',
-          'audio/webm',
-          'video/webm',
-          'application/ogg',
-        };
-  if (!allowed.contains(mime)) {
+  if (upload.filename.trim().isEmpty ||
+      (type != WisperBotMessageType.image &&
+          type != WisperBotMessageType.audio)) {
     throw const WisperBotException(
       code: WisperBotErrorCode.attachmentRejected,
-      message: 'The attachment type is not supported.',
+      message: 'The attachment filename or message type is invalid.',
       retryable: false,
     );
   }
@@ -681,12 +593,20 @@ void _validateUpload(WisperBotUpload upload, WisperBotMessageType type) {
 Map<String, dynamic> _requiredObject(Map<String, dynamic> json, String key) {
   final value = _objectOrNull(json[key]);
   if (value != null) return value;
-  throw const WisperBotException(
-    code: WisperBotErrorCode.server,
-    message: 'WisperBot returned an incomplete response.',
-    retryable: false,
-  );
+  throw _invalidResponse();
 }
+
+bool _requiredBool(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value is bool) return value;
+  throw _invalidResponse();
+}
+
+WisperBotException _invalidResponse() => const WisperBotException(
+      code: WisperBotErrorCode.server,
+      message: 'WisperBot returned an incomplete response.',
+      retryable: false,
+    );
 
 Map<String, dynamic>? _objectOrNull(Object? value) =>
     value is Map<String, dynamic> ? value : null;

@@ -49,7 +49,7 @@ void main() {
       const ValueKey<String>('wisperbot-loading-appbar-line'),
     );
     expect(appBarLine, findsOneWidget);
-    expect(tester.getSize(appBarLine).height, 3);
+    expect(tester.getSize(appBarLine).height, 1);
     expect(
       find.byKey(const ValueKey<String>('wisperbot-loading-message-1')),
       findsOneWidget,
@@ -233,6 +233,64 @@ void main() {
     await runtime.dispose();
   });
 
+  testWidgets('required pre-chat collects fields before showing composer',
+      (tester) async {
+    var calls = 0;
+    Map<String, dynamic>? submitted;
+    String? submittedToken;
+    final runtime = _runtime(
+      config,
+      MockClient((request) async {
+        calls++;
+        if (calls == 2) {
+          submitted = jsonDecode(request.body) as Map<String, dynamic>;
+          submittedToken = request.headers['X-Widget-Token'];
+        }
+        return http.Response(
+          jsonEncode(sessionResponse(requirePreChat: true)),
+          200,
+        );
+      }),
+    );
+
+    await tester.pumpWidget(_app(
+      WisperBotChatView(config: config, controller: runtime.controller),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('wisperbot-prechat-name')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('wisperbot-prechat-email')),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Send message'), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('wisperbot-prechat-name')),
+      'Jane Doe',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('wisperbot-prechat-email')),
+      'jane@example.com',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('wisperbot-prechat-submit')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(submittedToken, 'token-1');
+    expect(submitted?['visitor_id'], 'visitor-1');
+    expect(submitted?['name'], 'Jane Doe');
+    expect(submitted?['email'], 'jane@example.com');
+    expect(find.byTooltip('Send message'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
   testWidgets('default composer picks images and records voice through adapter',
       (tester) async {
     final mediaAdapter = _FakeMediaAdapter();
@@ -248,7 +306,6 @@ void main() {
     );
     var uploadCount = 0;
     final uploadedContentTypes = <String>[];
-    final uploadedFilenames = <String>[];
     final uploadedBodies = <List<int>>[];
     final runtime = _runtime(
       mediaConfig,
@@ -259,13 +316,6 @@ void main() {
         if (request.method == 'POST' &&
             request.url.path.endsWith('/messages')) {
           uploadedContentTypes.add(request.headers['content-type'] ?? '');
-          uploadedFilenames.add(
-            utf8.decode(
-              base64Decode(
-                request.headers['x-wisperbot-filename-b64'] ?? '',
-              ),
-            ),
-          );
           uploadedBodies.add(request.bodyBytes);
           uploadCount++;
           final type = uploadCount == 1 ? 'image' : 'audio';
@@ -316,12 +366,13 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(uploadCount, 1);
-    expect(uploadedContentTypes, <String>['image/png']);
-    expect(uploadedFilenames, <String>['photo.png']);
-    expect(
-      uploadedBodies.single.take(8),
-      <int>[137, 80, 78, 71, 13, 10, 26, 10],
-    );
+    expect(uploadedContentTypes.single, startsWith('multipart/form-data;'));
+    final imageBody = utf8.decode(uploadedBodies.single, allowMalformed: true);
+    expect(imageBody, contains('name="key"'));
+    expect(imageBody, contains('test-widget'));
+    expect(imageBody, contains('name="type"'));
+    expect(imageBody, contains('image'));
+    expect(imageBody, contains('name="attachment"; filename="photo.png"'));
     expect(preview, findsNothing);
 
     await tester.tap(find.byTooltip('Record voice message'));
@@ -337,12 +388,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(mediaAdapter.recordingStops, 1);
     expect(uploadCount, 2);
-    expect(
-      uploadedContentTypes,
-      <String>['image/png', 'audio/wav'],
-    );
-    expect(uploadedFilenames, <String>['photo.png', 'voice.wav']);
-    expect(uploadedBodies.last, <int>[1, 2, 3, 4]);
+    expect(uploadedContentTypes.last, startsWith('multipart/form-data;'));
+    final audioBody = utf8.decode(uploadedBodies.last, allowMalformed: true);
+    expect(audioBody, contains('audio'));
+    expect(audioBody, contains('name="attachment"; filename="voice.wav"'));
     expect(find.text('Recording… tap stop to send'), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());

@@ -1,0 +1,11 @@
+{
+  "name": "WisperBot Chat SDK",
+  "short_name": "WisperBot Chat",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#FF762E",
+  "description": "Demonstrates the WisperBot Flutter chat SDK.",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false
+}

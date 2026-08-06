@@ -9,18 +9,21 @@ class WisperBotStoredSession {
     required this.visitorId,
     required this.token,
     required this.savedAt,
+    this.preChatCompleted = false,
     this.schemaVersion = 1,
   });
 
   final String visitorId;
   final String token;
   final DateTime savedAt;
+  final bool preChatCompleted;
   final int schemaVersion;
 
   @override
   String toString() =>
       'WisperBotStoredSession(visitorId: [redacted], token: [redacted], '
-      'savedAt: $savedAt, schemaVersion: $schemaVersion)';
+      'savedAt: $savedAt, preChatCompleted: $preChatCompleted, '
+      'schemaVersion: $schemaVersion)';
 }
 
 abstract interface class WisperBotSessionStore {
@@ -52,12 +55,14 @@ class FlutterSecureWisperBotSessionStore implements WisperBotSessionStore {
       final visitorId = value['visitor_id'];
       final token = value['token'];
       final savedAt = value['saved_at'];
+      final preChatCompleted = value['pre_chat_completed'];
       final schemaVersion = value['schema_version'];
       if (visitorId is! String ||
           visitorId.isEmpty ||
           token is! String ||
           token.isEmpty ||
           savedAt is! String ||
+          (preChatCompleted != null && preChatCompleted is! bool) ||
           schemaVersion is! int ||
           schemaVersion != 1) {
         throw const FormatException('Session record is incomplete.');
@@ -66,6 +71,7 @@ class FlutterSecureWisperBotSessionStore implements WisperBotSessionStore {
         visitorId: visitorId,
         token: token,
         savedAt: DateTime.parse(savedAt).toUtc(),
+        preChatCompleted: preChatCompleted == true,
         schemaVersion: schemaVersion,
       );
     } on Object {
@@ -85,6 +91,7 @@ class FlutterSecureWisperBotSessionStore implements WisperBotSessionStore {
           'visitor_id': session.visitorId,
           'token': session.token,
           'saved_at': session.savedAt.toUtc().toIso8601String(),
+          'pre_chat_completed': session.preChatCompleted,
           'schema_version': session.schemaVersion,
         }),
       );

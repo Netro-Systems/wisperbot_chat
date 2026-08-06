@@ -9,9 +9,7 @@ sealed class WisperBotChatEvent {
 }
 
 final class WisperBotSessionReady extends WisperBotChatEvent {
-  const WisperBotSessionReady({required this.identity});
-
-  final WisperBotIdentityStatus identity;
+  const WisperBotSessionReady();
 }
 
 final class WisperBotChatOpened extends WisperBotChatEvent {
@@ -40,12 +38,6 @@ final class WisperBotHandoffChanged extends WisperBotChatEvent {
   const WisperBotHandoffChanged({required this.handoff});
 
   final WisperBotHandoffState handoff;
-}
-
-final class WisperBotUnreadChanged extends WisperBotChatEvent {
-  const WisperBotUnreadChanged({required this.unreadCount});
-
-  final int unreadCount;
 }
 
 final class WisperBotConnectionChanged extends WisperBotChatEvent {

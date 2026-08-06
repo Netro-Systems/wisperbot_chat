@@ -35,10 +35,8 @@ Map<String, Object?> sessionResponse({
   List<Map<String, Object?>> messages = const <Map<String, Object?>>[],
   bool requirePreChat = false,
   bool online = true,
-  Map<String, Object?>? capabilities,
   String? avatarUrl,
   String? launcherLogoUrl,
-  Map<String, Object?>? realtime,
 }) =>
     <String, Object?>{
       'visitor_id': visitorId,
@@ -67,8 +65,6 @@ Map<String, Object?> sessionResponse({
         'eligible': false,
         'status': 'bot',
       },
-      if (capabilities != null) 'capabilities': capabilities,
-      if (realtime != null) 'realtime': realtime,
       'unknown_root_field': <String, Object?>{'safe': true},
     };
 

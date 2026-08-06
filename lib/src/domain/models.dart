@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 
 import 'errors.dart';
-import 'realtime.dart';
 
 enum WisperBotChatPhase {
   idle,
@@ -23,8 +22,6 @@ enum WisperBotConnectionState {
 
 enum WisperBotSupportAvailability { unknown, available, unavailable }
 
-enum WisperBotIdentityStatus { unknown, anonymous, verified, rejected }
-
 enum WisperBotHandoffStatus {
   unavailable,
   eligible,
@@ -43,66 +40,7 @@ enum WisperBotMessageType { text, image, audio, file, unknown }
 
 enum WisperBotMessageStatus { pending, sent, failed, unconfirmed }
 
-enum WisperBotSenderKind { visitor, bot, human, unknown }
-
-@immutable
-class WisperBotCapabilities {
-  const WisperBotCapabilities({
-    required this.text,
-    required this.images,
-    required this.audio,
-    required this.visitorTyping,
-    required this.agentTyping,
-    required this.handoff,
-    required this.backwardPagination,
-    required this.idempotentSends,
-    required this.unread,
-    required this.readReceipts,
-    required this.realtime,
-    required this.push,
-  });
-
-  const WisperBotCapabilities.none()
-      : text = false,
-        images = false,
-        audio = false,
-        visitorTyping = false,
-        agentTyping = false,
-        handoff = false,
-        backwardPagination = false,
-        idempotentSends = false,
-        unread = false,
-        readReceipts = false,
-        realtime = false,
-        push = false;
-
-  const WisperBotCapabilities.currentV1()
-      : text = true,
-        images = true,
-        audio = true,
-        visitorTyping = true,
-        agentTyping = true,
-        handoff = true,
-        backwardPagination = false,
-        idempotentSends = false,
-        unread = false,
-        readReceipts = false,
-        realtime = false,
-        push = false;
-
-  final bool text;
-  final bool images;
-  final bool audio;
-  final bool visitorTyping;
-  final bool agentTyping;
-  final bool handoff;
-  final bool backwardPagination;
-  final bool idempotentSends;
-  final bool unread;
-  final bool readReceipts;
-  final bool realtime;
-  final bool push;
-}
+enum WisperBotSenderKind { visitor, bot, human, automation, broadcast, unknown }
 
 @immutable
 class WisperBotHandoffState {
@@ -196,6 +134,14 @@ class WisperBotUpload {
 }
 
 @immutable
+class WisperBotPreChatData {
+  const WisperBotPreChatData({this.name, this.email});
+
+  final String? name;
+  final String? email;
+}
+
+@immutable
 class WisperBotMessage {
   const WisperBotMessage({
     required this.localId,
@@ -258,16 +204,12 @@ class WisperBotChatState {
     required this.phase,
     required List<WisperBotMessage> messages,
     required this.connection,
-    this.realtime = WisperBotRealtimeStatus.disabled,
     required this.widget,
-    required this.capabilities,
-    required this.identity,
     required this.handoff,
     required this.supportAvailability,
     required this.visitorTyping,
     required this.agentTyping,
     required this.pendingCount,
-    required this.unreadCount,
     this.error,
   }) : messages = List<WisperBotMessage>.unmodifiable(messages);
 
@@ -275,59 +217,44 @@ class WisperBotChatState {
         phase: WisperBotChatPhase.idle,
         messages: const <WisperBotMessage>[],
         connection: WisperBotConnectionState.disconnected,
-        realtime: WisperBotRealtimeStatus.disabled,
         widget: null,
-        capabilities: const WisperBotCapabilities.none(),
-        identity: WisperBotIdentityStatus.unknown,
         handoff: const WisperBotHandoffState.unavailable(),
         supportAvailability: WisperBotSupportAvailability.unknown,
         visitorTyping: false,
         agentTyping: null,
         pendingCount: 0,
-        unreadCount: null,
       );
 
   final WisperBotChatPhase phase;
   final List<WisperBotMessage> messages;
   final WisperBotConnectionState connection;
-  final WisperBotRealtimeStatus realtime;
   final WisperBotWidgetConfig? widget;
-  final WisperBotCapabilities capabilities;
-  final WisperBotIdentityStatus identity;
   final WisperBotHandoffState handoff;
   final WisperBotSupportAvailability supportAvailability;
   final bool visitorTyping;
   final WisperBotAgentTyping? agentTyping;
   final int pendingCount;
-  final int? unreadCount;
   final WisperBotException? error;
 
   WisperBotChatState copyWith({
     WisperBotChatPhase? phase,
     List<WisperBotMessage>? messages,
     WisperBotConnectionState? connection,
-    WisperBotRealtimeStatus? realtime,
     Object? widget = _notProvided,
-    WisperBotCapabilities? capabilities,
-    WisperBotIdentityStatus? identity,
     WisperBotHandoffState? handoff,
     WisperBotSupportAvailability? supportAvailability,
     bool? visitorTyping,
     Object? agentTyping = _notProvided,
     int? pendingCount,
-    Object? unreadCount = _notProvided,
     Object? error = _notProvided,
   }) =>
       WisperBotChatState(
         phase: phase ?? this.phase,
         messages: messages ?? this.messages,
         connection: connection ?? this.connection,
-        realtime: realtime ?? this.realtime,
         widget: identical(widget, _notProvided)
             ? this.widget
             : widget as WisperBotWidgetConfig?,
-        capabilities: capabilities ?? this.capabilities,
-        identity: identity ?? this.identity,
         handoff: handoff ?? this.handoff,
         supportAvailability: supportAvailability ?? this.supportAvailability,
         visitorTyping: visitorTyping ?? this.visitorTyping,
@@ -335,9 +262,6 @@ class WisperBotChatState {
             ? this.agentTyping
             : agentTyping as WisperBotAgentTyping?,
         pendingCount: pendingCount ?? this.pendingCount,
-        unreadCount: identical(unreadCount, _notProvided)
-            ? this.unreadCount
-            : unreadCount as int?,
         error: identical(error, _notProvided)
             ? this.error
             : error as WisperBotException?,

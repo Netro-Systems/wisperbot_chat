@@ -8,24 +8,19 @@ import 'package:http/http.dart' as http;
 import '../data/session_scope.dart';
 import '../data/session_store.dart';
 import '../data/widget_api.dart';
-import '../data/pusher_realtime_transport.dart';
 import '../domain/config.dart';
 import '../domain/errors.dart';
 import '../domain/events.dart';
 import '../domain/models.dart';
-import '../domain/realtime.dart';
 
 class WisperBotClient {
   WisperBotClient({
     required this.config,
     http.Client? httpClient,
     WisperBotSessionStore? sessionStore,
-    WisperBotRealtimeTransport? realtimeTransport,
   })  : _httpClient = httpClient ?? http.Client(),
         _ownsHttpClient = httpClient == null,
         _sessionStore = sessionStore ?? FlutterSecureWisperBotSessionStore(),
-        _realtimeTransport =
-            realtimeTransport ?? PusherWisperBotRealtimeTransport(),
         _activeUser = config.user {
     validateWisperBotConfig(config);
     _baseUrl = validateAndCanonicalizeBaseUrl(config.apiBaseUrl);
@@ -42,7 +37,6 @@ class WisperBotClient {
   final http.Client _httpClient;
   final bool _ownsHttpClient;
   final WisperBotSessionStore _sessionStore;
-  final WisperBotRealtimeTransport _realtimeTransport;
   late final Uri _baseUrl;
   late final WidgetApiClient _api;
   late String _unsignedEphemeralScope;
@@ -58,6 +52,7 @@ class WisperBotClient {
       widgetKey: config.widgetKey,
       user: _activeUser,
       storedSession: stored,
+      preChatCompleted: stored?.preChatCompleted ?? false,
     );
     await _writeStoredSession(result.session);
     _session = result.session;
@@ -72,24 +67,6 @@ class WisperBotClient {
       after: after,
     );
   }
-
-  Future<WisperBotRealtimeAuthorization> _authorizeRealtime(
-    WisperBotRealtimeSettings settings,
-    String socketId,
-    String channelName,
-  ) {
-    final session = _requireSession();
-    return _api.authorizeRealtime(
-      widgetKey: config.widgetKey,
-      token: session.token,
-      endpoint: settings.authEndpoint,
-      socketId: socketId,
-      channelName: channelName,
-    );
-  }
-
-  WisperBotMessage? _parseRealtimeMessage(String data) =>
-      _api.parseRealtimeMessage(data);
 
   Future<WidgetSendResult> _sendText(String text) {
     final session = _requireSession();
@@ -132,7 +109,44 @@ class WisperBotClient {
     );
   }
 
+  Future<WidgetSessionResult> _submitPreChat(
+    WisperBotPreChatData preChat,
+  ) async {
+    final current = _requireSession();
+    final active = _activeUser;
+    final result = await _api.startSession(
+      widgetKey: config.widgetKey,
+      user: WisperBotUser(
+        externalId: active?.externalId,
+        name: preChat.name ?? active?.name,
+        email: preChat.email ?? active?.email,
+        avatarUrl: active?.avatarUrl,
+        signature: active?.signature,
+      ),
+      storedSession: current,
+      preChatCompleted: true,
+    );
+    await _writeStoredSession(result.session);
+    _session = result.session;
+    return result;
+  }
+
+  Future<void> _markPreChatCompleted() async {
+    final current = _requireSession();
+    if (current.preChatCompleted) return;
+    final completed = WisperBotStoredSession(
+      visitorId: current.visitorId,
+      token: current.token,
+      savedAt: current.savedAt,
+      preChatCompleted: true,
+      schemaVersion: current.schemaVersion,
+    );
+    await _writeStoredSession(completed);
+    _session = completed;
+  }
+
   Future<bool> _switchUser(WisperBotUser? user) async {
+    if (_sameUser(_activeUser, user)) return false;
     final candidate = WisperBotConfig(
       widgetKey: config.widgetKey,
       apiBaseUrl: config.apiBaseUrl,
@@ -141,6 +155,7 @@ class WisperBotClient {
       useApiColors: config.useApiColors,
       presentation: config.presentation,
       enableTyping: config.enableTyping,
+      mediaAdapter: config.mediaAdapter,
       polling: config.polling,
       diagnostics: config.diagnostics,
     );
@@ -167,7 +182,7 @@ class WisperBotClient {
     );
     _activeUser = user;
     if (nextNamespace == previousNamespace) {
-      return false;
+      return true;
     }
     _unsignedEphemeralScope = nextEphemeral;
     _namespace = nextNamespace;
@@ -227,6 +242,13 @@ class WisperBotClient {
   bool get _shouldPersistActiveSession =>
       _activeUser == null || _activeUser?.signature != null;
 
+  bool _sameUser(WisperBotUser? left, WisperBotUser? right) =>
+      left?.externalId == right?.externalId &&
+      left?.name == right?.name &&
+      left?.email == right?.email &&
+      left?.avatarUrl == right?.avatarUrl &&
+      left?.signature == right?.signature;
+
   WisperBotStoredSession _requireSession() {
     _ensureOpen();
     final session = _session;
@@ -283,11 +305,6 @@ class WisperBotChatController with WidgetsBindingObserver {
   final Map<int, WisperBotMessage> _deferredVisitorPollMessages =
       <int, WisperBotMessage>{};
   Timer? _pollTimer;
-  Timer? _realtimeRetryTimer;
-  WisperBotRealtimeSettings? _realtimeSettings;
-  WisperBotRealtimeConnection? _realtimeConnection;
-  bool _realtimeConnecting = false;
-  int _realtimeGeneration = 0;
   Timer? _typingIdleTimer;
   DateTime? _lastTypingSentAt;
   DateTime _lastActivity = DateTime.now();
@@ -326,8 +343,6 @@ class WisperBotChatController with WidgetsBindingObserver {
 
   Future<void> _initializeInternal() async {
     final started = DateTime.now();
-    await _disconnectRealtime();
-    _realtimeSettings = null;
     _observeLifecycle();
     _emit(
       _state.copyWith(
@@ -338,69 +353,34 @@ class WisperBotChatController with WidgetsBindingObserver {
     );
     try {
       final result = await _client._startSession();
-      if (result.widget.requiresPreChat) {
-        await _client._clearSession();
-        throw const WisperBotException(
-          code: WisperBotErrorCode.configuration,
-          message:
-              'This widget requires pre-chat. The current backend must expose '
-              'configuration before session creation to support it safely.',
-          retryable: false,
+      _validatePreChatFields(result.widget);
+      final preChatSatisfied = result.session.preChatCompleted ||
+          _activeUserSatisfiesPreChat(result.widget);
+      if (result.widget.requiresPreChat && !preChatSatisfied) {
+        _emit(
+          _state.copyWith(
+            phase: WisperBotChatPhase.awaitingPreChat,
+            messages: const <WisperBotMessage>[],
+            connection: WisperBotConnectionState.connected,
+            widget: result.widget,
+            handoff: result.handoff,
+            supportAvailability: result.supportAvailability,
+            visitorTyping: false,
+            agentTyping: null,
+            pendingCount: 0,
+            error: null,
+          ),
         );
+        _diagnostic(
+          WisperBotDiagnosticKind.initialization,
+          duration: DateTime.now().difference(started),
+        );
+        return;
       }
-
-      var messages = _mergeMessages(
-        const <WisperBotMessage>[],
-        result.messages,
-        emitReceivedEvents: false,
-      );
-      _pollCursor = _greatestServerId(result.messages, fallback: 0);
-      var latestBatchLength = result.messages.length;
-      var catchUpPages = 0;
-      while (latestBatchLength == 100 && catchUpPages < 50) {
-        final page = await _client._poll(_pollCursor);
-        messages = _mergeMessages(
-          messages,
-          page.messages,
-          emitReceivedEvents: false,
-        );
-        _pollCursor = _greatestServerId(
-          page.messages,
-          fallback: _pollCursor,
-        );
-        latestBatchLength = page.messages.length;
-        catchUpPages++;
+      if (result.widget.requiresPreChat && !result.session.preChatCompleted) {
+        await _client._markPreChatCompleted();
       }
-
-      _pollFailures = 0;
-      _pollRetryAfter = null;
-      _lastActivity = DateTime.now();
-      _emit(
-        _state.copyWith(
-          phase: WisperBotChatPhase.ready,
-          messages: messages,
-          connection: WisperBotConnectionState.connected,
-          realtime: result.realtime != null
-              ? WisperBotRealtimeStatus.connecting
-              : result.capabilities.realtime
-                  ? WisperBotRealtimeStatus.unavailable
-                  : WisperBotRealtimeStatus.disabled,
-          widget: result.widget,
-          capabilities: result.capabilities,
-          identity: result.identity,
-          handoff: result.handoff,
-          supportAvailability: result.supportAvailability,
-          visitorTyping: false,
-          agentTyping: null,
-          pendingCount: _pendingCount(messages),
-          unreadCount: result.capabilities.unread ? 0 : null,
-          error: null,
-        ),
-      );
-      _realtimeSettings = result.realtime;
-      _addEvent(WisperBotSessionReady(identity: result.identity));
-      _schedulePoll();
-      unawaited(_syncRealtime());
+      await _acceptSession(result);
       _diagnostic(
         WisperBotDiagnosticKind.initialization,
         duration: DateTime.now().difference(started),
@@ -420,6 +400,162 @@ class WisperBotChatController with WidgetsBindingObserver {
         exception: exception,
       );
       rethrow;
+    }
+  }
+
+  Future<void> _acceptSession(WidgetSessionResult result) async {
+    var messages = _mergeMessages(
+      const <WisperBotMessage>[],
+      result.messages,
+      emitReceivedEvents: false,
+    );
+    _pollCursor = _greatestServerId(result.messages, fallback: 0);
+    var latestBatchLength = result.messages.length;
+    var catchUpPages = 0;
+    while (latestBatchLength == 100 && catchUpPages < 50) {
+      final page = await _client._poll(_pollCursor);
+      messages = _mergeMessages(
+        messages,
+        page.messages,
+        emitReceivedEvents: false,
+      );
+      _pollCursor = _greatestServerId(
+        page.messages,
+        fallback: _pollCursor,
+      );
+      latestBatchLength = page.messages.length;
+      catchUpPages++;
+    }
+
+    _pollFailures = 0;
+    _pollRetryAfter = null;
+    _lastActivity = DateTime.now();
+    _emit(
+      _state.copyWith(
+        phase: WisperBotChatPhase.ready,
+        messages: messages,
+        connection: WisperBotConnectionState.connected,
+        widget: result.widget,
+        handoff: result.handoff,
+        supportAvailability: result.supportAvailability,
+        visitorTyping: false,
+        agentTyping: null,
+        pendingCount: _pendingCount(messages),
+        error: null,
+      ),
+    );
+    _addEvent(const WisperBotSessionReady());
+    _schedulePoll();
+  }
+
+  Future<void> submitPreChat(WisperBotPreChatData data) async {
+    _ensureNotDisposed();
+    if (_state.phase != WisperBotChatPhase.awaitingPreChat ||
+        _state.widget == null) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.validation,
+        message: 'Pre-chat information is not currently required.',
+        retryable: false,
+      );
+    }
+    final widget = _state.widget!;
+    _validatePreChatSubmission(widget, data);
+    _emit(_state.copyWith(connection: WisperBotConnectionState.connecting));
+    try {
+      final result = await _client._submitPreChat(
+        WisperBotPreChatData(
+          name: data.name?.trim(),
+          email: data.email?.trim(),
+        ),
+      );
+      _validatePreChatFields(result.widget);
+      await _acceptSession(result);
+    } on Object catch (error) {
+      final exception = _asWisperBotException(error);
+      _emit(
+        _state.copyWith(
+          phase: WisperBotChatPhase.awaitingPreChat,
+          connection: WisperBotConnectionState.connected,
+          error: exception,
+        ),
+      );
+      rethrow;
+    }
+  }
+
+  bool _activeUserSatisfiesPreChat(WisperBotWidgetConfig widget) {
+    final user = _client._activeUser;
+    if (user == null) return false;
+    for (final field in widget.preChatFields) {
+      switch (field) {
+        case WisperBotPreChatField.name:
+          if (user.name?.trim().isNotEmpty != true) return false;
+        case WisperBotPreChatField.email:
+          if (user.email?.trim().isNotEmpty != true) return false;
+        case WisperBotPreChatField.unknown:
+          return false;
+      }
+    }
+    return true;
+  }
+
+  void _validatePreChatFields(WisperBotWidgetConfig widget) {
+    if (widget.requiresPreChat &&
+        widget.preChatFields.contains(WisperBotPreChatField.unknown)) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.unsupported,
+        message: 'This widget requires an unsupported pre-chat field.',
+        retryable: false,
+      );
+    }
+  }
+
+  void _validatePreChatSubmission(
+    WisperBotWidgetConfig widget,
+    WisperBotPreChatData data,
+  ) {
+    final name = data.name?.trim() ?? '';
+    final email = data.email?.trim() ?? '';
+    if (widget.preChatFields.contains(WisperBotPreChatField.name) &&
+        name.isEmpty) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.validation,
+        message: 'Name is required.',
+        retryable: false,
+        fieldErrors: <String, List<String>>{
+          'name': <String>['Name is required.'],
+        },
+      );
+    }
+    if (name.length > 120) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.validation,
+        message: 'Name must be 120 characters or fewer.',
+        retryable: false,
+      );
+    }
+    if (widget.preChatFields.contains(WisperBotPreChatField.email) &&
+        email.isEmpty) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.validation,
+        message: 'Email is required.',
+        retryable: false,
+        fieldErrors: <String, List<String>>{
+          'email': <String>['Email is required.'],
+        },
+      );
+    }
+    if (email.length > 190 ||
+        (email.isNotEmpty &&
+            !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email))) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.validation,
+        message: 'Enter a valid email address.',
+        retryable: false,
+        fieldErrors: <String, List<String>>{
+          'email': <String>['Enter a valid email address.'],
+        },
+      );
     }
   }
 
@@ -509,13 +645,6 @@ class WisperBotChatController with WidgetsBindingObserver {
   }
 
   Future<WisperBotMessage> sendText(String text) {
-    if (!_state.capabilities.text && _state.phase == WisperBotChatPhase.ready) {
-      throw const WisperBotException(
-        code: WisperBotErrorCode.unsupported,
-        message: 'Text messages are not supported by this widget.',
-        retryable: false,
-      );
-    }
     final body = text.trim();
     if (body.isEmpty || body.length > 4000) {
       throw const WisperBotException(
@@ -576,16 +705,6 @@ class WisperBotChatController with WidgetsBindingObserver {
     String? caption,
   ) async {
     _ensureReady();
-    final supported = type == WisperBotMessageType.image
-        ? _state.capabilities.images
-        : _state.capabilities.audio;
-    if (!supported) {
-      throw const WisperBotException(
-        code: WisperBotErrorCode.unsupported,
-        message: 'This attachment type is not supported by the widget.',
-        retryable: false,
-      );
-    }
     final pending = WisperBotMessage(
       localId: _newLocalId(),
       role: WisperBotMessageRole.visitor,
@@ -712,7 +831,6 @@ class WisperBotChatController with WidgetsBindingObserver {
 
   Future<void> setTyping(bool isTyping) async {
     if (!_client.config.enableTyping ||
-        !_state.capabilities.visitorTyping ||
         _state.phase != WisperBotChatPhase.ready) {
       return;
     }
@@ -741,8 +859,7 @@ class WisperBotChatController with WidgetsBindingObserver {
 
   Future<void> requestHumanAgent() async {
     _ensureReady();
-    if (!_state.capabilities.handoff ||
-        _state.handoff.status != WisperBotHandoffStatus.eligible) {
+    if (_state.handoff.status != WisperBotHandoffStatus.eligible) {
       throw const WisperBotException(
         code: WisperBotErrorCode.unsupported,
         message: 'Human handoff is not available.',
@@ -771,7 +888,6 @@ class WisperBotChatController with WidgetsBindingObserver {
   Future<void> updateUser(WisperBotUser? user) async {
     _ensureNotDisposed();
     _cancelPoll();
-    await _disconnectRealtime();
     final changed = await _client._switchUser(user);
     if (!changed) return;
     _deferredVisitorPollMessages.clear();
@@ -789,7 +905,6 @@ class WisperBotChatController with WidgetsBindingObserver {
   Future<void> resetSession() async {
     _ensureNotDisposed();
     _cancelPoll();
-    await _disconnectRealtime();
     await _client._clearSession();
     _deferredVisitorPollMessages.clear();
     _pollCursor = 0;
@@ -817,12 +932,10 @@ class WisperBotChatController with WidgetsBindingObserver {
     _diagnostic(WisperBotDiagnosticKind.lifecycle);
     if (_foreground) {
       if (_hasLease && _state.phase == WisperBotChatPhase.ready) {
-        unawaited(_syncRealtime());
         unawaited(refresh().catchError((_) {}));
       }
     } else {
       _cancelPoll();
-      unawaited(_disconnectRealtime());
       _typingIdleTimer?.cancel();
     }
   }
@@ -831,7 +944,6 @@ class WisperBotChatController with WidgetsBindingObserver {
     if (_disposed) return;
     _disposed = true;
     _cancelPoll();
-    await _disconnectRealtime();
     _typingIdleTimer?.cancel();
     _deferredVisitorPollMessages.clear();
     if (_observingLifecycle) {
@@ -861,104 +973,12 @@ class WisperBotChatController with WidgetsBindingObserver {
 
   bool get _hasLease => _stateLease || _eventLease;
 
-  Future<void> _syncRealtime() async {
-    final settings = _realtimeSettings;
-    if (_disposed || !_foreground || !_hasLease || settings == null) return;
-    if (_realtimeConnection != null || _realtimeConnecting) return;
-    _realtimeConnecting = true;
-    final generation = ++_realtimeGeneration;
-    try {
-      final connection = await _client._realtimeTransport.connect(
-        settings: settings,
-        authorize: (socketId, channelName) => _client._authorizeRealtime(
-          settings,
-          socketId,
-          channelName,
-        ),
-        onEvent: (event) => _handleRealtimeEvent(generation, event),
-        onStatus: (status) => _handleRealtimeStatus(generation, status),
-      );
-      if (_disposed || generation != _realtimeGeneration || !_hasLease) {
-        await connection.close();
-        return;
-      }
-      _realtimeConnection = connection;
-    } on Object {
-      if (!_disposed && generation == _realtimeGeneration) {
-        _emit(_state.copyWith(realtime: WisperBotRealtimeStatus.unavailable));
-        _diagnostic(WisperBotDiagnosticKind.realtime);
-        _schedulePoll();
-        _scheduleRealtimeRetry(generation);
-      }
-    } finally {
-      if (generation == _realtimeGeneration) _realtimeConnecting = false;
-    }
-  }
-
-  void _handleRealtimeStatus(int generation, WisperBotRealtimeStatus status) {
-    if (_disposed || generation != _realtimeGeneration) return;
-    _emit(_state.copyWith(realtime: status));
-    _diagnostic(WisperBotDiagnosticKind.realtime);
-    if (status == WisperBotRealtimeStatus.connected) {
-      _realtimeRetryTimer?.cancel();
-      unawaited(refresh().catchError((_) {}));
-    } else {
-      _schedulePoll();
-      if (status == WisperBotRealtimeStatus.unavailable) {
-        _scheduleRealtimeRetry(generation);
-      }
-    }
-  }
-
-  void _handleRealtimeEvent(int generation, WisperBotRealtimeEvent event) {
-    if (_disposed || generation != _realtimeGeneration) return;
-    final message = _client._parseRealtimeMessage(event.data);
-    if (message == null || message.role != WisperBotMessageRole.agent) return;
-    final messages = _mergeMessages(
-      _state.messages,
-      <WisperBotMessage>[message],
-      emitReceivedEvents: true,
-    );
-    _lastActivity = DateTime.now();
-    _emit(_state.copyWith(messages: messages));
-  }
-
-  Future<void> _disconnectRealtime() async {
-    _realtimeRetryTimer?.cancel();
-    _realtimeRetryTimer = null;
-    _realtimeGeneration++;
-    _realtimeConnecting = false;
-    final connection = _realtimeConnection;
-    _realtimeConnection = null;
-    if (connection != null) {
-      try {
-        await connection.close();
-      } on Object {
-        // Polling remains the recovery transport.
-      }
-    }
-    if (!_disposed && _realtimeSettings != null) {
-      _emit(_state.copyWith(realtime: WisperBotRealtimeStatus.reconnecting));
-    }
-  }
-
-  void _scheduleRealtimeRetry(int generation) {
-    _realtimeRetryTimer?.cancel();
-    _realtimeRetryTimer = Timer(const Duration(seconds: 10), () async {
-      if (_disposed || generation != _realtimeGeneration) return;
-      await _disconnectRealtime();
-      await _syncRealtime();
-    });
-  }
-
   void _leaseChanged() {
     if (_disposed) return;
     if (_hasLease) {
       _schedulePoll();
-      unawaited(_syncRealtime());
     } else {
       _cancelPoll();
-      unawaited(_disconnectRealtime());
     }
   }
 
@@ -990,9 +1010,6 @@ class WisperBotChatController with WidgetsBindingObserver {
       final configuredMax = _client.config.polling.failureMaxInterval;
       final bounded = backoff > configuredMax ? configuredMax : backoff;
       return bounded < minimum ? minimum : bounded;
-    }
-    if (_state.realtime == WisperBotRealtimeStatus.connected) {
-      return const Duration(seconds: 60);
     }
     final configured =
         DateTime.now().difference(_lastActivity) > const Duration(seconds: 30)

@@ -121,10 +121,7 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
       override: widget.config.theme,
       useApiColors: widget.config.useApiColors,
     );
-    final unread = _state.unreadCount;
-    final label = unread != null && unread > 0
-        ? 'Open chat, $unread unread ${unread == 1 ? 'message' : 'messages'}'
-        : 'Open chat';
+    const label = 'Open chat';
     return Semantics(
       button: true,
       label: label,
@@ -143,12 +140,6 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
                 child: _launcherIcon(_state, colors.launcherSize),
               ),
             ),
-            if (unread != null && unread > 0)
-              PositionedDirectional(
-                top: -6,
-                end: -6,
-                child: _UnreadBadge(count: unread),
-              ),
           ],
         ),
       ),
@@ -222,32 +213,4 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
     }
     super.dispose();
   }
-}
-
-class _UnreadBadge extends StatelessWidget {
-  const _UnreadBadge({required this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.error,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Theme.of(context).colorScheme.surface,
-            width: 2,
-          ),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          count > 99 ? '99+' : '$count',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onError,
-                fontWeight: FontWeight.w700,
-              ),
-        ),
-      );
 }

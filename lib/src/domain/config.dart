@@ -93,8 +93,6 @@ enum WisperBotDiagnosticKind {
   connection,
   poll,
   send,
-  capability,
-  realtime,
 }
 
 @immutable
