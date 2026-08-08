@@ -23,3 +23,9 @@
 - Added `WisperBotConfig.useApiColors`: API colors remain enabled by default, disabling them selects the built-in `#FF762E` brand palette, and explicit custom theme colors always win.
 - Increased the bottom-sheet presentation to 96% of the available safe height for a roomier mobile conversation view.
 - Added format-aware remote image rendering so SVG and Flutter-supported raster avatars, launcher logos, and image messages use the appropriate decoder, safe fallbacks, and web-widget-aligned logo sizing.
+# Unreleased
+
+- Reorganized package internals into documented configuration, domain,
+  application, data, and presentation boundaries without changing the public
+  API or prebuilt UI.
+- Added contributor guidance and expanded public API documentation.

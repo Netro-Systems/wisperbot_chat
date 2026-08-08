@@ -1,0 +1,308 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
+import '../../domain/contracts/session_store.dart';
+import '../../domain/errors/wisperbot_exception.dart';
+import '../../domain/models/models.dart';
+import 'widget_results.dart';
+
+/// Strictly decodes visitor API responses into immutable SDK values.
+///
+/// Raw JSON and response bodies never leave this data-layer component.
+final class WidgetResponseDecoder {
+  /// Creates the stateless response decoder.
+  const WidgetResponseDecoder();
+
+  /// Decodes a session creation or restoration response.
+  WidgetSessionResult session(
+    http.Response response, {
+    required bool preChatCompleted,
+  }) {
+    final json = _decodeObject(response);
+    final visitorId = _requiredString(json, 'visitor_id');
+    final token = _requiredString(json, 'token');
+    final configJson = _requiredObject(json, 'config');
+    return WidgetSessionResult(
+      session: WisperBotStoredSession(
+        visitorId: visitorId,
+        token: token,
+        savedAt: DateTime.now().toUtc(),
+        preChatCompleted: preChatCompleted,
+      ),
+      widget: _parseWidgetConfig(configJson),
+      messages: _parseMessages(json['messages']),
+      supportAvailability: _parseAvailability(_requiredBool(json, 'online')),
+      handoff: _parseHandoff(json['handoff']),
+    );
+  }
+
+  /// Decodes one forward-poll response.
+  WidgetPollResult poll(http.Response response) {
+    final json = _decodeObject(response);
+    final typing = _requiredObject(json, 'agent_typing');
+    final isTyping = _requiredBool(typing, 'is_typing');
+    final typingName = typing['name'];
+    if (typingName != null && typingName is! String) {
+      throw _invalidResponse();
+    }
+    return WidgetPollResult(
+      messages: _parseMessages(json['messages']),
+      supportAvailability: _parseAvailability(_requiredBool(json, 'online')),
+      handoff: _parseHandoff(json['handoff']),
+      agentTyping:
+          isTyping ? WisperBotAgentTyping(name: typingName as String?) : null,
+    );
+  }
+
+  /// Decodes a visitor-send confirmation.
+  WidgetSendResult send(http.Response response) {
+    final json = _decodeObject(response);
+    final messageJson = _requiredObject(json, 'message');
+    final message = _parseMessage(messageJson);
+    if (message == null) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.server,
+        message: 'WisperBot returned an invalid message.',
+        retryable: false,
+      );
+    }
+    return WidgetSendResult(
+      message: message,
+      handoff: _parseHandoff(json['handoff']),
+    );
+  }
+
+  /// Decodes a handoff response.
+  WisperBotHandoffState handoff(http.Response response) =>
+      _parseHandoff(_decodeObject(response)['handoff']);
+
+  Map<String, dynamic> _decodeObject(http.Response response) {
+    try {
+      final value = jsonDecode(utf8.decode(response.bodyBytes));
+      if (value is Map<String, dynamic>) return value;
+    } on Object {
+      // The safe typed failure below deliberately excludes response contents.
+    }
+    throw WisperBotException(
+      code: WisperBotErrorCode.server,
+      message: 'WisperBot returned an invalid response.',
+      retryable: response.statusCode >= 500,
+      httpStatus: response.statusCode,
+    );
+  }
+
+  List<WisperBotMessage> _parseMessages(Object? value) {
+    if (value is! List<dynamic>) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.server,
+        message: 'WisperBot returned an incomplete response.',
+        retryable: false,
+      );
+    }
+    final messages = <WisperBotMessage>[];
+    for (final item in value) {
+      if (item is! Map<String, dynamic>) {
+        throw const WisperBotException(
+          code: WisperBotErrorCode.server,
+          message: 'WisperBot returned an invalid message.',
+          retryable: false,
+        );
+      }
+      final message = _parseMessage(item);
+      if (message == null) {
+        throw const WisperBotException(
+          code: WisperBotErrorCode.server,
+          message: 'WisperBot returned an invalid message.',
+          retryable: false,
+        );
+      }
+      messages.add(message);
+    }
+    return messages;
+  }
+
+  WisperBotMessage? _parseMessage(Map<String, dynamic> json) {
+    final id = switch (json['id']) {
+      int value => value,
+      String value => int.tryParse(value),
+      _ => null,
+    };
+    final createdAt =
+        DateTime.tryParse(_stringOrNull(json['created_at']) ?? '');
+    if (id == null || createdAt == null || json['body'] is! String) return null;
+    final role = switch (json['role']) {
+      'visitor' => WisperBotMessageRole.visitor,
+      'agent' => WisperBotMessageRole.agent,
+      _ => WisperBotMessageRole.unknown,
+    };
+    final type = switch (json['type']) {
+      'text' => WisperBotMessageType.text,
+      'image' => WisperBotMessageType.image,
+      'audio' => WisperBotMessageType.audio,
+      'file' => WisperBotMessageType.file,
+      _ => WisperBotMessageType.unknown,
+    };
+    final sentBy = role == WisperBotMessageRole.visitor
+        ? WisperBotSenderKind.visitor
+        : switch (json['sent_by']) {
+            'human' => WisperBotSenderKind.human,
+            'bot' => WisperBotSenderKind.bot,
+            'automation' => WisperBotSenderKind.automation,
+            'broadcast' => WisperBotSenderKind.broadcast,
+            _ => WisperBotSenderKind.unknown,
+          };
+    final attachmentUri = _safeRemoteUri(json['attachment_url']);
+    return WisperBotMessage(
+      localId: 'server-$id',
+      serverId: id,
+      role: role,
+      type: type,
+      body: json['body'] as String,
+      status: WisperBotMessageStatus.sent,
+      createdAt: createdAt.toLocal(),
+      attachment: attachmentUri == null
+          ? null
+          : WisperBotAttachment(
+              url: attachmentUri,
+              filename: _stringOrNull(json['filename']),
+              mimeType: _stringOrNull(json['mime_type']),
+            ),
+      senderName: role == WisperBotMessageRole.agent
+          ? _stringOrNull(json['agent_name'])
+          : null,
+      sentBy: sentBy,
+    );
+  }
+
+  WisperBotWidgetConfig _parseWidgetConfig(Map<String, dynamic> json) {
+    final members = <WisperBotTeamMember>[];
+    final rawMembers = json['team_members'];
+    if (rawMembers is List<dynamic>) {
+      for (final item in rawMembers.whereType<Map<String, dynamic>>().take(5)) {
+        final name = _stringOrNull(item['name']);
+        if (name != null && name.isNotEmpty) {
+          members.add(
+            WisperBotTeamMember(
+              name: name,
+              avatarUrl: _safeRemoteUri(item['avatar_url']),
+            ),
+          );
+        }
+      }
+    }
+    final preChatFields = <WisperBotPreChatField>[];
+    final rawFields = json['prechat_fields'];
+    if (rawFields is! List<dynamic>) throw _invalidResponse();
+    for (final field in rawFields) {
+      preChatFields.add(
+        switch (field) {
+          'name' => WisperBotPreChatField.name,
+          'email' => WisperBotPreChatField.email,
+          _ => WisperBotPreChatField.unknown,
+        },
+      );
+    }
+    final rawColor = _stringOrNull(json['primary_color']) ?? '#ff762e';
+    final color =
+        RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(rawColor) ? rawColor : '#ff762e';
+    return WisperBotWidgetConfig(
+      title: _stringOrNull(json['title']) ?? 'Chat with us',
+      subtitle: _stringOrNull(json['subtitle']) ??
+          'We typically reply in a few minutes',
+      welcomeMessage: _stringOrNull(json['welcome_message']) ??
+          'Hi there! How can we help?',
+      agentName: _stringOrNull(json['agent_name']) ?? 'Support',
+      avatarUrl: _safeRemoteUri(json['avatar_url']),
+      primaryColorHex: color,
+      launcherPosition: switch (json['position']) {
+        'bottom_right' => WisperBotLauncherPosition.bottomRight,
+        'bottom_left' => WisperBotLauncherPosition.bottomLeft,
+        _ => WisperBotLauncherPosition.unknown,
+      },
+      launcherText: _stringOrNull(json['launcher_text']),
+      launcherLogoUrl: _safeRemoteUri(json['launcher_logo_url']),
+      footerCompanyName:
+          _stringOrNull(json['footer_company_name']) ?? 'WisperBot',
+      teamMembers: members,
+      aiEnabled: _requiredBool(json, 'ai_enabled'),
+      requiresPreChat: _requiredBool(json, 'require_prechat'),
+      preChatFields: preChatFields,
+      offlineMessage: _stringOrNull(json['offline_message']),
+    );
+  }
+
+  WisperBotHandoffState _parseHandoff(Object? value) {
+    if (value is! Map<String, dynamic>) throw _invalidResponse();
+    final enabled = _requiredBool(value, 'enabled');
+    final eligible = _requiredBool(value, 'eligible');
+    if (value['status'] is! String) throw _invalidResponse();
+    if (!enabled) {
+      return const WisperBotHandoffState.unavailable();
+    }
+    if (value['status'] == 'connected') {
+      return const WisperBotHandoffState(
+        status: WisperBotHandoffStatus.connected,
+      );
+    }
+    if (eligible) {
+      return const WisperBotHandoffState(
+        status: WisperBotHandoffStatus.eligible,
+      );
+    }
+    return const WisperBotHandoffState(
+      status: WisperBotHandoffStatus.unavailable,
+    );
+  }
+
+  WisperBotSupportAvailability _parseAvailability(Object? value) =>
+      switch (value) {
+        true => WisperBotSupportAvailability.available,
+        false => WisperBotSupportAvailability.unavailable,
+        _ => WisperBotSupportAvailability.unknown,
+      };
+
+  Map<String, dynamic> _requiredObject(Map<String, dynamic> json, String key) {
+    final value = _objectOrNull(json[key]);
+    if (value != null) return value;
+    throw _invalidResponse();
+  }
+
+  bool _requiredBool(Map<String, dynamic> json, String key) {
+    final value = json[key];
+    if (value is bool) return value;
+    throw _invalidResponse();
+  }
+
+  WisperBotException _invalidResponse() => const WisperBotException(
+        code: WisperBotErrorCode.server,
+        message: 'WisperBot returned an incomplete response.',
+        retryable: false,
+      );
+
+  Map<String, dynamic>? _objectOrNull(Object? value) =>
+      value is Map<String, dynamic> ? value : null;
+
+  String _requiredString(Map<String, dynamic> json, String key) {
+    final value = _stringOrNull(json[key]);
+    if (value != null && value.isNotEmpty) return value;
+    throw const WisperBotException(
+      code: WisperBotErrorCode.server,
+      message: 'WisperBot returned an incomplete response.',
+      retryable: false,
+    );
+  }
+
+  String? _stringOrNull(Object? value) => value is String ? value : null;
+
+  Uri? _safeRemoteUri(Object? value) {
+    if (value is! String || value.isEmpty) return null;
+    final uri = Uri.tryParse(value);
+    if (uri == null || !uri.isAbsolute) return null;
+    if (uri.scheme != 'https' && (kReleaseMode || uri.scheme != 'http')) {
+      return null;
+    }
+    return uri;
+  }
+}

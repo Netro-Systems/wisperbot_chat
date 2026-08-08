@@ -15,6 +15,31 @@ The widget key selects the server widget and workspace. The encrypted visitor
 token authorizes one visitor conversation. The SDK never uses a conversation
 ID, chatbot ID, or agent ID as authority.
 
+## Source layout
+
+```text
+lib/src/
+|- configuration/  # Public host options and presentation configuration
+|- domain/         # Immutable models, typed failures, events, contracts
+|- application/    # Client/controller orchestration and focused services
+|- data/           # HTTP mapping and secure-storage implementations
+`- presentation/   # Optional screens, views, launcher, theme, and widgets
+```
+
+Configuration is separate from the domain because its public theme options use
+Flutter UI types. Data implements domain-owned contracts. The internal
+`application/wisperbot_runtime.dart` Dart library is the composition point: it
+wires focused data adapters to the client/controller without exporting those
+adapters. Presentation observes controller state and never imports data
+directly.
+Only `lib/wisperbot_chat.dart` defines the supported public surface.
+
+The public client and controller share a private Dart library through focused
+part files so their collaboration does not enlarge the public API. Request
+encoding, response decoding, HTTP error mapping, session coordination,
+validation, reconciliation, polling scheduling, state transitions, and UI
+components remain in separate, independently testable files.
+
 ## Public surface
 
 The intentional public API includes configuration/user models, secure session
