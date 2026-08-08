@@ -138,7 +138,12 @@ final config = WisperBotConfig(
 );
 ```
 
-Call `controller.updateUser(...)` whenever the host app switches accounts, and `controller.updateUser(null)` on logout. Sessions are securely isolated by canonical API base URL, widget key, and identity scope.
+Call `controller.updateUser(...)` whenever the host app switches accounts, and
+`controller.updateUser(null)` on logout. Logout stops polling, sends a
+best-effort typing-off update, deletes the active credential scope, and clears
+the in-memory conversation. It does not create a replacement anonymous session;
+the next `initialize()` or newly opened chat creates one. Sessions are securely
+isolated by canonical API base URL, widget key, and identity scope.
 
 Anonymous and correctly signed identities persist across launches. Unsigned profile-only sessions stay in memory so an unverified display name or email cannot become a durable identity key or leave unreachable secure-storage records.
 
@@ -160,7 +165,9 @@ The core upload API accepts validated bytes through `WisperBotUpload`. Supply a
 `WisperBotMediaAdapter` in `WisperBotConfig` to enable the default composer's
 image and microphone controls while keeping picker/recorder plugins out of the
 core runtime. The example app contains a working `image_picker` + `record`
-adapter.
+adapter. Native multipart uploads deliberately omit browser `Origin` and
+`Referer`; the hosting WAF must allow `POST /widget/v1/messages`, and an edge
+HTML `406` is surfaced as `WisperBotErrorCode.edgeRejected`.
 
 When the widget requires pre-chat, the built-in UI collects the configured name
 and/or email fields. Headless integrations submit them with

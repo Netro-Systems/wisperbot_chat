@@ -29,3 +29,9 @@
   application, data, and presentation boundaries without changing the public
   API or prebuilt UI.
 - Added contributor guidance and expanded public API documentation.
+- Clarified the internal networking flow with named API endpoints, a central
+  HTTP caller, and an operation-oriented widget remote data source.
+- Removed routine `Sending` and `Sent` bubble labels while retaining internal
+  delivery tracking and visible failed/unconfirmed states.
+- Validated image/audio extension and MIME pairs, caption and byte limits, and
+  distinguished native multipart WAF `406` failures from Laravel validation.

@@ -124,11 +124,8 @@ final class WidgetResponseDecoder {
   }
 
   WisperBotMessage? _parseMessage(Map<String, dynamic> json) {
-    final id = switch (json['id']) {
-      int value => value,
-      String value => int.tryParse(value),
-      _ => null,
-    };
+    final rawId = json['id'];
+    final id = rawId is int && rawId > 0 ? rawId : null;
     final createdAt =
         DateTime.tryParse(_stringOrNull(json['created_at']) ?? '');
     if (id == null || createdAt == null || json['body'] is! String) return null;

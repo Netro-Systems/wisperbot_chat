@@ -40,6 +40,19 @@ encoding, response decoding, HTTP error mapping, session coordination,
 validation, reconciliation, polling scheduling, state transitions, and UI
 components remain in separate, independently testable files.
 
+The data-layer request flow uses familiar, explicit responsibilities:
+
+```text
+ApiEndpoints -> NetworkCaller -> WidgetRemoteDataSource -> application
+```
+
+`ApiEndpoints` lists the complete `/widget/v1` surface. `NetworkCaller` is the
+only component that invokes `http.Client`; it resolves URLs, applies the allowed
+headers and timeout, executes JSON/multipart requests, and maps transport/HTTP
+failures. `HttpWidgetRemoteDataSource` selects an operation and delegates its
+wire encoding and decoding to focused mappers. The application sees typed
+results rather than HTTP responses or JSON maps.
+
 ## Public surface
 
 The intentional public API includes configuration/user models, secure session
@@ -139,6 +152,11 @@ Error mapping is operation-aware: session `404` is configuration failure;
 authenticated `401` and conversation `404` permit one controlled restoration;
 media `422` is attachment rejection; other `422` is validation; and `429`
 preserves `Retry-After`.
+
+The package intentionally keeps `http`, constructor injection, and typed
+`WisperBotException` failures. It does not add Dio, a service locator, generic
+result wrappers, use cases, or repository implementations that would only
+forward the same visitor operations.
 
 ## Platform policy
 

@@ -4,7 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:wisperbot_chat/wisperbot_chat.dart';
-import 'package:wisperbot_chat/src/data/network/widget_api_client.dart';
+import 'package:wisperbot_chat/src/data/datasources/widget_remote_data_source.dart';
+import 'package:wisperbot_chat/src/data/network/network_caller.dart';
 
 import '../support/support.dart';
 
@@ -15,6 +16,19 @@ void main() {
   _registerRequestContractTests();
   _registerResponseContractTests();
 }
+
+HttpWidgetRemoteDataSource _remoteDataSource({
+  required Uri baseUrl,
+  required http.Client httpClient,
+  Duration requestTimeout = const Duration(seconds: 30),
+}) =>
+    HttpWidgetRemoteDataSource(
+      networkCaller: NetworkCaller(
+        baseUrl: baseUrl,
+        httpClient: httpClient,
+        requestTimeout: requestTimeout,
+      ),
+    );
 
 void _expectNoInventedHeaders(http.BaseRequest request) {
   final names = request.headers.keys.map((key) => key.toLowerCase()).toSet();

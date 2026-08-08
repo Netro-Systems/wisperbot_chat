@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /d/Android/wisperbot_chat log --oneline -20)"
+    ]
+  }
+}

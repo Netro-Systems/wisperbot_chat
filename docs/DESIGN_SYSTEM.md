@@ -216,11 +216,16 @@ collected name/email, then uses the refreshed configuration and history.
 
 Visitor states:
 
-- `pending`: progress/clock
-- `sent`: server-confirmed
+- `pending`: tracked internally while the request is in flight
+- `sent`: tracked internally after server confirmation
 - `failed`: definitive rejection plus retry/remove action when retry is safe
 - `unconfirmed`: the request outcome is unknown; refresh first and warn that
   resending before backend idempotency may create a duplicate
+
+The default bubble does not display routine `Sending` or `Sent` labels. The
+backend may perform synchronous post-persistence work before returning, and a
+routine label would make that server latency look like a client-side delay.
+Failed and delivery-unconfirmed states remain visible and actionable.
 
 Agent messages may show a backend-supplied sender. Do not guess AI versus human when `sent_by` is absent.
 
@@ -247,8 +252,9 @@ default attachment and voice controls appear when the host supplies a
 - Provide an explicit send button.
 - Disable only unavailable actions; polling must not freeze the composer.
 - Announce validation/upload errors accessibly.
-- Preview a selected image before upload. While recording, show a live status,
-  make the microphone action stop-and-send, and provide an explicit cancel.
+- Preview a selected image before upload. While recording, show a live status
+  and provide an explicit cancel. Stopping creates an audio confirmation with
+  explicit Send and Discard actions so recording never implies delivery.
 
 ### Typing indicator
 

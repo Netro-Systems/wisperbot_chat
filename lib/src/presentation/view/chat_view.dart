@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/wisperbot_runtime.dart';
 import '../../configuration/wisperbot_config.dart';
+import '../../diagnostics/debug_upload_logger.dart';
 import '../../domain/contracts/media_adapter.dart';
 import '../../domain/errors/wisperbot_exception.dart';
 import '../../domain/models/models.dart';
@@ -27,6 +28,7 @@ part '../widgets/typing_indicator.dart';
 part '../widgets/handoff_action.dart';
 part '../widgets/message_composer.dart';
 part '../widgets/image_preview.dart';
+part '../widgets/audio_preview.dart';
 
 /// Builds a custom chat state such as an empty or error presentation.
 typedef WisperBotChatStateBuilder = Widget Function(

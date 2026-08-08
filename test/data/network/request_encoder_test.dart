@@ -34,9 +34,7 @@ void main() {
   });
 
   test('multipart upload preserves documented fields and attachment name', () {
-    final request = encoder.uploadRequest(
-      endpoint: Uri.parse('https://chat.example.test/widget/v1/messages'),
-      headers: const <String, String>{'X-Widget-Token': 'token'},
+    final fields = encoder.uploadFields(
       widgetKey: 'widget-key',
       upload: WisperBotUpload(
         bytes: Uint8List.fromList(<int>[1, 2, 3]),
@@ -47,20 +45,16 @@ void main() {
       caption: '  Caption  ',
     );
 
-    expect(request.fields, <String, String>{
+    expect(fields, <String, String>{
       'key': 'widget-key',
       'type': 'image',
       'message': 'Caption',
     });
-    expect(request.files.single.field, 'attachment');
-    expect(request.files.single.filename, 'photo.png');
   });
 
   test('empty attachments fail before transport execution', () {
     expect(
-      () => encoder.uploadRequest(
-        endpoint: Uri.parse('https://chat.example.test/widget/v1/messages'),
-        headers: const <String, String>{},
+      () => encoder.uploadFields(
         widgetKey: 'widget-key',
         upload: WisperBotUpload(
           bytes: Uint8List(0),
@@ -78,5 +72,120 @@ void main() {
         ),
       ),
     );
+  });
+
+  test('multipart upload includes an empty browser-compatible caption', () {
+    final fields = encoder.uploadFields(
+      widgetKey: 'widget-key',
+      upload: WisperBotUpload(
+        bytes: Uint8List.fromList(<int>[1, 2, 3]),
+        filename: 'photo.png',
+        mimeType: 'image/png',
+      ),
+      type: WisperBotMessageType.image,
+      caption: null,
+    );
+
+    expect(fields['message'], isEmpty);
+  });
+
+  test('rejects oversized attachments and captions before transport', () {
+    expect(
+      () => encoder.uploadFields(
+        widgetKey: 'widget-key',
+        upload: WisperBotUpload(
+          bytes: Uint8List(10 * 1024 * 1024 + 1),
+          filename: 'large.png',
+          mimeType: 'image/png',
+        ),
+        type: WisperBotMessageType.image,
+        caption: null,
+      ),
+      throwsA(isA<WisperBotException>()),
+    );
+    expect(
+      () => encoder.uploadFields(
+        widgetKey: 'widget-key',
+        upload: WisperBotUpload(
+          bytes: Uint8List.fromList(<int>[1]),
+          filename: 'photo.png',
+          mimeType: 'image/png',
+        ),
+        type: WisperBotMessageType.image,
+        caption: 'x' * 4001,
+      ),
+      throwsA(
+        isA<WisperBotException>().having(
+          (error) => error.code,
+          'code',
+          WisperBotErrorCode.validation,
+        ),
+      ),
+    );
+  });
+
+  test('requires supported matching media extensions and MIME types', () {
+    for (final upload in <WisperBotUpload>[
+      WisperBotUpload(
+        bytes: Uint8List.fromList(<int>[1]),
+        filename: 'photo.gif',
+        mimeType: 'image/gif',
+      ),
+      WisperBotUpload(
+        bytes: Uint8List.fromList(<int>[1]),
+        filename: 'photo.png',
+        mimeType: 'image/jpeg',
+      ),
+    ]) {
+      expect(
+        () => encoder.uploadFields(
+          widgetKey: 'widget-key',
+          upload: upload,
+          type: WisperBotMessageType.image,
+          caption: null,
+        ),
+        throwsA(
+          isA<WisperBotException>().having(
+            (error) => error.code,
+            'code',
+            WisperBotErrorCode.attachmentRejected,
+          ),
+        ),
+      );
+    }
+
+    final fields = encoder.uploadFields(
+      widgetKey: 'widget-key',
+      upload: WisperBotUpload(
+        bytes: Uint8List.fromList(<int>[1]),
+        filename: 'voice.m4a',
+        mimeType: 'audio/mp4',
+      ),
+      type: WisperBotMessageType.audio,
+      caption: null,
+    );
+    expect(fields['type'], 'audio');
+  });
+
+  test('accepts every supported website image format', () {
+    for (final format in <(String, String)>[
+      ('photo.jpg', 'image/jpeg'),
+      ('photo.jpeg', 'image/jpeg'),
+      ('photo.png', 'image/png'),
+      ('photo.webp', 'image/webp'),
+    ]) {
+      final fields = encoder.uploadFields(
+        widgetKey: 'widget-key',
+        upload: WisperBotUpload(
+          bytes: Uint8List.fromList(<int>[1]),
+          filename: format.$1,
+          mimeType: format.$2,
+        ),
+        type: WisperBotMessageType.image,
+        caption: null,
+      );
+      expect(fields['type'], 'image');
+      expect(fields['message'], isEmpty);
+    }
   });
 }

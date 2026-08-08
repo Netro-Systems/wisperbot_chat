@@ -10,7 +10,10 @@ without adding them to the core SDK.
 2. Put your public widget key in `WISPERBOT_WIDGET_KEY`. Change `WISPERBOT_API_BASE_URL` only for staging or a self-hosted API.
 3. For native runs, use a widget without a browser-domain allowlist; the SDK
    does not spoof browser origin headers. Required name/email pre-chat is
-   supported by the example and SDK.
+   supported by the example and SDK. The production LiteSpeed/ModSecurity
+   configuration must narrowly allow multipart `POST /widget/v1/messages`;
+   otherwise the SDK reports `WisperBotErrorCode.edgeRejected` for the HTML
+   `406` generated before Laravel.
 4. Run `flutter pub get`, then `flutter run` from this directory. Android, iOS,
    and web runners are included.
 

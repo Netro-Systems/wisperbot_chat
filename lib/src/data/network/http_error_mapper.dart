@@ -15,6 +15,7 @@ WisperBotException mapWidgetHttpError(
   final status = response.statusCode;
   final sessionRequest = operation == WidgetOperation.session;
   final fieldErrors = _safeFieldErrors(response);
+  final serverMessage = _safeServerMessage(response);
   final retryAfterSeconds = int.tryParse(response.headers['retry-after'] ?? '');
   return switch (status) {
     400 => WisperBotException(
@@ -46,13 +47,28 @@ WisperBotException mapWidgetHttpError(
         retryable: !sessionRequest,
         httpStatus: status,
       ),
+    406 when operation == WidgetOperation.sendMedia && _isHtml(response) =>
+      const WisperBotException(
+        code: WisperBotErrorCode.edgeRejected,
+        message: 'The server security layer rejected the media upload.',
+        retryable: false,
+        httpStatus: 406,
+      ),
+    413 when operation == WidgetOperation.sendMedia => const WisperBotException(
+        code: WisperBotErrorCode.attachmentRejected,
+        message: 'The attachment is too large. Choose a file under 10 MB.',
+        retryable: false,
+        httpStatus: 413,
+      ),
     422 => WisperBotException(
         code: operation == WidgetOperation.sendMedia
             ? WisperBotErrorCode.attachmentRejected
             : WisperBotErrorCode.validation,
-        message: operation == WidgetOperation.sendMedia
-            ? 'The attachment was rejected by WisperBot.'
-            : 'The request could not be validated.',
+        message: _validationMessage(
+          operation: operation,
+          fieldErrors: fieldErrors,
+          serverMessage: serverMessage,
+        ),
         retryable: false,
         httpStatus: status,
         fieldErrors: fieldErrors,
@@ -81,6 +97,28 @@ WisperBotException mapWidgetHttpError(
   };
 }
 
+bool _isHtml(http.Response response) {
+  final contentType = response.headers['content-type']?.toLowerCase() ?? '';
+  return contentType.startsWith('text/html') ||
+      response.body.trimLeft().toLowerCase().startsWith('<!doctype html') ||
+      response.body.trimLeft().toLowerCase().startsWith('<html');
+}
+
+String _validationMessage({
+  required WidgetOperation operation,
+  required Map<String, List<String>> fieldErrors,
+  required String? serverMessage,
+}) {
+  final attachmentMessage = fieldErrors['attachment']?.firstOrNull;
+  if (operation == WidgetOperation.sendMedia && attachmentMessage != null) {
+    return attachmentMessage;
+  }
+  return serverMessage ??
+      (operation == WidgetOperation.sendMedia
+          ? 'The attachment was rejected by WisperBot.'
+          : 'The request could not be validated.');
+}
+
 Map<String, List<String>> _safeFieldErrors(http.Response response) {
   try {
     final decoded = jsonDecode(utf8.decode(response.bodyBytes));
@@ -99,5 +137,18 @@ Map<String, List<String>> _safeFieldErrors(http.Response response) {
     };
   } on Object {
     return const <String, List<String>>{};
+  }
+}
+
+String? _safeServerMessage(http.Response response) {
+  try {
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    final message = decoded is Map<String, dynamic> ? decoded['message'] : null;
+    if (message is! String) return null;
+    final normalized = message.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.isEmpty || normalized.length > 300) return null;
+    return normalized;
+  } on Object {
+    return null;
   }
 }

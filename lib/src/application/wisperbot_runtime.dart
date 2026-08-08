@@ -6,7 +6,8 @@ import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 
 import '../configuration/wisperbot_config.dart';
-import '../data/network/widget_api_client.dart';
+import '../data/datasources/widget_remote_data_source.dart';
+import '../data/network/network_caller.dart';
 import '../data/network/widget_results.dart';
 import '../data/storage/secure_session_store.dart';
 import '../data/storage/session_scope.dart';
@@ -24,8 +25,10 @@ part 'controller/chat_controller.dart';
 part 'services/session_coordinator.dart';
 
 /// Creates the concrete transport at the package's private composition point.
-WidgetApiClient _createWidgetApiClient({
+WidgetRemoteDataSource _createWidgetRemoteDataSource({
   required Uri baseUrl,
   required http.Client httpClient,
 }) =>
-    WidgetApiClient(baseUrl: baseUrl, httpClient: httpClient);
+    HttpWidgetRemoteDataSource(
+      networkCaller: NetworkCaller(baseUrl: baseUrl, httpClient: httpClient),
+    );

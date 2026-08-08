@@ -199,7 +199,7 @@ void registerViewStateTests(WisperBotConfig config) {
     expect(sendCalls, 1);
     expect(find.text('Hello SDK'), findsOneWidget);
     expect(find.text('Welcome to the test chat'), findsOneWidget);
-    expect(find.text('Sent'), findsOneWidget);
+    expect(find.text('Sent'), findsNothing);
     final sent = runtime.controller.state.messages.single;
     final bubbleSize = tester.getSize(
       find.byKey(
@@ -207,6 +207,67 @@ void registerViewStateTests(WisperBotConfig config) {
       ),
     );
     expect(bubbleSize.width, lessThan(300));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets('normal message delivery does not show sending or sent labels',
+      (tester) async {
+    final sendResponse = Completer<http.Response>();
+    final runtime = _runtime(
+      config,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          return http.Response(jsonEncode(sessionResponse()), 200);
+        }
+        if (request.url.path.endsWith('/typing')) {
+          return http.Response('{"ok":true}', 200);
+        }
+        return sendResponse.future;
+      }),
+    );
+
+    await tester.pumpWidget(_app(
+      WisperBotChatView(config: config, controller: runtime.controller),
+    ));
+    await tester.pump();
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'No delayed status');
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.send_rounded));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('No delayed status'), findsOneWidget);
+    expect(find.text('Sending'), findsNothing);
+    expect(find.text('Sent'), findsNothing);
+
+    sendResponse.complete(
+      http.Response(
+        jsonEncode(<String, Object?>{
+          'message': message(
+            id: 1,
+            role: 'visitor',
+            body: 'No delayed status',
+            sentBy: 'human',
+          ),
+          'handoff': <String, Object?>{
+            'enabled': true,
+            'eligible': false,
+            'status': 'bot',
+          },
+        }),
+        200,
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Sending'), findsNothing);
+    expect(find.text('Sent'), findsNothing);
+    expect(
+      runtime.controller.state.messages.single.status,
+      WisperBotMessageStatus.sent,
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();

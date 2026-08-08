@@ -18,10 +18,13 @@ class WisperBotClient {
         _ownsHttpClient = httpClient == null {
     validateWisperBotConfig(config);
     final baseUrl = validateAndCanonicalizeBaseUrl(config.apiBaseUrl);
-    _api = _createWidgetApiClient(baseUrl: baseUrl, httpClient: _httpClient);
+    _remoteDataSource = _createWidgetRemoteDataSource(
+      baseUrl: baseUrl,
+      httpClient: _httpClient,
+    );
     _sessions = _SessionCoordinator(
       config: config,
-      api: _api,
+      remoteDataSource: _remoteDataSource,
       sessionStore: sessionStore ?? FlutterSecureWisperBotSessionStore(),
     );
   }
@@ -30,7 +33,7 @@ class WisperBotClient {
   final WisperBotConfig config;
   final http.Client _httpClient;
   final bool _ownsHttpClient;
-  late final WidgetApiClient _api;
+  late final WidgetRemoteDataSource _remoteDataSource;
   late final _SessionCoordinator _sessions;
   bool _closed = false;
 
@@ -43,7 +46,7 @@ class WisperBotClient {
 
   Future<WidgetPollResult> _poll(int after) {
     final session = _requireSession();
-    return _api.poll(
+    return _remoteDataSource.poll(
       widgetKey: config.widgetKey,
       token: session.token,
       after: after,
@@ -52,7 +55,7 @@ class WisperBotClient {
 
   Future<WidgetSendResult> _sendText(String text) {
     final session = _requireSession();
-    return _api.sendText(
+    return _remoteDataSource.sendText(
       widgetKey: config.widgetKey,
       token: session.token,
       text: text,
@@ -65,7 +68,7 @@ class WisperBotClient {
     String? caption,
   ) {
     final session = _requireSession();
-    return _api.sendUpload(
+    return _remoteDataSource.sendUpload(
       widgetKey: config.widgetKey,
       token: session.token,
       upload: upload,
@@ -76,7 +79,7 @@ class WisperBotClient {
 
   Future<void> _setTyping(bool isTyping) {
     final session = _requireSession();
-    return _api.setTyping(
+    return _remoteDataSource.setTyping(
       widgetKey: config.widgetKey,
       token: session.token,
       isTyping: isTyping,
@@ -85,7 +88,7 @@ class WisperBotClient {
 
   Future<WisperBotHandoffState> _requestHandoff() {
     final session = _requireSession();
-    return _api.requestHandoff(
+    return _remoteDataSource.requestHandoff(
       widgetKey: config.widgetKey,
       token: session.token,
     );

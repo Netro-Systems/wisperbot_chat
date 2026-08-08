@@ -23,6 +23,13 @@ configuration --------^          ^
 Put a declaration in the narrowest layer that owns its rules. Do not create
 generic `core`, `common`, `helpers`, or `utils` dumping grounds.
 
+Networking follows `ApiEndpoints -> NetworkCaller -> WidgetRemoteDataSource`.
+Add every backend path to `data/network/api_endpoints.dart`. Only
+`NetworkCaller` may invoke `http.Client`; remote data sources choose operations
+and convert between wire payloads and typed results. Keep request encoding,
+response decoding, and operation-aware error mapping in their focused files.
+Do not add repository or use-case classes that only forward a data-source call.
+
 ## Public API
 
 Only exports from `lib/wisperbot_chat.dart` are supported public API. Adding an

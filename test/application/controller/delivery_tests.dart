@@ -284,4 +284,56 @@ void registerDeliveryTests(WisperBotConfig config) {
     await controller.dispose();
     await client.close();
   });
+
+  test('ambiguous image upload remains unconfirmed and is sent once', () async {
+    var uploadCalls = 0;
+    final httpClient = MockClient((request) async {
+      if (request.url.path.endsWith('/session')) {
+        return http.Response(jsonEncode(sessionResponse()), 200);
+      }
+      if (request.method == 'POST' && request.url.path.endsWith('/messages')) {
+        uploadCalls++;
+        throw http.ClientException('connection dropped after upload');
+      }
+      return http.Response(jsonEncode(pollResponse()), 200);
+    });
+    final client = WisperBotClient(
+      config: config,
+      httpClient: httpClient,
+      sessionStore: MemorySessionStore(),
+    );
+    final controller = WisperBotChatController(client: client);
+    await controller.initialize();
+
+    await expectLater(
+      controller.sendImage(
+        WisperBotUpload(
+          bytes: Uint8List.fromList(<int>[137, 80, 78, 71]),
+          filename: 'screenshot.png',
+          mimeType: 'image/png',
+        ),
+        caption: 'Please review this',
+      ),
+      throwsA(
+        isA<WisperBotException>().having(
+          (error) => error.code,
+          'code',
+          WisperBotErrorCode.network,
+        ),
+      ),
+    );
+
+    expect(uploadCalls, 1);
+    expect(controller.state.messages, hasLength(1));
+    final local = controller.state.messages.single;
+    expect(local.type, WisperBotMessageType.image);
+    expect(local.status, WisperBotMessageStatus.unconfirmed);
+    expect(
+      () => controller.retryMessage(local.localId),
+      throwsA(isA<WisperBotException>()),
+    );
+
+    await controller.dispose();
+    await client.close();
+  });
 }

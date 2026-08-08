@@ -1,7 +1,5 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
-
 import '../../configuration/wisperbot_config.dart';
 import '../../domain/contracts/session_store.dart';
 import '../../domain/errors/wisperbot_exception.dart';
@@ -52,31 +50,31 @@ final class WidgetRequestEncoder {
   /// Encodes a JSON request body without exposing maps outside data.
   String jsonBody(Map<String, Object> body) => jsonEncode(body);
 
-  /// Builds the documented multipart image/audio request.
-  http.MultipartRequest uploadRequest({
-    required Uri endpoint,
-    required Map<String, String> headers,
+  /// Builds the documented multipart image/audio form fields.
+  Map<String, String> uploadFields({
     required String widgetKey,
     required WisperBotUpload upload,
     required WisperBotMessageType type,
     required String? caption,
   }) {
     _validateUpload(upload, type);
-    final request = http.MultipartRequest('POST', endpoint)
-      ..headers.addAll(headers)
-      ..fields['key'] = widgetKey
-      ..fields['type'] = type == WisperBotMessageType.image ? 'image' : 'audio'
-      ..files.add(
-        http.MultipartFile.fromBytes(
-          'attachment',
-          upload.bytes,
-          filename: upload.filename,
-        ),
+    final normalizedCaption = caption?.trim() ?? '';
+    if (normalizedCaption.length > 4000) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.validation,
+        message: 'Attachment captions cannot exceed 4,000 characters.',
+        retryable: false,
       );
-    if (caption != null && caption.trim().isNotEmpty) {
-      request.fields['message'] = caption.trim();
     }
-    return request;
+    final fields = <String, String>{
+      'key': widgetKey,
+      'type': type == WisperBotMessageType.image ? 'image' : 'audio',
+      // Match the browser widget's FormData shape. The backend accepts an
+      // empty caption, and always including the field avoids a multipart
+      // request-shape difference between web and native clients.
+      'message': normalizedCaption,
+    };
+    return fields;
   }
 
   void _validateUpload(WisperBotUpload upload, WisperBotMessageType type) {
@@ -93,6 +91,39 @@ final class WidgetRequestEncoder {
       throw const WisperBotException(
         code: WisperBotErrorCode.attachmentRejected,
         message: 'The attachment filename or message type is invalid.',
+        retryable: false,
+      );
+    }
+
+    final filename = upload.filename.trim().toLowerCase();
+    final mimeType = upload.mimeType.trim().toLowerCase();
+    final supported = switch (type) {
+      WisperBotMessageType.image => const <String, Set<String>>{
+          '.jpg': <String>{'image/jpeg'},
+          '.jpeg': <String>{'image/jpeg'},
+          '.png': <String>{'image/png'},
+          '.webp': <String>{'image/webp'},
+        },
+      WisperBotMessageType.audio => const <String, Set<String>>{
+          '.mp3': <String>{'audio/mpeg'},
+          '.aac': <String>{'audio/aac'},
+          '.m4a': <String>{'audio/mp4'},
+          '.amr': <String>{'audio/amr'},
+          '.ogg': <String>{'audio/ogg'},
+          '.oga': <String>{'audio/ogg'},
+          '.wav': <String>{'audio/wav'},
+          '.webm': <String>{'audio/webm'},
+        },
+      _ => const <String, Set<String>>{},
+    };
+    final matchingEntry = supported.entries.where(
+      (entry) => filename.endsWith(entry.key),
+    );
+    if (matchingEntry.isEmpty ||
+        !matchingEntry.first.value.contains(mimeType)) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.attachmentRejected,
+        message: 'The attachment filename and MIME type are not supported.',
         retryable: false,
       );
     }

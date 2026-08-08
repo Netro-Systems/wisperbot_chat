@@ -38,6 +38,7 @@ class WisperBotChatController with WidgetsBindingObserver {
   DateTime _lastActivity = DateTime.now();
   int _pollCursor = 0;
   int _pollFailures = 0;
+  int _sessionRevision = 0;
   Duration? _pollRetryAfter;
   bool _observingLifecycle = false;
   bool _disposed = false;
@@ -253,17 +254,18 @@ class WisperBotChatController with WidgetsBindingObserver {
         _state.phase != WisperBotChatPhase.reconnecting) {
       return initialize();
     }
-    final future = _refreshInternal();
+    final future = _refreshInternal(_sessionRevision);
     _pollInFlight = future;
     return future.whenComplete(() {
       if (identical(_pollInFlight, future)) _pollInFlight = null;
     });
   }
 
-  Future<void> _refreshInternal() async {
+  Future<void> _refreshInternal(int revision) async {
     _cancelPoll();
     try {
       final result = await _client._poll(_pollCursor);
+      if (_disposed || revision != _sessionRevision) return;
       final messages = _mergePollMessages(
         _state.messages,
         result.messages,
@@ -297,10 +299,11 @@ class WisperBotChatController with WidgetsBindingObserver {
       );
       _diagnostic(WisperBotDiagnosticKind.poll);
       if (result.messages.length == 100) {
-        await _refreshInternal();
+        await _refreshInternal(revision);
         return;
       }
     } on WisperBotException catch (exception) {
+      if (_disposed || revision != _sessionRevision) return;
       if ((exception.code == WisperBotErrorCode.sessionExpired ||
               exception.code == WisperBotErrorCode.unauthorized) &&
           !_recoveryAttempted) {
@@ -332,7 +335,7 @@ class WisperBotChatController with WidgetsBindingObserver {
       _diagnostic(WisperBotDiagnosticKind.poll, exception: exception);
       rethrow;
     } finally {
-      _schedulePoll();
+      if (revision == _sessionRevision) _schedulePoll();
     }
   }
 
@@ -610,20 +613,25 @@ class WisperBotChatController with WidgetsBindingObserver {
   ///
   /// The previous identity's token is never reused for [user]. Throws a typed
   /// [WisperBotException] when validation, storage, or initialization fails.
+  /// Passing `null` is treated as host-application logout: polling and typing
+  /// stop, credentials and in-memory messages are cleared, and no anonymous
+  /// session is created until [initialize] is called again.
   Future<void> updateUser(WisperBotUser? user) async {
     _ensureNotDisposed();
     _cancelPoll();
+    _sessionRevision++;
+    if (user == null) await _stopTypingBestEffort();
     final changed = await _client._switchUser(user);
     if (!changed) return;
     _deferredVisitorPollMessages.clear();
     _pollCursor = 0;
     _recoveryAttempted = false;
-    _emit(
-      WisperBotChatState.initial().copyWith(
-        phase: WisperBotChatPhase.initializing,
-        connection: WisperBotConnectionState.connecting,
-      ),
-    );
+    _emit(WisperBotChatState.initial());
+    if (user == null) return;
+    _emit(_state.copyWith(
+      phase: WisperBotChatPhase.initializing,
+      connection: WisperBotConnectionState.connecting,
+    ));
     await initialize();
   }
 
@@ -634,6 +642,8 @@ class WisperBotChatController with WidgetsBindingObserver {
   Future<void> resetSession() async {
     _ensureNotDisposed();
     _cancelPoll();
+    _sessionRevision++;
+    await _stopTypingBestEffort();
     await _client._clearSession();
     _deferredVisitorPollMessages.clear();
     _pollCursor = 0;
@@ -643,6 +653,25 @@ class WisperBotChatController with WidgetsBindingObserver {
     );
     _emit(WisperBotChatState.initial());
     if (_hasLease) await initialize();
+  }
+
+  Future<void> _stopTypingBestEffort() async {
+    _typingIdleTimer?.cancel();
+    _typingIdleTimer = null;
+    _lastTypingSentAt = null;
+    if (_state.phase != WisperBotChatPhase.ready &&
+        _state.phase != WisperBotChatPhase.reconnecting) {
+      return;
+    }
+    if (_state.visitorTyping) {
+      _emit(_state.copyWith(visitorTyping: false));
+    }
+    try {
+      await _client._setTyping(false);
+    } on Object {
+      // Logout/reset must continue even when the best-effort typing update
+      // cannot reach the server.
+    }
   }
 
   @internal

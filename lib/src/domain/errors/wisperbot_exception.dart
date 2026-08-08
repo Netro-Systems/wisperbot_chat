@@ -7,6 +7,7 @@ enum WisperBotErrorCode {
   rateLimited,
   validation,
   attachmentRejected,
+  edgeRejected,
   network,
   server,
   unsupported,

@@ -7,9 +7,9 @@ part of '../wisperbot_runtime.dart';
 final class _SessionCoordinator {
   _SessionCoordinator({
     required this.config,
-    required WidgetApiClient api,
+    required WidgetRemoteDataSource remoteDataSource,
     required WisperBotSessionStore sessionStore,
-  })  : _api = api,
+  })  : _remoteDataSource = remoteDataSource,
         _sessionStore = sessionStore,
         _activeUser = config.user {
     _unsignedEphemeralScope = createEphemeralScopeId();
@@ -21,7 +21,7 @@ final class _SessionCoordinator {
   }
 
   final WisperBotConfig config;
-  final WidgetApiClient _api;
+  final WidgetRemoteDataSource _remoteDataSource;
   final WisperBotSessionStore _sessionStore;
   late String _unsignedEphemeralScope;
   late String _namespace;
@@ -32,7 +32,7 @@ final class _SessionCoordinator {
 
   Future<WidgetSessionResult> start() async {
     final stored = _session ?? await _readStoredSession();
-    final result = await _api.startSession(
+    final result = await _remoteDataSource.startSession(
       widgetKey: config.widgetKey,
       user: _activeUser,
       storedSession: stored,
@@ -47,7 +47,7 @@ final class _SessionCoordinator {
       WisperBotPreChatData preChat) async {
     final current = requireSession();
     final active = _activeUser;
-    final result = await _api.startSession(
+    final result = await _remoteDataSource.startSession(
       widgetKey: config.widgetKey,
       user: WisperBotUser(
         externalId: active?.externalId,
@@ -79,6 +79,21 @@ final class _SessionCoordinator {
   }
 
   Future<bool> switchUser(WisperBotUser? user) async {
+    // Passing null is the host application's logout signal, even when the
+    // current chat scope is already anonymous. Always discard that scope so a
+    // later initialize cannot restore pre-logout visitor credentials.
+    if (user == null) {
+      final previousNamespace = _namespace;
+      await _deleteStoredSession(previousNamespace);
+      _activeUser = null;
+      _unsignedEphemeralScope = createEphemeralScopeId();
+      _namespace = sessionNamespace(config: config, user: null);
+      if (_namespace != previousNamespace) {
+        await _deleteStoredSession(_namespace);
+      }
+      _session = null;
+      return true;
+    }
     if (_sameUser(_activeUser, user)) return false;
     final candidate = WisperBotConfig(
       widgetKey: config.widgetKey,
@@ -95,18 +110,6 @@ final class _SessionCoordinator {
     validateWisperBotConfig(candidate);
 
     final previousNamespace = _namespace;
-    if (user == null) {
-      await _deleteStoredSession(previousNamespace);
-      _activeUser = null;
-      _unsignedEphemeralScope = createEphemeralScopeId();
-      _namespace = sessionNamespace(config: config, user: null);
-      if (_namespace != previousNamespace) {
-        await _deleteStoredSession(_namespace);
-      }
-      _session = null;
-      return true;
-    }
-
     final nextEphemeral = createEphemeralScopeId();
     final nextNamespace = sessionNamespace(
       config: config,

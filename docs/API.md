@@ -34,6 +34,11 @@ Future<void> resetSession();
 Future<void> dispose();
 ```
 
+Passing `null` to `updateUser` is the host-application logout operation. It
+stops polling, sends typing `false` on a best-effort basis, deletes the active
+identity-scoped visitor ID/token, clears in-memory messages, and returns the
+controller to `idle`. A later `initialize()` creates a fresh anonymous session.
+
 There is no visitor realtime, server capability, unread/read-receipt, push,
 device-registration, backward-pagination, or identity-outcome API in the
 current backend or SDK.
@@ -147,12 +152,28 @@ Multipart fields:
 
 - `key`: widget key
 - `type`: `image` or `audio`
-- `message`: optional caption
-- `attachment`: file bytes and original filename
+- `message`: caption; the SDK sends an empty field when no caption is supplied
+  to match the browser widget's multipart request shape
+- `attachment`: file bytes, original filename, and the upload's explicit MIME
+  type (for example, `image/png`)
 
 The backend accepts up to 10 MB. Images are JPG/JPEG, PNG, or WebP. Audio is
 MP3, AAC, M4A, AMR, OGG/OGA, WAV, or WebM. Laravel performs the authoritative
-file validation; media `422` maps to `attachmentRejected`.
+file validation; the SDK first rejects empty/oversized files and filename/MIME
+mismatches. Media `422` maps to `attachmentRejected`.
+
+Native clients do not send fabricated browser `Origin` or `Referer` headers.
+Production hosting must allow authenticated native multipart requests to this
+route. An HTML `406` response from the edge/WAF maps to `edgeRejected` rather
+than being presented as Laravel validation.
+
+The production edge fix is a narrow LiteSpeed/ModSecurity rule-ID exclusion
+for `POST /widget/v1/messages`; it is hosting configuration, not a Laravel code
+change. Do not disable the WAF globally. After the exclusion, a tokenless
+native multipart request must reach Laravel and return `401 application/json`
+instead of `406 text/html`. A widget used by native clients must also have an
+empty browser-domain allowlist until the backend provides a native domain
+policy.
 
 ### Poll
 
@@ -219,10 +240,22 @@ Backend messages contain `id`, `role`, `body`, `type`, `attachment_url`,
 | 403 | forbidden domain/application |
 | 404 on session | missing/disabled widget configuration |
 | 404 authenticated | expired/unavailable conversation, then one recovery |
+| 406 media | edge/WAF rejected native multipart upload |
+| 413 | attachment too large |
 | 422 media | attachment rejected |
 | 422 other | validation |
 | 429 | rate limited; honor `Retry-After` |
 | 500–599 | server failure |
+
+A media `422` preserves the backend's bounded attachment validation message
+when present so the built-in composer can explain the rejection. Diagnostics
+expose only HTTP status and a typed error code; they never include response
+bodies, tokens, or media bytes.
+
+In debug builds, the package also emits `logger` upload checkpoints for image
+selection, byte size, MIME type, multipart construction, request dispatch,
+HTTP status, and typed failure code. These logs intentionally omit filenames,
+captions, tokens, URLs, and file contents, and are disabled in release builds.
 
 A send becomes `sent` only when the server returns a message ID. Network or
 server failure after transmission becomes `unconfirmed` because the backend may

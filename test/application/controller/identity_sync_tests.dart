@@ -41,9 +41,96 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     expect(controller.state.messages, isEmpty);
 
     await controller.updateUser(null);
-    expect(headers, <String?>[null, null, null]);
+    expect(headers, <String?>[null, null, 'token-2']);
+    expect(bodies.last, <String, dynamic>{
+      'key': 'test-widget',
+      'is_typing': false,
+    });
+    expect(controller.state.phase, WisperBotChatPhase.idle);
+    expect(controller.state.messages, isEmpty);
+
+    await controller.initialize();
+    expect(headers, <String?>[null, null, 'token-2', null]);
     expect(bodies.last.containsKey('external_id'), isFalse);
     expect(bodies.last.containsKey('visitor_id'), isFalse);
+
+    await controller.dispose();
+    await client.close();
+  });
+
+  test('logout continues when the best-effort typing stop fails', () async {
+    final store = MemorySessionStore();
+    var sessionCalls = 0;
+    final client = WisperBotClient(
+      config: config,
+      httpClient: MockClient((request) async {
+        if (request.url.path.endsWith('/typing')) {
+          throw http.ClientException('offline');
+        }
+        sessionCalls++;
+        return http.Response(
+          jsonEncode(
+            sessionResponse(
+              messages: <Map<String, Object?>>[
+                message(id: 1, body: 'Private history'),
+              ],
+            ),
+          ),
+          200,
+        );
+      }),
+      sessionStore: store,
+    );
+    final controller = WisperBotChatController(client: client);
+    await controller.initialize();
+
+    await controller.updateUser(null);
+
+    expect(sessionCalls, 1);
+    expect(store.values, isEmpty);
+    expect(controller.state.phase, WisperBotChatPhase.idle);
+    expect(controller.state.messages, isEmpty);
+
+    await controller.dispose();
+    await client.close();
+  });
+
+  test('an in-flight poll cannot restore messages after logout', () async {
+    final releasePoll = Completer<void>();
+    final pollStarted = Completer<void>();
+    final client = WisperBotClient(
+      config: config,
+      httpClient: MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          return http.Response(jsonEncode(sessionResponse()), 200);
+        }
+        if (request.url.path.endsWith('/typing')) {
+          return http.Response('{"ok":true}', 200);
+        }
+        pollStarted.complete();
+        await releasePoll.future;
+        return http.Response(
+          jsonEncode(
+            pollResponse(messages: <Map<String, Object?>>[
+              message(id: 9, body: 'Must stay hidden'),
+            ]),
+          ),
+          200,
+        );
+      }),
+      sessionStore: MemorySessionStore(),
+    );
+    final controller = WisperBotChatController(client: client);
+    await controller.initialize();
+
+    final poll = controller.refresh();
+    await pollStarted.future;
+    await controller.updateUser(null);
+    releasePoll.complete();
+    await poll;
+
+    expect(controller.state.phase, WisperBotChatPhase.idle);
+    expect(controller.state.messages, isEmpty);
 
     await controller.dispose();
     await client.close();

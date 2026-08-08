@@ -19,13 +19,29 @@ class ExampleMediaAdapter implements WisperBotMediaAdapter {
 
   @override
   Future<WisperBotUpload?> pickImage() async {
-    final file = await _imagePicker.pickImage(source: ImageSource.gallery);
+    final file = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 2048,
+      maxHeight: 2048,
+      imageQuality: 90,
+    );
     if (file == null) return null;
     final bytes = await file.readAsBytes();
-    final mimeType = file.mimeType ?? _imageMimeType(file.name);
+    final filename = file.name.trim();
+    final mimeType = (file.mimeType ?? _imageMimeType(filename)).toLowerCase();
+    _validateMedia(
+      bytes: bytes,
+      filename: filename,
+      mimeType: mimeType,
+      allowedMimeTypes: const <String>{
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+      },
+    );
     return WisperBotUpload(
       bytes: bytes,
-      filename: file.name,
+      filename: filename,
       mimeType: mimeType,
     );
   }
@@ -88,6 +104,13 @@ class ExampleMediaAdapter implements WisperBotMediaAdapter {
       );
     }
 
+    _validateMedia(
+      bytes: bytes,
+      filename: 'voice.wav',
+      mimeType: 'audio/wav',
+      allowedMimeTypes: const <String>{'audio/wav'},
+    );
+
     return WisperBotUpload(
       bytes: bytes,
       filename: 'voice-${DateTime.now().millisecondsSinceEpoch}.wav',
@@ -119,6 +142,42 @@ class ExampleMediaAdapter implements WisperBotMediaAdapter {
     final lower = filename.toLowerCase();
     if (lower.endsWith('.png')) return 'image/png';
     if (lower.endsWith('.webp')) return 'image/webp';
-    return 'image/jpeg';
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+      return 'image/jpeg';
+    }
+    throw const WisperBotException(
+      code: WisperBotErrorCode.attachmentRejected,
+      message: 'Choose a JPG, PNG, or WebP image.',
+      retryable: false,
+    );
+  }
+
+  void _validateMedia({
+    required Uint8List bytes,
+    required String filename,
+    required String mimeType,
+    required Set<String> allowedMimeTypes,
+  }) {
+    if (bytes.isEmpty) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.attachmentRejected,
+        message: 'The selected media file is empty.',
+        retryable: false,
+      );
+    }
+    if (bytes.length > 10 * 1024 * 1024) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.attachmentRejected,
+        message: 'Choose a media file under 10 MB.',
+        retryable: false,
+      );
+    }
+    if (filename.isEmpty || !allowedMimeTypes.contains(mimeType)) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.attachmentRejected,
+        message: 'The selected media format is not supported.',
+        retryable: false,
+      );
+    }
   }
 }

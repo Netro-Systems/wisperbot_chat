@@ -12,7 +12,7 @@ void _registerRequestContractTests() {
             as Map<String, dynamic>;
         return _jsonResponse(sessionResponse());
       });
-      final api = WidgetApiClient(
+      final api = _remoteDataSource(
         baseUrl: Uri.parse('https://chat.example.com/base'),
         httpClient: client,
       );
@@ -83,7 +83,7 @@ void _registerRequestContractTests() {
         }
         return _jsonResponse(<String, Object?>{'ok': true});
       });
-      final api = WidgetApiClient(
+      final api = _remoteDataSource(
         baseUrl: Uri.parse('https://chat.example.com'),
         httpClient: client,
       );
@@ -136,6 +136,7 @@ void _registerRequestContractTests() {
         expect(multipart.files, hasLength(1));
         expect(multipart.files.single.field, 'attachment');
         expect(multipart.files.single.filename, 'photo.png');
+        expect(multipart.files.single.contentType.toString(), 'image/png');
         expect(multipart.headers['accept'], 'application/json');
         expect(multipart.headers['x-widget-token'], 'token-1');
         _expectNoInventedHeaders(multipart);
@@ -164,7 +165,7 @@ void _registerRequestContractTests() {
           status: 422,
         );
       });
-      final api = WidgetApiClient(
+      final api = _remoteDataSource(
         baseUrl: Uri.parse('https://chat.example.com'),
         httpClient: client,
       );
@@ -192,11 +193,17 @@ void _registerRequestContractTests() {
           caption: 'A caption',
         ),
         throwsA(
-          isA<WisperBotException>().having(
-            (error) => error.code,
-            'code',
-            WisperBotErrorCode.attachmentRejected,
-          ),
+          isA<WisperBotException>()
+              .having(
+                (error) => error.code,
+                'code',
+                WisperBotErrorCode.attachmentRejected,
+              )
+              .having(
+                (error) => error.message,
+                'message',
+                'The attachment is invalid.',
+              ),
         ),
       );
     });

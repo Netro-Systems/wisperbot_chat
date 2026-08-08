@@ -26,6 +26,7 @@ class _ComposerState extends State<_Composer> {
   bool _mediaBusy = false;
   bool _isRecording = false;
   WisperBotUpload? _pendingImage;
+  WisperBotUpload? _pendingAudio;
 
   @override
   Widget build(BuildContext context) {
@@ -50,6 +51,14 @@ class _ComposerState extends State<_Composer> {
                 onSend: _sendPendingImage,
                 onDiscard: _discardPendingImage,
               ),
+            if (_pendingAudio != null)
+              _AudioPreview(
+                upload: _pendingAudio!,
+                colors: widget.colors,
+                sending: _mediaBusy,
+                onSend: _sendPendingAudio,
+                onDiscard: _discardPendingAudio,
+              ),
             if (_isRecording)
               _RecordingStatus(
                 colors: widget.colors,
@@ -64,7 +73,10 @@ class _ComposerState extends State<_Composer> {
                     label: 'Attach image',
                     child: IconButton(
                       tooltip: 'Attach image',
-                      onPressed: _mediaBusy || _isRecording ? null : _pickImage,
+                      onPressed:
+                          _mediaBusy || _isRecording || _pendingAudio != null
+                              ? null
+                              : _pickImage,
                       icon: const Icon(Icons.image_outlined),
                       color: widget.colors.onSurfaceMuted,
                     ),
@@ -73,13 +85,15 @@ class _ComposerState extends State<_Composer> {
                   Semantics(
                     button: true,
                     label: _isRecording
-                        ? 'Stop and send voice message'
+                        ? 'Stop voice recording'
                         : 'Record voice message',
                     child: IconButton(
                       tooltip: _isRecording
-                          ? 'Stop and send voice message'
+                          ? 'Stop voice recording'
                           : 'Record voice message',
-                      onPressed: _mediaBusy || _pendingImage != null
+                      onPressed: _mediaBusy ||
+                              _pendingImage != null ||
+                              _pendingAudio != null
                           ? null
                           : _toggleRecording,
                       icon: Icon(
@@ -132,8 +146,13 @@ class _ComposerState extends State<_Composer> {
                       disabledForegroundColor: widget.colors.onSurfaceMuted,
                     ),
                     tooltip: 'Send message',
-                    onPressed:
-                        _hasText && !_mediaBusy && !_isRecording ? _send : null,
+                    onPressed: _hasText &&
+                            !_mediaBusy &&
+                            !_isRecording &&
+                            _pendingImage == null &&
+                            _pendingAudio == null
+                        ? _send
+                        : null,
                     icon: const Icon(Icons.send_rounded, size: 21),
                   ),
                 ),
@@ -156,12 +175,22 @@ class _ComposerState extends State<_Composer> {
   Future<void> _pickImage() async {
     final adapter = widget.mediaAdapter;
     if (adapter == null) return;
+    WisperBotDebugUploadLogger.selectionStarted();
     setState(() => _mediaBusy = true);
     try {
       final upload = await adapter.pickImage();
       if (!mounted) return;
-      if (upload != null) setState(() => _pendingImage = upload);
+      if (upload == null) {
+        WisperBotDebugUploadLogger.selectionCancelled();
+      } else {
+        WisperBotDebugUploadLogger.selectionReady(
+          sizeBytes: upload.bytes.length,
+          mimeType: upload.mimeType,
+        );
+        setState(() => _pendingImage = upload);
+      }
     } on Object catch (error) {
+      WisperBotDebugUploadLogger.selectionFailed(error);
       if (mounted) _showMediaError(error, 'The image could not be selected.');
     } finally {
       if (mounted) setState(() => _mediaBusy = false);
@@ -171,6 +200,10 @@ class _ComposerState extends State<_Composer> {
   Future<void> _sendPendingImage() async {
     final upload = _pendingImage;
     if (upload == null) return;
+    WisperBotDebugUploadLogger.sendRequested(
+      sizeBytes: upload.bytes.length,
+      mimeType: upload.mimeType,
+    );
     setState(() => _mediaBusy = true);
     try {
       final caption = _textController.text.trim();
@@ -178,6 +211,7 @@ class _ComposerState extends State<_Composer> {
         upload,
         caption: caption.isEmpty ? null : caption,
       );
+      WisperBotDebugUploadLogger.sendConfirmed();
       if (!mounted) return;
       _textController.clear();
       setState(() {
@@ -185,6 +219,11 @@ class _ComposerState extends State<_Composer> {
         _pendingImage = null;
       });
     } on Object catch (error) {
+      if (error is WisperBotException) {
+        WisperBotDebugUploadLogger.failed('image_upload', error);
+      } else {
+        WisperBotDebugUploadLogger.unexpectedFailure('image_upload', error);
+      }
       if (mounted) _showMediaError(error, 'The image could not be sent.');
     } finally {
       if (mounted) setState(() => _mediaBusy = false);
@@ -208,14 +247,7 @@ class _ComposerState extends State<_Composer> {
       if (!mounted) return;
       setState(() => _isRecording = false);
       if (upload == null) return;
-      final caption = _textController.text.trim();
-      await widget.controller.sendAudio(
-        upload,
-        caption: caption.isEmpty ? null : caption,
-      );
-      if (!mounted) return;
-      _textController.clear();
-      setState(() => _hasText = false);
+      setState(() => _pendingAudio = upload);
     } on Object catch (error) {
       if (_isRecording) {
         try {
@@ -232,6 +264,33 @@ class _ComposerState extends State<_Composer> {
       if (mounted) setState(() => _mediaBusy = false);
     }
   }
+
+  Future<void> _sendPendingAudio() async {
+    final upload = _pendingAudio;
+    if (upload == null) return;
+    setState(() => _mediaBusy = true);
+    try {
+      final caption = _textController.text.trim();
+      await widget.controller.sendAudio(
+        upload,
+        caption: caption.isEmpty ? null : caption,
+      );
+      if (!mounted) return;
+      _textController.clear();
+      setState(() {
+        _hasText = false;
+        _pendingAudio = null;
+      });
+    } on Object catch (error) {
+      if (mounted) {
+        _showMediaError(error, 'The voice message could not be sent.');
+      }
+    } finally {
+      if (mounted) setState(() => _mediaBusy = false);
+    }
+  }
+
+  void _discardPendingAudio() => setState(() => _pendingAudio = null);
 
   Future<void> _cancelRecording() async {
     final adapter = widget.mediaAdapter;
@@ -308,7 +367,7 @@ class _RecordingStatus extends StatelessWidget {
             children: <Widget>[
               Icon(Icons.fiber_manual_record, size: 14, color: colors.error),
               const SizedBox(width: 6),
-              const Expanded(child: Text('Recording… tap stop to send')),
+              const Expanded(child: Text('Recording… tap stop to preview')),
               TextButton(onPressed: onCancel, child: const Text('Cancel')),
             ],
           ),

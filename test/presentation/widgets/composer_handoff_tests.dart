@@ -92,17 +92,28 @@ void registerComposerHandoffTests(WisperBotConfig config) {
       find.bySemanticsLabel(RegExp('Recording voice message')),
       findsOneWidget,
     );
-    expect(find.byTooltip('Stop and send voice message'), findsOneWidget);
+    expect(find.byTooltip('Stop voice recording'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Stop and send voice message'));
+    await tester.tap(find.byTooltip('Stop voice recording'));
     await tester.pumpAndSettle();
     expect(mediaAdapter.recordingStops, 1);
+    final audioPreview = find.byKey(
+      const ValueKey<String>('wisperbot-audio-preview'),
+    );
+    expect(audioPreview, findsOneWidget);
+    expect(uploadCount, 1);
+
+    await tester.tap(
+      find.descendant(of: audioPreview, matching: find.text('Send')),
+    );
+    await tester.pumpAndSettle();
     expect(uploadCount, 2);
     expect(uploadedContentTypes.last, startsWith('multipart/form-data;'));
     final audioBody = utf8.decode(uploadedBodies.last, allowMalformed: true);
     expect(audioBody, contains('audio'));
     expect(audioBody, contains('name="attachment"; filename="voice.wav"'));
-    expect(find.text('Recording… tap stop to send'), findsNothing);
+    expect(find.text('Recording… tap stop to preview'), findsNothing);
+    expect(audioPreview, findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();

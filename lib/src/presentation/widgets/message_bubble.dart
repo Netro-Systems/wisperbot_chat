@@ -23,7 +23,7 @@ class _MessageBubble extends StatelessWidget {
     final status = _statusLabel(message.status);
     return Semantics(
       label:
-          '${visitor ? 'Your' : 'Support'} message. ${message.body}${visitor ? '. $status' : ''}',
+          '${visitor ? 'Your' : 'Support'} message. ${message.body}${status == null ? '' : '. $status'}',
       child: _BubbleLayout(
         visitor: visitor,
         widgetConfig: widgetConfig,
@@ -35,7 +35,7 @@ class _MessageBubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             _MessageContent(message: message, colors: colors),
-            if (visitor) ...<Widget>[
+            if (visitor && status != null) ...<Widget>[
               const SizedBox(height: 4),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -97,18 +97,21 @@ class _MessageBubble extends StatelessWidget {
             visitor ? colors.onVisitorBubble : colors.onAgentBubble,
       );
 
-  static String _statusLabel(WisperBotMessageStatus status) => switch (status) {
-        WisperBotMessageStatus.pending => 'Sending',
-        WisperBotMessageStatus.sent => 'Sent',
+  static String? _statusLabel(WisperBotMessageStatus status) =>
+      switch (status) {
+        // Normal delivery state remains tracked internally, but displaying it
+        // makes backend processing latency look like a client-side send delay.
+        WisperBotMessageStatus.pending || WisperBotMessageStatus.sent => null,
         WisperBotMessageStatus.failed => 'Failed',
         WisperBotMessageStatus.unconfirmed => 'Delivery unconfirmed',
       };
 
   static IconData _statusIcon(WisperBotMessageStatus status) =>
       switch (status) {
-        WisperBotMessageStatus.pending => Icons.schedule,
-        WisperBotMessageStatus.sent => Icons.check,
         WisperBotMessageStatus.failed => Icons.error_outline,
         WisperBotMessageStatus.unconfirmed => Icons.help_outline,
+        WisperBotMessageStatus.pending ||
+        WisperBotMessageStatus.sent =>
+          throw StateError('Normal delivery states do not render a status.'),
       };
 }
