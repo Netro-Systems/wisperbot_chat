@@ -17,6 +17,9 @@ class ExampleMediaAdapter implements WisperBotMediaAdapter {
   BytesBuilder? _recordingBytes;
   Object? _recordingError;
 
+  static const int _recordingSampleRate = 16000;
+  static const int _recordingChannels = 1;
+
   @override
   Future<WisperBotUpload?> pickImage() async {
     final file = await _imagePicker.pickImage(
@@ -64,9 +67,11 @@ class ExampleMediaAdapter implements WisperBotMediaAdapter {
     _recordingError = null;
     final stream = await _recorder.startStream(
       const RecordConfig(
-        encoder: AudioEncoder.wav,
-        numChannels: 1,
-        sampleRate: 16000,
+        // `record` does not support WAV as a stream encoder. Capture raw PCM
+        // and add the WAV container header when recording stops.
+        encoder: AudioEncoder.pcm16bits,
+        numChannels: _recordingChannels,
+        sampleRate: _recordingSampleRate,
       ),
     );
     _recordingSubscription = stream.listen(
@@ -93,16 +98,21 @@ class ExampleMediaAdapter implements WisperBotMediaAdapter {
     await _recordingSubscription?.cancel();
 
     final error = _recordingError;
-    final bytes = _recordingBytes?.takeBytes() ?? Uint8List(0);
+    final pcmBytes = _recordingBytes?.takeBytes() ?? Uint8List(0);
     _clearRecordingState();
     if (error != null) throw error;
-    if (bytes.isEmpty) {
+    if (pcmBytes.isEmpty) {
       throw const WisperBotException(
         code: WisperBotErrorCode.attachmentRejected,
         message: 'No audio was captured. Please try again.',
         retryable: true,
       );
     }
+    final bytes = encodePcm16AsWav(
+      pcmBytes,
+      sampleRate: _recordingSampleRate,
+      channels: _recordingChannels,
+    );
 
     _validateMedia(
       bytes: bytes,
@@ -180,4 +190,44 @@ class ExampleMediaAdapter implements WisperBotMediaAdapter {
       );
     }
   }
+}
+
+/// Wraps little-endian signed PCM16 samples in a standard WAV container.
+///
+/// Kept outside the adapter so the example's recording output can be verified
+/// without invoking a platform microphone in tests.
+Uint8List encodePcm16AsWav(
+  Uint8List pcmBytes, {
+  required int sampleRate,
+  required int channels,
+}) {
+  const bitsPerSample = 16;
+  const headerLength = 44;
+  final bytesPerSample = bitsPerSample ~/ 8;
+  final byteRate = sampleRate * channels * bytesPerSample;
+  final blockAlign = channels * bytesPerSample;
+  final wav = Uint8List(headerLength + pcmBytes.length);
+  final data = ByteData.sublistView(wav);
+
+  void writeAscii(int offset, String value) {
+    for (var index = 0; index < value.length; index++) {
+      wav[offset + index] = value.codeUnitAt(index);
+    }
+  }
+
+  writeAscii(0, 'RIFF');
+  data.setUint32(4, wav.length - 8, Endian.little);
+  writeAscii(8, 'WAVE');
+  writeAscii(12, 'fmt ');
+  data.setUint32(16, 16, Endian.little);
+  data.setUint16(20, 1, Endian.little);
+  data.setUint16(22, channels, Endian.little);
+  data.setUint32(24, sampleRate, Endian.little);
+  data.setUint32(28, byteRate, Endian.little);
+  data.setUint16(32, blockAlign, Endian.little);
+  data.setUint16(34, bitsPerSample, Endian.little);
+  writeAscii(36, 'data');
+  data.setUint32(40, pcmBytes.length, Endian.little);
+  wav.setRange(headerLength, wav.length, pcmBytes);
+  return wav;
 }

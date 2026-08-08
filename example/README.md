@@ -19,7 +19,9 @@ without adding them to the core SDK.
 
 The Android example includes internet and microphone permissions and uses the
 Flutter tool's supported minimum SDK for audio recording. The iOS example
-includes photo-library and microphone usage descriptions. The iOS/macOS projects include the Keychain
+includes photo-library and microphone usage descriptions. Voice messages are
+captured as a PCM16 stream and wrapped in a WAV container before upload because
+the recorder plugin does not support WAV directly in stream mode. The iOS/macOS projects include the Keychain
 Sharing entitlements required by the default secure session store. Flutter
 bundles `.env` as an application asset, so it is suitable only for public client
 configuration such as the widget key and API base URL. Never put identity
