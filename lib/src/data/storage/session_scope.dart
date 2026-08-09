@@ -134,11 +134,14 @@ String sessionNamespace({
   final canonical = validateAndCanonicalizeBaseUrl(config.apiBaseUrl);
   final signature = user?.signature;
   final signedValue = user?.externalId ?? user?.email;
+  final unsignedStableValue = unsignedStableIdentityValue(user);
   final identityScope = signature != null && signedValue != null
       ? 'signed:$signedValue\u0000$signature'
       : user == null
           ? 'anonymous'
-          : 'unsigned:${unsignedEphemeralScope ?? createEphemeralScopeId()}';
+          : unsignedStableValue != null
+              ? 'unsigned-stable:$unsignedStableValue'
+              : 'unsigned:${unsignedEphemeralScope ?? createEphemeralScopeId()}';
   final material = <String>[
     canonical.toString(),
     config.widgetKey,
@@ -146,6 +149,11 @@ String sessionNamespace({
     'v$wisperBotSessionSchemaVersion',
   ].join('\u0000');
   return 'wisperbot_chat_${sha256.convert(utf8.encode(material))}';
+}
+
+String? unsignedStableIdentityValue(WisperBotUser? user) {
+  if (user == null || user.signature != null) return null;
+  return user.externalId ?? user.email;
 }
 
 String presentationScopeKey(WisperBotConfig config) {

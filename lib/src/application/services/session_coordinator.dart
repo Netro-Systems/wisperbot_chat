@@ -188,7 +188,9 @@ final class _SessionCoordinator {
   }
 
   bool get _shouldPersistActiveSession =>
-      _activeUser == null || _activeUser?.signature != null;
+      _activeUser == null ||
+      _activeUser?.signature != null ||
+      unsignedStableIdentityValue(_activeUser) != null;
 
   bool _sameUser(WisperBotUser? left, WisperBotUser? right) =>
       left?.externalId == right?.externalId &&
@@ -211,7 +213,11 @@ String wisperBotPresentationScope(WisperBotConfig config) =>
 Future<void> resetWisperBotStoredSession(WisperBotConfig config) async {
   validateWisperBotConfig(config);
   final user = config.user;
-  if (user != null && user.signature == null) return;
+  if (user != null &&
+      user.signature == null &&
+      unsignedStableIdentityValue(user) == null) {
+    return;
+  }
   final namespace = sessionNamespace(config: config, user: user);
   await FlutterSecureWisperBotSessionStore().delete(namespace);
 }

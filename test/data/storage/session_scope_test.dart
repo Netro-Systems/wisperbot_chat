@@ -74,6 +74,31 @@ void main() {
     expect(first, isNot(second));
   });
 
+  test('unsigned profiles with stable identity reuse a local namespace', () {
+    const externalUser = WisperBotUser(
+      externalId: 'customer-123',
+      name: 'Customer One',
+    );
+    const emailUser = WisperBotUser(email: 'customer@example.com');
+
+    final externalFirst = sessionNamespace(
+      config: base,
+      user: externalUser,
+      unsignedEphemeralScope: 'scope-one',
+    );
+    final externalSecond = sessionNamespace(
+      config: base,
+      user: externalUser,
+      unsignedEphemeralScope: 'scope-two',
+    );
+    final emailScope = sessionNamespace(config: base, user: emailUser);
+
+    expect(externalFirst, externalSecond);
+    expect(externalFirst, isNot(emailScope));
+    expect(externalFirst, isNot(contains('customer-123')));
+    expect(emailScope, isNot(contains('customer@example.com')));
+  });
+
   test('configuration rejects unsafe identity and polling values', () {
     expect(
       () => WisperBotClient(
