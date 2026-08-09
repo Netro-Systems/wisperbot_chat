@@ -212,6 +212,48 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
+  testWidgets('ready view opens at the latest message', (tester) async {
+    final messages = List<Map<String, Object?>>.generate(40, (index) {
+      final id = index + 1;
+      return message(
+        id: id,
+        body: id == 40 ? 'Latest message 40' : 'Older message $id',
+      );
+    });
+    final runtime = _runtime(
+      config,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          return http.Response(
+            jsonEncode(sessionResponse(messages: messages)),
+            200,
+          );
+        }
+        return http.Response('{"ok":true}', 200);
+      }),
+    );
+
+    await tester.pumpWidget(_app(
+      SizedBox(
+        height: 360,
+        child:
+            WisperBotChatView(config: config, controller: runtime.controller),
+      ),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 220));
+
+    expect(find.text('Latest message 40'), findsOneWidget);
+    expect(find.text('Older message 1'), findsNothing);
+
+    final listView = tester.widget<ListView>(find.byType(ListView));
+    final position = listView.controller!.position;
+    expect(position.pixels, position.minScrollExtent);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
   testWidgets('normal message delivery does not show sending or sent labels',
       (tester) async {
     final sendResponse = Completer<http.Response>();

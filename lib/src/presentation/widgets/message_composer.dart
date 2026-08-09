@@ -48,7 +48,6 @@ class _ComposerState extends State<_Composer> {
                 upload: _pendingImage!,
                 colors: widget.colors,
                 sending: _mediaBusy,
-                onSend: _sendPendingImage,
                 onDiscard: _discardPendingImage,
               ),
             if (_pendingAudio != null)
@@ -56,7 +55,6 @@ class _ComposerState extends State<_Composer> {
                 upload: _pendingAudio!,
                 colors: widget.colors,
                 sending: _mediaBusy,
-                onSend: _sendPendingAudio,
                 onDiscard: _discardPendingAudio,
               ),
             if (_isRecording)
@@ -146,13 +144,7 @@ class _ComposerState extends State<_Composer> {
                       disabledForegroundColor: widget.colors.onSurfaceMuted,
                     ),
                     tooltip: 'Send message',
-                    onPressed: _hasText &&
-                            !_mediaBusy &&
-                            !_isRecording &&
-                            _pendingImage == null &&
-                            _pendingAudio == null
-                        ? _send
-                        : null,
+                    onPressed: _canSend ? _send : null,
                     icon: const Icon(Icons.send_rounded, size: 21),
                   ),
                 ),
@@ -174,6 +166,11 @@ class _ComposerState extends State<_Composer> {
 
   WisperBotMediaAdapter get _mediaAdapter =>
       widget.mediaAdapter ?? (_ownedMediaAdapter ??= _DefaultMediaAdapter());
+
+  bool get _canSend =>
+      !_mediaBusy &&
+      !_isRecording &&
+      (_hasText || _pendingImage != null || _pendingAudio != null);
 
   Future<void> _pickImage() async {
     final adapter = _mediaAdapter;
@@ -318,6 +315,14 @@ class _ComposerState extends State<_Composer> {
   }
 
   void _send() {
+    if (_pendingImage != null) {
+      unawaited(_sendPendingImage());
+      return;
+    }
+    if (_pendingAudio != null) {
+      unawaited(_sendPendingAudio());
+      return;
+    }
     final text = _textController.text.trim();
     if (text.isEmpty) return;
     _textController.clear();

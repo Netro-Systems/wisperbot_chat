@@ -6,14 +6,12 @@ class _AudioPreview extends StatefulWidget {
     required this.upload,
     required this.colors,
     required this.sending,
-    required this.onSend,
     required this.onDiscard,
   });
 
   final WisperBotUpload upload;
   final WisperBotResolvedTheme colors;
   final bool sending;
-  final VoidCallback onSend;
   final VoidCallback onDiscard;
 
   @override
@@ -136,10 +134,6 @@ class _AudioPreviewState extends State<_AudioPreview> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-            ),
-            TextButton(
-              onPressed: widget.sending ? null : widget.onSend,
-              child: const Text('Send'),
             ),
             IconButton(
               tooltip: 'Discard voice message',

@@ -71,9 +71,7 @@ void registerComposerHandoffTests(WisperBotConfig config) {
     );
     expect(preview, findsOneWidget);
 
-    await tester.tap(
-      find.descendant(of: preview, matching: find.text('Send')),
-    );
+    await tester.tap(find.byTooltip('Send message'));
     await tester.pumpAndSettle();
     expect(uploadCount, 1);
     expect(uploadedContentTypes.single, startsWith('multipart/form-data;'));
@@ -103,9 +101,7 @@ void registerComposerHandoffTests(WisperBotConfig config) {
     expect(audioPreview, findsOneWidget);
     expect(uploadCount, 1);
 
-    await tester.tap(
-      find.descendant(of: audioPreview, matching: find.text('Send')),
-    );
+    await tester.tap(find.byTooltip('Send message'));
     await tester.pumpAndSettle();
     expect(uploadCount, 2);
     expect(uploadedContentTypes.last, startsWith('multipart/form-data;'));

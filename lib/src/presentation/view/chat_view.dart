@@ -166,14 +166,14 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
   void _trackScrollPosition() {
     if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
-    _nearBottom = position.maxScrollExtent - position.pixels < 96;
+    _nearBottom = position.pixels - position.minScrollExtent < 96;
   }
 
   void _scrollToEnd() {
     if (!mounted || !_scrollController.hasClients) return;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final target = _scrollController.position.maxScrollExtent;
+    final target = _scrollController.position.minScrollExtent;
     if (reduceMotion) {
       _scrollController.jumpTo(target);
     } else {
@@ -288,11 +288,20 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
         children: <Widget>[
           ListView.builder(
             controller: _scrollController,
+            reverse: true,
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
             itemCount: welcomeCount + _state.messages.length + typingCount,
             itemBuilder: (context, index) {
-              if (index == 0) {
+              if (typingCount == 1 && index == 0) {
+                return _TypingIndicator(
+                  typing: _state.agentTyping!,
+                  colors: colors,
+                );
+              }
+              final messageIndex =
+                  _state.messages.length - 1 - (index - typingCount);
+              if (messageIndex < 0) {
                 return Padding(
                   padding: EdgeInsets.only(bottom: colors.messageSpacing),
                   child: _WelcomeBubble(
@@ -300,13 +309,6 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
                     widgetConfig: _state.widget,
                     colors: colors,
                   ),
-                );
-              }
-              final messageIndex = index - welcomeCount;
-              if (messageIndex == _state.messages.length) {
-                return _TypingIndicator(
-                  typing: _state.agentTyping!,
-                  colors: colors,
                 );
               }
               final message = _state.messages[messageIndex];
