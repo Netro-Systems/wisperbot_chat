@@ -3,6 +3,7 @@ part of '../view/chat_view.dart';
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
+    required this.controller,
     required this.widgetConfig,
     required this.colors,
     required this.onRetry,
@@ -11,6 +12,7 @@ class _MessageBubble extends StatelessWidget {
   });
 
   final WisperBotMessage message;
+  final WisperBotChatController controller;
   final WisperBotWidgetConfig? widgetConfig;
   final WisperBotResolvedTheme colors;
   final VoidCallback? onRetry;
@@ -34,7 +36,11 @@ class _MessageBubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            _MessageContent(message: message, colors: colors),
+            _MessageContent(
+              message: message,
+              colors: colors,
+              controller: controller,
+            ),
             if (visitor && status != null) ...<Widget>[
               const SizedBox(height: 4),
               Row(

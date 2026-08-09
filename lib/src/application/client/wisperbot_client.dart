@@ -77,6 +77,14 @@ class WisperBotClient {
     );
   }
 
+  Future<Uint8List> _loadAttachmentBytes(WisperBotAttachment attachment) {
+    final session = _requireSession();
+    return _remoteDataSource.loadAttachmentBytes(
+      token: session.token,
+      attachment: attachment,
+    );
+  }
+
   Future<void> _setTyping(bool isTyping) {
     final session = _requireSession();
     return _remoteDataSource.setTyping(

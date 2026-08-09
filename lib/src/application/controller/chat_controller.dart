@@ -407,6 +407,12 @@ class WisperBotChatController with WidgetsBindingObserver {
         ),
       );
 
+  /// Loads protected attachment bytes through the active widget session.
+  Future<Uint8List> loadAttachmentBytes(WisperBotAttachment attachment) {
+    _ensureReady();
+    return _client._loadAttachmentBytes(attachment);
+  }
+
   Future<WisperBotMessage> _sendUploadInternal(
     WisperBotUpload upload,
     WisperBotMessageType type,

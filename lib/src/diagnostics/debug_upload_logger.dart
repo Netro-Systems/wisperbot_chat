@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:logger/logger.dart';
 
 import '../domain/errors/wisperbot_exception.dart';
@@ -28,8 +29,9 @@ final class WisperBotDebugUploadLogger {
         '(sizeBytes=$sizeBytes, mimeType=$mimeType)',
       );
 
-  static void selectionFailed(Object error) =>
-      _debug('image_upload: selection failed (error=${error.runtimeType})');
+  static void selectionFailed(Object error) => _debug(
+        'image_upload: selection failed (${_safeError(error)})',
+      );
 
   static void sendRequested({
     required int sizeBytes,
@@ -71,7 +73,20 @@ final class WisperBotDebugUploadLogger {
       );
 
   static void unexpectedFailure(String operation, Object error) =>
-      _debug('$operation: failed (error=${error.runtimeType})');
+      _debug('$operation: failed (${_safeError(error)})');
+
+  static String _safeError(Object error) {
+    if (error is PlatformException) {
+      final code = error.code.trim();
+      final message = error.message?.trim();
+      return [
+        'error=PlatformException',
+        if (code.isNotEmpty) 'code=$code',
+        if (message != null && message.isNotEmpty) 'message=$message',
+      ].join(', ');
+    }
+    return 'error=${error.runtimeType}';
+  }
 
   static String _safeContentType(String? value) {
     final type = value?.split(';').first.trim().toLowerCase();

@@ -44,6 +44,27 @@ final class NetworkCaller {
     );
   }
 
+  /// Downloads a protected media URL with the active widget token.
+  Future<http.Response> download(
+    Uri uri, {
+    required WidgetOperation operation,
+    required String token,
+    String accept = '*/*',
+  }) =>
+      _execute(
+        () => _httpClient
+            .get(
+              uri,
+              headers: _headers(
+                token: token,
+                jsonBody: false,
+                accept: accept,
+              ),
+            )
+            .timeout(requestTimeout),
+        operation: operation,
+      );
+
   /// Executes a JSON POST request against a named API [path].
   Future<http.Response> postJson(
     String path, {
@@ -172,9 +193,10 @@ final class NetworkCaller {
   Map<String, String> _headers({
     String? token,
     bool jsonBody = true,
+    String accept = 'application/json',
   }) =>
       <String, String>{
-        'Accept': 'application/json',
+        'Accept': accept,
         if (jsonBody) 'Content-Type': 'application/json',
         if (token != null && token.isNotEmpty) 'X-Widget-Token': token,
         // Native clients cannot truthfully supply browser Origin or Referer.

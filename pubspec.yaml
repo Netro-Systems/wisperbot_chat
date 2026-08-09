@@ -15,7 +15,10 @@ dependencies:
   flutter_svg: ^2.1.0
   http: ^1.6.0
   http_parser: ^4.1.2
+  image_picker: '>=1.1.2 <1.2.0'
+  just_audio: ^0.10.5
   logger: ^2.6.2
+  record: '>=6.0.0 <6.1.0'
 
 dev_dependencies:
   flutter_test:

@@ -22,6 +22,7 @@ class _Composer extends StatefulWidget {
 class _ComposerState extends State<_Composer> {
   final TextEditingController _textController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  _DefaultMediaAdapter? _ownedMediaAdapter;
   bool _hasText = false;
   bool _mediaBusy = false;
   bool _isRecording = false;
@@ -30,9 +31,8 @@ class _ComposerState extends State<_Composer> {
 
   @override
   Widget build(BuildContext context) {
-    final mediaAdapter = widget.mediaAdapter;
-    final showImage = mediaAdapter != null && widget.imagesEnabled;
-    final showAudio = mediaAdapter != null && widget.audioEnabled;
+    final showImage = widget.imagesEnabled;
+    final showAudio = widget.audioEnabled;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: widget.colors.surface,
@@ -172,9 +172,11 @@ class _ComposerState extends State<_Composer> {
     unawaited(widget.controller.setTyping(hasText));
   }
 
+  WisperBotMediaAdapter get _mediaAdapter =>
+      widget.mediaAdapter ?? (_ownedMediaAdapter ??= _DefaultMediaAdapter());
+
   Future<void> _pickImage() async {
-    final adapter = widget.mediaAdapter;
-    if (adapter == null) return;
+    final adapter = _mediaAdapter;
     WisperBotDebugUploadLogger.selectionStarted();
     setState(() => _mediaBusy = true);
     try {
@@ -233,8 +235,7 @@ class _ComposerState extends State<_Composer> {
   void _discardPendingImage() => setState(() => _pendingImage = null);
 
   Future<void> _toggleRecording() async {
-    final adapter = widget.mediaAdapter;
-    if (adapter == null) return;
+    final adapter = _mediaAdapter;
     setState(() => _mediaBusy = true);
     try {
       if (!_isRecording) {
@@ -293,8 +294,7 @@ class _ComposerState extends State<_Composer> {
   void _discardPendingAudio() => setState(() => _pendingAudio = null);
 
   Future<void> _cancelRecording() async {
-    final adapter = widget.mediaAdapter;
-    if (adapter == null) return;
+    final adapter = _mediaAdapter;
     setState(() => _mediaBusy = true);
     try {
       await adapter.cancelAudioRecording();
@@ -341,9 +341,13 @@ class _ComposerState extends State<_Composer> {
 
   @override
   void dispose() {
-    final adapter = widget.mediaAdapter;
+    final adapter = widget.mediaAdapter ?? _ownedMediaAdapter;
     if (_isRecording && adapter != null) {
       unawaited(adapter.cancelAudioRecording().catchError((_) {}));
+    }
+    final owned = _ownedMediaAdapter;
+    if (owned != null) {
+      unawaited(owned.dispose());
     }
     _textController.dispose();
     _focusNode.dispose();

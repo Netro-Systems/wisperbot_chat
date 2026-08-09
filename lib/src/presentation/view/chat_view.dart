@@ -1,7 +1,11 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:record/record.dart';
 
 import '../../application/wisperbot_runtime.dart';
 import '../../configuration/wisperbot_config.dart';
@@ -24,6 +28,8 @@ part '../widgets/welcome_bubble.dart';
 part '../widgets/pre_chat_form.dart';
 part '../widgets/message_bubble.dart';
 part '../widgets/message_content.dart';
+part '../widgets/audio_playback_coordinator.dart';
+part '../widgets/default_media_adapter.dart';
 part '../widgets/typing_indicator.dart';
 part '../widgets/handoff_action.dart';
 part '../widgets/message_composer.dart';
@@ -309,6 +315,7 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
                 child: widget.messageBuilder?.call(context, message) ??
                     _MessageBubble(
                       message: message,
+                      controller: _controller,
                       widgetConfig: _state.widget,
                       colors: colors,
                       onRetry:

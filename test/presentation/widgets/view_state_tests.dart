@@ -273,6 +273,52 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
+  testWidgets('audio messages render a playback control', (tester) async {
+    final mediaRequestHeaders = <Map<String, String>>[];
+    final runtime = _runtime(
+      config,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/voice.m4a')) {
+          mediaRequestHeaders.add(request.headers);
+          return http.Response.bytes(
+            Uint8List.fromList(<int>[1, 2, 3, 4]),
+            200,
+            headers: <String, String>{'content-type': 'audio/mp4'},
+          );
+        }
+        return http.Response(
+          jsonEncode(sessionResponse(messages: <Map<String, Object?>>[
+            message(
+              id: 1,
+              role: 'visitor',
+              type: 'audio',
+              body: 'Voice message',
+              sentBy: 'human',
+              attachmentUrl: 'https://chat.example.com/voice.m4a',
+              filename: 'voice.m4a',
+              mimeType: 'audio/mp4',
+            ),
+          ])),
+          200,
+        );
+      }),
+    );
+
+    await tester.pumpWidget(_app(
+      WisperBotChatView(config: config, controller: runtime.controller),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byTooltip('Play voice message'), findsOneWidget);
+    expect(find.text('Voice message'), findsNothing);
+    expect(mediaRequestHeaders.single['X-Widget-Token'], 'token-1');
+    expect(mediaRequestHeaders.single['Accept'], 'audio/*,*/*');
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
   testWidgets('required pre-chat collects fields before showing composer',
       (tester) async {
     var calls = 0;

@@ -5,7 +5,15 @@ import 'package:http/http.dart' as http;
 import '../../domain/errors/wisperbot_exception.dart';
 
 /// Widget operation categories whose HTTP semantics differ by endpoint.
-enum WidgetOperation { session, poll, sendText, sendMedia, typing, handoff }
+enum WidgetOperation {
+  session,
+  poll,
+  sendText,
+  sendMedia,
+  media,
+  typing,
+  handoff,
+}
 
 /// Converts HTTP failures into safe, operation-aware public exceptions.
 WisperBotException mapWidgetHttpError(

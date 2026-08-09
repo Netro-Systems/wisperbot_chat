@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../../configuration/wisperbot_config.dart';
 import '../../domain/contracts/session_store.dart';
 import '../../domain/models/models.dart';
@@ -35,6 +37,11 @@ abstract interface class WidgetRemoteDataSource {
     required WisperBotUpload upload,
     required WisperBotMessageType type,
     String? caption,
+  });
+
+  Future<Uint8List> loadAttachmentBytes({
+    required String token,
+    required WisperBotAttachment attachment,
   });
 
   Future<void> setTyping({
@@ -143,6 +150,22 @@ final class HttpWidgetRemoteDataSource implements WidgetRemoteDataSource {
       operation: WidgetOperation.sendMedia,
     );
     return _decoder.send(response);
+  }
+
+  @override
+  Future<Uint8List> loadAttachmentBytes({
+    required String token,
+    required WisperBotAttachment attachment,
+  }) async {
+    final response = await _networkCaller.download(
+      attachment.url,
+      token: token,
+      operation: WidgetOperation.media,
+      accept: attachment.mimeType?.startsWith('audio/') == true
+          ? 'audio/*,*/*'
+          : '*/*',
+    );
+    return response.bodyBytes;
   }
 
   @override
