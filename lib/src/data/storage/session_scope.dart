@@ -132,12 +132,13 @@ String sessionNamespace({
   String? unsignedEphemeralScope,
 }) {
   final canonical = validateAndCanonicalizeBaseUrl(config.apiBaseUrl);
+  final anonymous = isAnonymousEquivalentUser(user);
   final signature = user?.signature;
   final signedValue = user?.externalId ?? user?.email;
   final unsignedStableValue = unsignedStableIdentityValue(user);
   final identityScope = signature != null && signedValue != null
       ? 'signed:$signedValue\u0000$signature'
-      : user == null
+      : anonymous
           ? 'anonymous'
           : unsignedStableValue != null
               ? 'unsigned-stable:$unsignedStableValue'
@@ -150,6 +151,14 @@ String sessionNamespace({
   ].join('\u0000');
   return 'wisperbot_chat_${sha256.convert(utf8.encode(material))}';
 }
+
+bool isAnonymousEquivalentUser(WisperBotUser? user) =>
+    user == null ||
+    (user.externalId == null &&
+        user.name == null &&
+        user.email == null &&
+        user.avatarUrl == null &&
+        user.signature == null);
 
 String? unsignedStableIdentityValue(WisperBotUser? user) {
   if (user == null || user.signature != null) return null;

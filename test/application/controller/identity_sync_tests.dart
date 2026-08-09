@@ -161,6 +161,68 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     await client.close();
   });
 
+  test('empty user restores as anonymous from local secure storage', () async {
+    final store = MemorySessionStore();
+    const emptyUserConfig = WisperBotConfig(
+      widgetKey: 'test-widget',
+      apiBaseUrl: 'https://chat.example.com/base/',
+      user: WisperBotUser(),
+      polling: WisperBotPollingConfig(
+        visibleInterval: Duration(minutes: 1),
+        idleInterval: Duration(minutes: 1),
+        failureMaxInterval: Duration(minutes: 1),
+      ),
+    );
+    final namespace = sessionNamespace(config: emptyUserConfig, user: null);
+    final bodies = <Map<String, dynamic>>[];
+    final headers = <String?>[];
+    var sessionCalls = 0;
+    final httpClient = MockClient((request) async {
+      bodies.add(jsonDecode(request.body) as Map<String, dynamic>);
+      headers.add(request.headers['X-Widget-Token']);
+      sessionCalls++;
+      return http.Response(
+        jsonEncode(
+          sessionResponse(
+            visitorId: 'visitor-$sessionCalls',
+            token: 'token-$sessionCalls',
+          ),
+        ),
+        200,
+      );
+    });
+
+    final firstClient = WisperBotClient(
+      config: emptyUserConfig,
+      httpClient: httpClient,
+      sessionStore: store,
+    );
+    final firstController = WisperBotChatController(client: firstClient);
+    await firstController.initialize();
+    await firstController.dispose();
+    await firstClient.close();
+
+    final secondClient = WisperBotClient(
+      config: emptyUserConfig,
+      httpClient: httpClient,
+      sessionStore: store,
+    );
+    final secondController = WisperBotChatController(client: secondClient);
+    await secondController.initialize();
+
+    expect(store.reads, <String>[namespace, namespace]);
+    expect(store.writes, <String>[namespace, namespace]);
+    expect(headers, <String?>[null, 'token-1']);
+    expect(bodies.first, <String, dynamic>{'key': 'test-widget'});
+    expect(bodies.last, <String, dynamic>{
+      'key': 'test-widget',
+      'visitor_id': 'visitor-1',
+    });
+
+    await secondController.dispose();
+    await secondClient.close();
+  });
+
   test('unsigned stable identity restores from local secure storage', () async {
     final store = MemorySessionStore();
     const unsignedConfig = WisperBotConfig(

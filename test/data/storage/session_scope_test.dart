@@ -20,6 +20,13 @@ void main() {
     );
   });
 
+  test('empty user shares the anonymous secure-storage namespace', () {
+    expect(
+      sessionNamespace(config: base, user: const WisperBotUser()),
+      sessionNamespace(config: base, user: null),
+    );
+  });
+
   test('sessions are isolated by widget, base URL, and signed identity', () {
     const signatureA =
         'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';

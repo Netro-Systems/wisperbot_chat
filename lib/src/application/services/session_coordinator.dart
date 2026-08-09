@@ -188,7 +188,7 @@ final class _SessionCoordinator {
   }
 
   bool get _shouldPersistActiveSession =>
-      _activeUser == null ||
+      isAnonymousEquivalentUser(_activeUser) ||
       _activeUser?.signature != null ||
       unsignedStableIdentityValue(_activeUser) != null;
 
@@ -214,6 +214,7 @@ Future<void> resetWisperBotStoredSession(WisperBotConfig config) async {
   validateWisperBotConfig(config);
   final user = config.user;
   if (user != null &&
+      !isAnonymousEquivalentUser(user) &&
       user.signature == null &&
       unsignedStableIdentityValue(user) == null) {
     return;
