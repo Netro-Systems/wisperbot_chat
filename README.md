@@ -1,6 +1,6 @@
 # wisperbot_chat
 
-`wisperbot_chat` is a Flutter package for WisperBot's customer-facing chat. It owns secure visitor sessions, public widget API communication, polling, message reconciliation, lifecycle handling, typed state and errors, and an optional Material UI.
+`wisperbot_chat` is a Flutter package for adding WisperBot customer chat to Flutter apps. It includes secure visitor sessions, public widget API communication, foreground polling, message reconciliation, typed state and errors, and optional Material UI.
 
 This is a `0.1.0-dev.1` preview. Native requests work only for widgets whose browser domain allowlist is empty; the SDK never spoofs browser `Origin` or `Referer` headers.
 
@@ -22,12 +22,11 @@ The widget key routes chat and is not a secret. Never put WisperBot management c
 
 The preview requires Flutter 3.24 or newer (Dart 3.5 or newer).
 
-Until the preview is published, use a Git or local path dependency:
+Add the package to your app:
 
 ```yaml
 dependencies:
-  wisperbot_chat:
-    path: ../wisperbot_chat
+  wisperbot_chat: ^0.1.0-dev.1
 ```
 
 Android apps must use min SDK 23 because the default session store uses `flutter_secure_storage`:
@@ -163,8 +162,8 @@ Anonymous and correctly signed identities persist across launches. Unsigned prof
 
 The core upload API accepts validated bytes through `WisperBotUpload`. Supply a
 `WisperBotMediaAdapter` in `WisperBotConfig` to enable the default composer's
-image and microphone controls while keeping picker/recorder plugins out of the
-core runtime. The example app contains a working `image_picker` + `record`
+image and microphone controls while keeping picker and recorder plugins out of
+the core runtime. The example app contains a working `image_picker` + `record`
 adapter. Native multipart uploads deliberately omit browser `Origin` and
 `Referer`; the hosting WAF must allow `POST /widget/v1/messages`, and an edge
 HTML `406` is surfaced as `WisperBotErrorCode.edgeRejected`.
@@ -193,4 +192,4 @@ flutter analyze
 flutter test
 ```
 
-The deeper contracts live in [PROJECT_GOAL.md](docs/PROJECT_GOAL.md), [ARCHITECTURE.md](docs/ARCHITECTURE.md), [DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md), and [API.md](docs/API.md).
+More details are available in [API.md](doc/API.md), [ARCHITECTURE.md](doc/ARCHITECTURE.md), [DESIGN_SYSTEM.md](doc/DESIGN_SYSTEM.md), and [PROJECT_GOAL.md](doc/PROJECT_GOAL.md).

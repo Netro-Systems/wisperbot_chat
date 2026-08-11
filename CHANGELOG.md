@@ -2,36 +2,40 @@
 
 ## 0.1.0-dev.1
 
-- Aligned every visitor request with the checked-in Laravel widget API and removed unsupported visitor realtime contracts.
-- Corrected image/audio delivery to use the backend's multipart upload format.
-- Added token-bound required pre-chat submission without persisting submitted PII.
-- Removed speculative capabilities, identity-outcome, realtime, and unread public state.
-- Backend AI auto-replies now run through the queue so visitor sends can be acknowledged immediately.
-- Converted the repository from a Flutter application scaffold to a reusable Flutter package with a cross-platform example app.
-- Added secure, identity-scoped visitor session persistence with injectable storage and HTTP transport.
-- Added anonymous and verified-user session initialization, controlled token restoration, identity switching, and logout/reset behavior.
-- Added typed immutable chat state, events, and redacted errors/diagnostics.
-- Added serialized lifecycle-aware polling, message ordering/deduplication, send/server-echo reconciliation, and honest unconfirmed delivery states.
-- Added text, image/audio upload transport, typing throttling, and human handoff supported by the current visitor API.
-- Added full-screen, launcher, embedded, bottom-sheet/dialog, and headless integration surfaces.
-- Added Material UI defaults, host/server theme resolution, loading/empty/error/reconnecting/offline states, message statuses, and accessibility semantics.
-- Kept the initial built-in copy in English; localization delegates/label overrides remain a pre-stable API task rather than exposing a non-functional locale option.
-- Documented the current backend contract and native domain-policy limitation.
-- Fixed duplicate outgoing bubbles by deferring visitor poll echoes while the matching send response is still in flight, then reconciling by exact server ID.
-- Moved the example widget key and API base URL into a local `.env` file and disabled the example app's debug banner.
-- Aligned the default Flutter chat UI with the WisperBot web widget: branded header, compact tailed bubbles, persistent welcome bubble, muted canvas, borderless composer, circular send action, and powered-by footer.
-- Added `WisperBotConfig.useApiColors`: API colors remain enabled by default, disabling them selects the built-in `#FF762E` brand palette, and explicit custom theme colors always win.
-- Increased the bottom-sheet presentation to 96% of the available safe height for a roomier mobile conversation view.
-- Added format-aware remote image rendering so SVG and Flutter-supported raster avatars, launcher logos, and image messages use the appropriate decoder, safe fallbacks, and web-widget-aligned logo sizing.
-# Unreleased
+### Added
 
-- Reorganized package internals into documented configuration, domain,
-  application, data, and presentation boundaries without changing the public
-  API or prebuilt UI.
-- Added contributor guidance and expanded public API documentation.
-- Clarified the internal networking flow with named API endpoints, a central
-  HTTP caller, and an operation-oriented widget remote data source.
-- Removed routine `Sending` and `Sent` bubble labels while retaining internal
-  delivery tracking and visible failed/unconfirmed states.
-- Validated image/audio extension and MIME pairs, caption and byte limits, and
-  distinguished native multipart WAF `406` failures from Laravel validation.
+- Reusable Flutter package structure with a cross-platform example app.
+- Anonymous and verified-user chat sessions with secure, identity-scoped storage.
+- Public widget API client with injectable HTTP transport and session storage.
+- Typed chat state, events, errors, and redacted diagnostics.
+- Lifecycle-aware foreground polling with message ordering, deduplication, and send/server-echo reconciliation.
+- Text, image, and audio message transport using the current visitor API.
+- Human handoff, typing updates, and required pre-chat support.
+- Prebuilt full-screen, launcher, embedded, bottom-sheet, dialog, and headless integration surfaces.
+- Material UI defaults with server/host theme resolution, loading, empty, error, reconnecting, offline, and accessibility states.
+- `WisperBotConfig.useApiColors` for switching between API-provided colors and the built-in WisperBot brand palette.
+- Format-aware remote image rendering for SVG and Flutter-supported raster assets.
+- Public API documentation and contributor guidance.
+
+### Changed
+
+- Aligned visitor requests with the Laravel widget API and removed unsupported realtime, identity-outcome, and unread state contracts.
+- Reorganized internals into configuration, domain, application, data, and presentation boundaries without changing the public API.
+- Clarified networking through named API endpoints, a central HTTP caller, and an operation-oriented widget remote data source.
+- Updated the default Flutter chat UI to better match the WisperBot web widget.
+- Increased bottom-sheet presentation height to 96% of the available safe height.
+- Moved example widget key and API base URL configuration into a local `.env` file.
+- Kept built-in copy in English while leaving localization delegates and label overrides as a pre-stable API task.
+
+### Fixed
+
+- Corrected image/audio delivery to use the backend multipart upload format.
+- Fixed duplicate outgoing bubbles by reconciling poll echoes with in-flight send responses.
+- Removed routine `Sending` and `Sent` bubble labels while retaining internal delivery tracking and visible failed/unconfirmed states.
+- Validated image/audio extension and MIME pairs, caption limits, byte limits, and native multipart edge `406` failures.
+- Ensured required pre-chat submission is token-bound and does not persist submitted PII.
+- Routed backend AI auto-replies through the queue so visitor sends can be acknowledged immediately.
+
+### Documented
+
+- Current backend contract and native domain-policy limitation.

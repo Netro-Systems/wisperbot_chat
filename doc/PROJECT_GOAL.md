@@ -52,7 +52,7 @@ At backend commit `3dfe430`, the visitor operations are:
 - `POST /widget/v1/handoff`
 
 The backend repository at `D:\Backend\wisperbot` is read-only reference
-material. `docs/API.md` records the exact request and response contract.
+material. `doc/API.md` records the exact request and response contract.
 
 The browser-oriented domain policy is a known limitation for native clients:
 native requests do not have trustworthy `Origin` or `Referer` values. The SDK

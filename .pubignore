@@ -1,0 +1,9 @@
+/AGENTS.md
+/android/
+/ios/
+/build/
+**/GeneratedPluginRegistrant.*
+**/local.properties
+**/Flutter/ephemeral/
+**/Flutter/flutter_export_environment.sh
+**/Flutter/Generated.xcconfig

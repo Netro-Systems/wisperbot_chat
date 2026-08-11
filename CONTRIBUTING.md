@@ -90,5 +90,5 @@ flutter test
 flutter build apk
 ```
 
-Update `docs/ARCHITECTURE.md` when boundaries change and `docs/API.md` when an
+Update `doc/ARCHITECTURE.md` when boundaries change and `doc/API.md` when an
 intentional public or backend contract changes.
