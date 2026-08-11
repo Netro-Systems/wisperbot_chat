@@ -11,7 +11,11 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
-/docs/
+AGENTS.md
+.env
+.puku-cli/
+doc/
+test/golden/failures/
 
 # IntelliJ related
 *.iml
@@ -33,6 +37,9 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+example/.dart_tool/
+example/build/
+example/.env
 
 # Symbolication related
 app.*.symbols
