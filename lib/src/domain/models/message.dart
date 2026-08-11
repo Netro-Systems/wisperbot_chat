@@ -24,6 +24,7 @@ class WisperBotMessage {
     required this.createdAt,
     this.serverId,
     this.attachment,
+    this.localUpload,
     this.senderName,
     this.sentBy,
     this.error,
@@ -53,6 +54,9 @@ class WisperBotMessage {
   /// Optional attachment metadata.
   final WisperBotAttachment? attachment;
 
+  /// Optional in-memory upload used for local pending media previews.
+  final WisperBotUpload? localUpload;
+
   /// Optional backend-supplied sender name.
   final String? senderName;
 
@@ -72,6 +76,7 @@ class WisperBotMessage {
     WisperBotMessageStatus? status,
     DateTime? createdAt,
     WisperBotAttachment? attachment,
+    WisperBotUpload? localUpload,
     String? senderName,
     WisperBotSenderKind? sentBy,
     WisperBotException? error,
@@ -86,6 +91,7 @@ class WisperBotMessage {
         status: status ?? this.status,
         createdAt: createdAt ?? this.createdAt,
         attachment: attachment ?? this.attachment,
+        localUpload: localUpload ?? this.localUpload,
         senderName: senderName ?? this.senderName,
         sentBy: sentBy ?? this.sentBy,
         error: clearError ? null : error ?? this.error,

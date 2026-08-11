@@ -18,7 +18,10 @@ class _BubbleLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (context, constraints) {
-          final maximumWidth = math.min(constraints.maxWidth * 0.76, 520.0);
+          final viewportWidth = constraints.hasBoundedWidth
+              ? constraints.maxWidth
+              : MediaQuery.sizeOf(context).width;
+          final maximumWidth = math.min(viewportWidth * 0.76, 520.0);
           return Align(
             alignment: visitor
                 ? AlignmentDirectional.centerEnd

@@ -20,9 +20,15 @@ class _Composer extends StatefulWidget {
 }
 
 class _ComposerState extends State<_Composer> {
+  static const String _imageIcon = 'assets/icons/image.png';
+  static const String _microphoneIcon = 'assets/icons/microphone.png';
+  static const String _sendIcon = 'assets/icons/send.png';
+
   final TextEditingController _textController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   _DefaultMediaAdapter? _ownedMediaAdapter;
+  Timer? _recordingTimer;
+  Duration _recordingElapsed = Duration.zero;
   bool _hasText = false;
   bool _mediaBusy = false;
   bool _isRecording = false;
@@ -31,15 +37,13 @@ class _ComposerState extends State<_Composer> {
 
   @override
   Widget build(BuildContext context) {
-    final showImage = widget.imagesEnabled;
-    final showAudio = widget.audioEnabled;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: widget.colors.surface,
         border: Border(top: BorderSide(color: widget.colors.outline)),
       ),
       child: Padding(
-        padding: const EdgeInsetsDirectional.fromSTEB(12, 9, 9, 9),
+        padding: const EdgeInsetsDirectional.fromSTEB(14, 8, 14, 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
@@ -58,102 +62,79 @@ class _ComposerState extends State<_Composer> {
                 onDiscard: _discardPendingAudio,
               ),
             if (_isRecording)
-              _RecordingStatus(
+              _RecordingComposer(
                 colors: widget.colors,
-                onCancel: _mediaBusy ? null : _cancelRecording,
+                elapsed: _recordingElapsed,
+                busy: _mediaBusy,
+                onCancel: _cancelRecording,
+                onSend: _sendRecording,
+              )
+            else
+              _TextComposer(
+                colors: widget.colors,
+                textController: _textController,
+                focusNode: _focusNode,
+                showImage: widget.imagesEnabled,
+                showAudio: widget.audioEnabled,
+                mediaBusy: _mediaBusy,
+                pendingImage: _pendingImage != null,
+                pendingAudio: _pendingAudio != null,
+                canSend: _canSend,
+                onPickImage: _pickImage,
+                onToggleRecording: _toggleRecording,
+                onTextChanged: _onTextChanged,
+                onSend: _send,
               ),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: <Widget>[
-                if (showImage)
-                  Semantics(
-                    button: true,
-                    label: 'Attach image',
-                    child: IconButton(
-                      tooltip: 'Attach image',
-                      onPressed:
-                          _mediaBusy || _isRecording || _pendingAudio != null
-                              ? null
-                              : _pickImage,
-                      icon: const Icon(Icons.image_outlined),
-                      color: widget.colors.onSurfaceMuted,
-                    ),
-                  ),
-                if (showAudio)
-                  Semantics(
-                    button: true,
-                    label: _isRecording
-                        ? 'Stop voice recording'
-                        : 'Record voice message',
-                    child: IconButton(
-                      tooltip: _isRecording
-                          ? 'Stop voice recording'
-                          : 'Record voice message',
-                      onPressed: _mediaBusy ||
-                              _pendingImage != null ||
-                              _pendingAudio != null
-                          ? null
-                          : _toggleRecording,
-                      icon: Icon(
-                        _isRecording ? Icons.stop_rounded : Icons.mic_none,
-                      ),
-                      color: _isRecording
-                          ? widget.colors.error
-                          : widget.colors.onSurfaceMuted,
-                    ),
-                  ),
-                Expanded(
-                  child: TextField(
-                    controller: _textController,
-                    focusNode: _focusNode,
-                    minLines: 1,
-                    maxLines: 5,
-                    maxLength: 4000,
-                    buildCounter: (_,
-                            {required currentLength,
-                            required isFocused,
-                            maxLength}) =>
-                        null,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      hintText: 'Type your message…',
-                      hintStyle: TextStyle(color: widget.colors.onSurfaceMuted),
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 13,
-                      ),
-                    ),
-                    onChanged: _onTextChanged,
-                    onSubmitted: (_) => _send(),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Semantics(
-                  button: true,
-                  label: 'Send message',
-                  child: IconButton.filled(
-                    style: IconButton.styleFrom(
-                      minimumSize: const Size.square(48),
-                      backgroundColor: widget.colors.primary,
-                      foregroundColor: widget.colors.onPrimary,
-                      disabledBackgroundColor: widget.colors.surfaceMuted,
-                      disabledForegroundColor: widget.colors.onSurfaceMuted,
-                    ),
-                    tooltip: 'Send message',
-                    onPressed: _canSend ? _send : null,
-                    icon: const Icon(Icons.send_rounded, size: 21),
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
       ),
     );
+  }
+
+  void _startRecordingTimer() {
+    _recordingTimer?.cancel();
+    _recordingElapsed = Duration.zero;
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() => _recordingElapsed += const Duration(seconds: 1));
+      }
+    });
+  }
+
+  void _stopRecordingTimer() {
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+    _recordingElapsed = Duration.zero;
+  }
+
+  Future<WisperBotUpload?> _stopRecordingForUpload() async {
+    final upload = await _mediaAdapter.stopAudioRecording();
+    if (!mounted) return null;
+    setState(() {
+      _isRecording = false;
+      _stopRecordingTimer();
+    });
+    return upload;
+  }
+
+  Future<void> _sendRecording() async {
+    if (!_isRecording || _mediaBusy) return;
+    setState(() => _mediaBusy = true);
+    try {
+      final upload = await _stopRecordingForUpload();
+      if (!mounted || upload == null) return;
+      await widget.controller.sendAudio(upload);
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() {
+          _isRecording = false;
+          _stopRecordingTimer();
+        });
+        _showMediaError(error, 'The voice message could not be sent.');
+      }
+    } finally {
+      if (mounted) setState(() => _mediaBusy = false);
+    }
   }
 
   void _onTextChanged(String value) {
@@ -203,20 +184,19 @@ class _ComposerState extends State<_Composer> {
       sizeBytes: upload.bytes.length,
       mimeType: upload.mimeType,
     );
-    setState(() => _mediaBusy = true);
+    final caption = _textController.text.trim();
+    _textController.clear();
+    setState(() {
+      _mediaBusy = true;
+      _hasText = false;
+      _pendingImage = null;
+    });
     try {
-      final caption = _textController.text.trim();
       await widget.controller.sendImage(
         upload,
         caption: caption.isEmpty ? null : caption,
       );
       WisperBotDebugUploadLogger.sendConfirmed();
-      if (!mounted) return;
-      _textController.clear();
-      setState(() {
-        _hasText = false;
-        _pendingImage = null;
-      });
     } on Object catch (error) {
       if (error is WisperBotException) {
         WisperBotDebugUploadLogger.failed('image_upload', error);
@@ -237,14 +217,17 @@ class _ComposerState extends State<_Composer> {
     try {
       if (!_isRecording) {
         await adapter.startAudioRecording();
-        if (mounted) setState(() => _isRecording = true);
+        if (mounted) {
+          setState(() {
+            _isRecording = true;
+            _startRecordingTimer();
+          });
+        }
         return;
       }
 
-      final upload = await adapter.stopAudioRecording();
-      if (!mounted) return;
-      setState(() => _isRecording = false);
-      if (upload == null) return;
+      final upload = await _stopRecordingForUpload();
+      if (!mounted || upload == null) return;
       setState(() => _pendingAudio = upload);
     } on Object catch (error) {
       if (_isRecording) {
@@ -255,7 +238,10 @@ class _ComposerState extends State<_Composer> {
         }
       }
       if (mounted) {
-        setState(() => _isRecording = false);
+        setState(() {
+          _isRecording = false;
+          _stopRecordingTimer();
+        });
         _showMediaError(error, 'The voice message could not be recorded.');
       }
     } finally {
@@ -266,19 +252,18 @@ class _ComposerState extends State<_Composer> {
   Future<void> _sendPendingAudio() async {
     final upload = _pendingAudio;
     if (upload == null) return;
-    setState(() => _mediaBusy = true);
+    final caption = _textController.text.trim();
+    _textController.clear();
+    setState(() {
+      _mediaBusy = true;
+      _hasText = false;
+      _pendingAudio = null;
+    });
     try {
-      final caption = _textController.text.trim();
       await widget.controller.sendAudio(
         upload,
         caption: caption.isEmpty ? null : caption,
       );
-      if (!mounted) return;
-      _textController.clear();
-      setState(() {
-        _hasText = false;
-        _pendingAudio = null;
-      });
     } on Object catch (error) {
       if (mounted) {
         _showMediaError(error, 'The voice message could not be sent.');
@@ -302,6 +287,7 @@ class _ComposerState extends State<_Composer> {
         setState(() {
           _isRecording = false;
           _mediaBusy = false;
+          _stopRecordingTimer();
         });
       }
     }
@@ -350,6 +336,7 @@ class _ComposerState extends State<_Composer> {
     if (_isRecording && adapter != null) {
       unawaited(adapter.cancelAudioRecording().catchError((_) {}));
     }
+    _recordingTimer?.cancel();
     final owned = _ownedMediaAdapter;
     if (owned != null) {
       unawaited(owned.dispose());
@@ -360,26 +347,389 @@ class _ComposerState extends State<_Composer> {
   }
 }
 
-class _RecordingStatus extends StatelessWidget {
-  const _RecordingStatus({required this.colors, required this.onCancel});
+class _TextComposer extends StatelessWidget {
+  const _TextComposer({
+    required this.colors,
+    required this.textController,
+    required this.focusNode,
+    required this.showImage,
+    required this.showAudio,
+    required this.mediaBusy,
+    required this.pendingImage,
+    required this.pendingAudio,
+    required this.canSend,
+    required this.onPickImage,
+    required this.onToggleRecording,
+    required this.onTextChanged,
+    required this.onSend,
+  });
 
   final WisperBotResolvedTheme colors;
-  final VoidCallback? onCancel;
+  final TextEditingController textController;
+  final FocusNode focusNode;
+  final bool showImage;
+  final bool showAudio;
+  final bool mediaBusy;
+  final bool pendingImage;
+  final bool pendingAudio;
+  final bool canSend;
+  final VoidCallback onPickImage;
+  final VoidCallback onToggleRecording;
+  final ValueChanged<String> onTextChanged;
+  final VoidCallback onSend;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        liveRegion: true,
-        label: 'Recording voice message',
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Row(
-            children: <Widget>[
-              Icon(Icons.fiber_manual_record, size: 14, color: colors.error),
-              const SizedBox(width: 6),
-              const Expanded(child: Text('Recording… tap stop to preview')),
-              TextButton(onPressed: onCancel, child: const Text('Cancel')),
-            ],
+  Widget build(BuildContext context) {
+    final mediaIconColor = colors.onSurface;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 86),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.surfaceMuted,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: TextField(
+              controller: textController,
+              focusNode: focusNode,
+              minLines: 1,
+              maxLines: 4,
+              maxLength: 4000,
+              buildCounter: (_,
+                      {required currentLength,
+                      required isFocused,
+                      maxLength}) =>
+                  null,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                hintText: 'Type your message…',
+                hintStyle: TextStyle(
+                  color: colors.onSurfaceMuted,
+                  fontWeight: FontWeight.w400,
+                ),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+              ),
+              onChanged: onTextChanged,
+              onSubmitted: (_) => onSend(),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 6, 6, 4),
+            child: Row(
+              children: <Widget>[
+                if (showImage)
+                  _ComposerIconButton(
+                    tooltip: 'Attach image',
+                    semanticLabel: 'Attach image',
+                    onPressed: mediaBusy || pendingAudio ? null : onPickImage,
+                    padding: EdgeInsets.zero,
+                    icon: _ComposerAssetIcon(
+                      assetName: _ComposerState._imageIcon,
+                      color: mediaIconColor,
+                      size: 21,
+                    ),
+                  ),
+                SizedBox(width: showImage && showAudio ? 8 : 0),
+                if (showAudio)
+                  _ComposerIconButton(
+                    tooltip: 'Record voice message',
+                    semanticLabel: 'Record voice message',
+                    onPressed: mediaBusy || pendingImage || pendingAudio
+                        ? null
+                        : onToggleRecording,
+                    padding: EdgeInsets.zero,
+                    icon: _ComposerAssetIcon(
+                      assetName: _ComposerState._microphoneIcon,
+                      color: mediaIconColor,
+                      size: 21,
+                    ),
+                  ),
+                const Spacer(),
+                Semantics(
+                  button: true,
+                  label: 'Send message',
+                  child: IconButton.filled(
+                    tooltip: 'Send message',
+                    onPressed: canSend ? onSend : null,
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size.square(42),
+                      backgroundColor: colors.primary,
+                      foregroundColor: colors.onPrimary,
+                      disabledBackgroundColor: colors.surfaceMuted,
+                      disabledForegroundColor: colors.onSurfaceMuted,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: _ComposerAssetIcon(
+                      assetName: _ComposerState._sendIcon,
+                      color: canSend ? colors.onPrimary : colors.onSurfaceMuted,
+                      size: 21,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecordingComposer extends StatelessWidget {
+  const _RecordingComposer({
+    required this.colors,
+    required this.elapsed,
+    required this.busy,
+    required this.onCancel,
+    required this.onSend,
+  });
+
+  final WisperBotResolvedTheme colors;
+  final Duration elapsed;
+  final bool busy;
+  final VoidCallback onCancel;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      label: 'Recording voice message',
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 84),
+        padding: const EdgeInsets.fromLTRB(12, 12, 8, 8),
+        decoration: BoxDecoration(
+          color: colors.surfaceMuted,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            _RecordingWaveform(color: colors.onSurfaceMuted),
+            const SizedBox(height: 10),
+            Row(
+              children: <Widget>[
+                _ComposerIconButton(
+                  tooltip: 'Cancel recording',
+                  semanticLabel: 'Cancel recording',
+                  onPressed: busy ? null : onCancel,
+                  icon: Icon(
+                    Icons.delete_outline,
+                    color: colors.error,
+                    size: 22,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  height: 34,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: colors.error,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Icon(Icons.graphic_eq, color: colors.onPrimary, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        _formatRecordingDuration(elapsed),
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: colors.onPrimary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                IconButton.filled(
+                  tooltip: 'Send voice message',
+                  onPressed: busy ? null : onSend,
+                  style: IconButton.styleFrom(
+                    minimumSize: const Size.square(42),
+                    backgroundColor: colors.primary,
+                    foregroundColor: colors.onPrimary,
+                    disabledBackgroundColor: colors.surface,
+                    disabledForegroundColor: colors.onSurfaceMuted,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: _ComposerAssetIcon(
+                    assetName: _ComposerState._sendIcon,
+                    color: colors.onPrimary,
+                    size: 21,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecordingWaveform extends StatefulWidget {
+  const _RecordingWaveform({required this.color});
+
+  final Color color;
+
+  @override
+  State<_RecordingWaveform> createState() => _RecordingWaveformState();
+}
+
+class _RecordingWaveformState extends State<_RecordingWaveform>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 12,
+      width: double.infinity,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          return CustomPaint(
+            painter: _RecordingWaveformPainter(
+              color: widget.color,
+              progress: _controller.value,
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _RecordingWaveformPainter extends CustomPainter {
+  const _RecordingWaveformPainter({
+    required this.color,
+    required this.progress,
+  });
+
+  final Color color;
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const barCount = 64;
+    const barWidth = 2.0;
+    final gap = size.width <= barCount * barWidth
+        ? 2.0
+        : (size.width - (barCount * barWidth)) / (barCount - 1);
+    final paint = Paint()
+      ..color = color.withValues(alpha: 0.55)
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = barWidth;
+
+    for (var index = 0; index < barCount; index++) {
+      final phase = (progress * math.pi * 2) + (index * 0.42);
+      final secondary = math.sin((progress * math.pi * 4) + (index * 0.19));
+      final normalized = (math.sin(phase) + 1) / 2;
+      final heightFactor = (normalized * 0.65) + (secondary.abs() * 0.25);
+      final barHeight = 3 + (heightFactor.clamp(0.0, 1.0) * (size.height - 3));
+      final x = index * (barWidth + gap) + (barWidth / 2);
+      final y1 = (size.height - barHeight) / 2;
+      final y2 = y1 + barHeight;
+      canvas.drawLine(Offset(x, y1), Offset(x, y2), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _RecordingWaveformPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.progress != progress;
+}
+
+class _ComposerIconButton extends StatelessWidget {
+  const _ComposerIconButton({
+    required this.tooltip,
+    required this.semanticLabel,
+    required this.icon,
+    required this.onPressed,
+    this.padding = EdgeInsets.zero,
+  });
+
+  final String tooltip;
+  final String semanticLabel;
+  final Widget icon;
+  final VoidCallback? onPressed;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: Tooltip(
+        message: tooltip,
+        child: GestureDetector(
+          onTap: onPressed,
+          child: Container(
+            width: 28,
+            height: 32,
+            padding: padding,
+            alignment: Alignment.center,
+            child: icon,
           ),
         ),
-      );
+      ),
+    );
+  }
+}
+
+class _ComposerAssetIcon extends StatelessWidget {
+  const _ComposerAssetIcon({
+    required this.assetName,
+    required this.color,
+    this.size = 16,
+  });
+
+  final String assetName;
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      assetName,
+      color: color,
+      package: 'wisperbot_chat',
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+    );
+  }
+}
+
+String _formatRecordingDuration(Duration duration) {
+  final minutes = duration.inMinutes.remainder(60);
+  final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+  return '$minutes:$seconds';
 }

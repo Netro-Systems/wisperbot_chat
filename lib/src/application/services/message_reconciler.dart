@@ -31,6 +31,7 @@ final class MessageReconciler {
       } else {
         messages[existingIndex] = message.copyWith(
           localId: messages[existingIndex].localId,
+          localUpload: messages[existingIndex].localUpload,
         );
       }
     }

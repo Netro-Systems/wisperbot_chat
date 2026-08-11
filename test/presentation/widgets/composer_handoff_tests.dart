@@ -84,32 +84,28 @@ void registerComposerHandoffTests(WisperBotConfig config) {
     expect(preview, findsNothing);
 
     await tester.tap(find.byTooltip('Record voice message'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 120));
     expect(mediaAdapter.recordingStarts, 1);
     expect(
       find.bySemanticsLabel(RegExp('Recording voice message')),
       findsOneWidget,
     );
-    expect(find.byTooltip('Stop voice recording'), findsOneWidget);
+    expect(find.byTooltip('Send voice message'), findsOneWidget);
+    expect(find.byTooltip('Cancel recording'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Stop voice recording'));
-    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Send voice message'));
+    await tester.pump(const Duration(milliseconds: 120));
     expect(mediaAdapter.recordingStops, 1);
-    final audioPreview = find.byKey(
-      const ValueKey<String>('wisperbot-audio-preview'),
-    );
-    expect(audioPreview, findsOneWidget);
-    expect(uploadCount, 1);
-
-    await tester.tap(find.byTooltip('Send message'));
-    await tester.pumpAndSettle();
     expect(uploadCount, 2);
     expect(uploadedContentTypes.last, startsWith('multipart/form-data;'));
     final audioBody = utf8.decode(uploadedBodies.last, allowMalformed: true);
     expect(audioBody, contains('audio'));
     expect(audioBody, contains('name="attachment"; filename="voice.wav"'));
-    expect(find.text('Recording… tap stop to preview'), findsNothing);
-    expect(audioPreview, findsNothing);
+    expect(find.byTooltip('Send voice message'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('wisperbot-audio-preview')),
+      findsNothing,
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();

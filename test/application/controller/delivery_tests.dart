@@ -336,4 +336,142 @@ void registerDeliveryTests(WisperBotConfig config) {
     await controller.dispose();
     await client.close();
   });
+
+  test('pending image upload keeps local preview bytes until confirmed',
+      () async {
+    final sendStarted = Completer<void>();
+    final sendResponse = Completer<http.Response>();
+    final httpClient = MockClient((request) async {
+      if (request.url.path.endsWith('/session')) {
+        return http.Response(jsonEncode(sessionResponse()), 200);
+      }
+      if (request.method == 'POST' && request.url.path.endsWith('/messages')) {
+        sendStarted.complete();
+        return sendResponse.future;
+      }
+      return http.Response(jsonEncode(pollResponse()), 200);
+    });
+    final client = WisperBotClient(
+      config: config,
+      httpClient: httpClient,
+      sessionStore: MemorySessionStore(),
+    );
+    final controller = WisperBotChatController(client: client);
+    await controller.initialize();
+
+    final upload = WisperBotUpload(
+      bytes: Uint8List.fromList(<int>[137, 80, 78, 71]),
+      filename: 'screenshot.png',
+      mimeType: 'image/png',
+    );
+    final send = controller.sendImage(upload, caption: 'Please review this');
+    await sendStarted.future;
+
+    final pending = controller.state.messages.single;
+    expect(pending.status, WisperBotMessageStatus.pending);
+    expect(pending.type, WisperBotMessageType.image);
+    expect(pending.localUpload?.filename, 'screenshot.png');
+    expect(pending.localUpload?.bytes, upload.bytes);
+
+    sendResponse.complete(
+      http.Response(
+        jsonEncode(<String, Object?>{
+          'message': message(
+            id: 4,
+            role: 'visitor',
+            type: 'image',
+            body: 'Please review this',
+            sentBy: 'human',
+            attachmentUrl: 'https://cdn.example.com/screenshot.png',
+            filename: 'screenshot.png',
+            mimeType: 'image/png',
+          ),
+          'handoff': <String, Object?>{
+            'enabled': true,
+            'eligible': false,
+            'status': 'bot',
+          },
+        }),
+        200,
+      ),
+    );
+    await send;
+
+    final confirmed = controller.state.messages.single;
+    expect(confirmed.status, WisperBotMessageStatus.sent);
+    expect(confirmed.localUpload?.filename, 'screenshot.png');
+    expect(confirmed.attachment?.filename, 'screenshot.png');
+
+    await controller.dispose();
+    await client.close();
+  });
+
+  test('pending audio upload keeps local preview bytes until confirmed',
+      () async {
+    final sendStarted = Completer<void>();
+    final sendResponse = Completer<http.Response>();
+    final httpClient = MockClient((request) async {
+      if (request.url.path.endsWith('/session')) {
+        return http.Response(jsonEncode(sessionResponse()), 200);
+      }
+      if (request.method == 'POST' && request.url.path.endsWith('/messages')) {
+        sendStarted.complete();
+        return sendResponse.future;
+      }
+      return http.Response(jsonEncode(pollResponse()), 200);
+    });
+    final client = WisperBotClient(
+      config: config,
+      httpClient: httpClient,
+      sessionStore: MemorySessionStore(),
+    );
+    final controller = WisperBotChatController(client: client);
+    await controller.initialize();
+
+    final upload = WisperBotUpload(
+      bytes: Uint8List.fromList(<int>[1, 2, 3, 4]),
+      filename: 'voice.wav',
+      mimeType: 'audio/wav',
+    );
+    final send = controller.sendAudio(upload);
+    await sendStarted.future;
+
+    final pending = controller.state.messages.single;
+    expect(pending.status, WisperBotMessageStatus.pending);
+    expect(pending.type, WisperBotMessageType.audio);
+    expect(pending.localUpload?.filename, 'voice.wav');
+    expect(pending.localUpload?.bytes, upload.bytes);
+
+    sendResponse.complete(
+      http.Response(
+        jsonEncode(<String, Object?>{
+          'message': message(
+            id: 5,
+            role: 'visitor',
+            type: 'audio',
+            body: 'Voice message',
+            sentBy: 'human',
+            attachmentUrl: 'https://cdn.example.com/voice.wav',
+            filename: 'voice.wav',
+            mimeType: 'audio/wav',
+          ),
+          'handoff': <String, Object?>{
+            'enabled': true,
+            'eligible': false,
+            'status': 'bot',
+          },
+        }),
+        200,
+      ),
+    );
+    await send;
+
+    final confirmed = controller.state.messages.single;
+    expect(confirmed.status, WisperBotMessageStatus.sent);
+    expect(confirmed.localUpload?.filename, 'voice.wav');
+    expect(confirmed.attachment?.filename, 'voice.wav');
+
+    await controller.dispose();
+    await client.close();
+  });
 }

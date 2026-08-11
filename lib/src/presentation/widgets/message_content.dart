@@ -18,10 +18,22 @@ class _MessageContent extends StatelessWidget {
         ? colors.onVisitorBubble
         : colors.onAgentBubble;
     final attachment = message.attachment;
+    final localUpload = message.localUpload;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        if (message.type == WisperBotMessageType.image && attachment != null)
+        if (message.type == WisperBotMessageType.image && localUpload != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _LocalImageAttachment(
+              upload: localUpload,
+              showError: message.status == WisperBotMessageStatus.failed ||
+                  message.status == WisperBotMessageStatus.unconfirmed,
+            ),
+          ),
+        if (message.type == WisperBotMessageType.image &&
+            localUpload == null &&
+            attachment != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: ClipRRect(
@@ -37,11 +49,13 @@ class _MessageContent extends StatelessWidget {
               ),
             ),
           ),
-        if (message.type == WisperBotMessageType.audio && attachment != null)
+        if (message.type == WisperBotMessageType.audio &&
+            (attachment != null || localUpload != null))
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: _AudioAttachmentPlayer(
               attachment: attachment,
+              localUpload: localUpload,
               colors: colors,
               visitor: message.role == WisperBotMessageRole.visitor,
               loadAttachmentBytes: controller.loadAttachmentBytes,
@@ -60,15 +74,65 @@ class _MessageContent extends StatelessWidget {
   }
 }
 
+class _LocalImageAttachment extends StatelessWidget {
+  const _LocalImageAttachment({required this.upload, required this.showError});
+
+  final WisperBotUpload upload;
+  final bool showError;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Stack(
+        alignment: Alignment.topRight,
+        children: <Widget>[
+          Image.memory(
+            upload.bytes,
+            key: const ValueKey<String>('wisperbot-local-image-preview'),
+            fit: BoxFit.cover,
+            semanticLabel: upload.filename,
+            errorBuilder: (_, __, ___) => const SizedBox(
+              height: 96,
+              child: Center(child: Icon(Icons.broken_image_outlined)),
+            ),
+          ),
+          if (showError)
+            const Padding(
+              padding: EdgeInsets.all(6),
+              child: DecoratedBox(
+                key: ValueKey<String>('wisperbot-local-image-error'),
+                decoration: BoxDecoration(
+                  color: Color(0xCC000000),
+                  shape: BoxShape.circle,
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.error_outline,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AudioAttachmentPlayer extends StatefulWidget {
   const _AudioAttachmentPlayer({
     required this.attachment,
+    required this.localUpload,
     required this.colors,
     required this.visitor,
     required this.loadAttachmentBytes,
   });
 
-  final WisperBotAttachment attachment;
+  final WisperBotAttachment? attachment;
+  final WisperBotUpload? localUpload;
   final WisperBotResolvedTheme colors;
   final bool visitor;
   final Future<Uint8List> Function(WisperBotAttachment attachment)
@@ -104,7 +168,8 @@ class _AudioAttachmentPlayerState extends State<_AudioAttachmentPlayer> {
   @override
   void didUpdateWidget(covariant _AudioAttachmentPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.attachment.url != widget.attachment.url) {
+    if (oldWidget.attachment?.url != widget.attachment?.url ||
+        !identical(oldWidget.localUpload, widget.localUpload)) {
       unawaited(_loadAudio());
     }
   }
@@ -116,30 +181,52 @@ class _AudioAttachmentPlayerState extends State<_AudioAttachmentPlayer> {
     });
 
     try {
-      final bytes = await _cachedAttachmentBytes();
-      await _setAudioSourceWithFallbacks(bytes);
+      final source = await _audioSource();
+      await _setAudioSourceWithFallbacks(source.bytes, source.contentTypes);
       if (mounted) setState(() => _ready = true);
     } on Object {
       if (mounted) setState(() => _failed = true);
     }
   }
 
-  Future<Uint8List> _cachedAttachmentBytes() async {
+  Future<_AudioSourceBytes> _audioSource() async {
+    final localUpload = widget.localUpload;
+    if (localUpload != null) {
+      return _AudioSourceBytes(
+        bytes: localUpload.bytes,
+        contentTypes: _candidateLocalAudioContentTypes(localUpload),
+      );
+    }
+    final attachment = widget.attachment;
+    if (attachment == null) {
+      throw StateError('Audio message has no local or remote source.');
+    }
+    return _AudioSourceBytes(
+      bytes: await _cachedAttachmentBytes(attachment),
+      contentTypes: _candidateAudioContentTypes(attachment),
+    );
+  }
+
+  Future<Uint8List> _cachedAttachmentBytes(
+      WisperBotAttachment attachment) async {
     final future = _downloadCache.putIfAbsent(
-      widget.attachment.url,
-      () => widget.loadAttachmentBytes(widget.attachment),
+      attachment.url,
+      () => widget.loadAttachmentBytes(attachment),
     );
     try {
       return await future;
     } on Object {
-      _downloadCache.remove(widget.attachment.url);
+      _downloadCache.remove(attachment.url);
       rethrow;
     }
   }
 
-  Future<void> _setAudioSourceWithFallbacks(Uint8List bytes) async {
+  Future<void> _setAudioSourceWithFallbacks(
+    Uint8List bytes,
+    List<String> contentTypes,
+  ) async {
     Object? lastError;
-    for (final contentType in _candidateAudioContentTypes(widget.attachment)) {
+    for (final contentType in contentTypes) {
       try {
         await _player.setAudioSource(
           AudioSource.uri(
@@ -187,6 +274,7 @@ class _AudioAttachmentPlayerState extends State<_AudioAttachmentPlayer> {
 
     if (_failed) {
       return Container(
+        key: _localPreviewKey,
         width: 226,
         constraints: const BoxConstraints(maxWidth: 320),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -213,6 +301,7 @@ class _AudioAttachmentPlayerState extends State<_AudioAttachmentPlayer> {
     }
 
     return Container(
+      key: _localPreviewKey,
       width: 226,
       constraints: const BoxConstraints(maxWidth: 320),
       padding: const EdgeInsets.fromLTRB(8, 7, 10, 7),
@@ -312,6 +401,18 @@ class _AudioAttachmentPlayerState extends State<_AudioAttachmentPlayer> {
       ),
     );
   }
+
+  Key? get _localPreviewKey =>
+      widget.localUpload != null && widget.attachment == null
+          ? const ValueKey<String>('wisperbot-local-audio-preview')
+          : null;
+}
+
+class _AudioSourceBytes {
+  const _AudioSourceBytes({required this.bytes, required this.contentTypes});
+
+  final Uint8List bytes;
+  final List<String> contentTypes;
 }
 
 List<String> _candidateAudioContentTypes(WisperBotAttachment attachment) {
@@ -321,6 +422,24 @@ List<String> _candidateAudioContentTypes(WisperBotAttachment attachment) {
       _inferAudioMimeType(attachment.filename)!,
     if (_validAudioMimeType(_inferAudioMimeType(attachment.url.path)))
       _inferAudioMimeType(attachment.url.path)!,
+    'audio/mpeg',
+    'audio/mp4',
+    'audio/aac',
+    'audio/wav',
+    'audio/ogg',
+    'audio/webm',
+    'audio/amr',
+  ];
+  return <String>{
+    for (final value in values) value.toLowerCase(),
+  }.toList(growable: false);
+}
+
+List<String> _candidateLocalAudioContentTypes(WisperBotUpload upload) {
+  final values = <String>[
+    if (_validAudioMimeType(upload.mimeType)) upload.mimeType.trim(),
+    if (_validAudioMimeType(_inferAudioMimeType(upload.filename)))
+      _inferAudioMimeType(upload.filename)!,
     'audio/mpeg',
     'audio/mp4',
     'audio/aac',

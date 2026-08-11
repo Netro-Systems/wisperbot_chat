@@ -430,6 +430,7 @@ class WisperBotChatController with WidgetsBindingObserver {
               : 'Voice message',
       status: WisperBotMessageStatus.pending,
       createdAt: DateTime.now(),
+      localUpload: upload,
       sentBy: WisperBotSenderKind.visitor,
     );
     _upsertLocal(pending);
@@ -450,6 +451,7 @@ class WisperBotChatController with WidgetsBindingObserver {
       final confirmed = result.message.copyWith(
         localId: pending.localId,
         status: WisperBotMessageStatus.sent,
+        localUpload: pending.localUpload,
         clearError: true,
       );
       _replaceLocal(pending.localId, confirmed);
