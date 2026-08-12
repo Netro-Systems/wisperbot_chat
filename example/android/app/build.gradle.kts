@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.wisperbot.wisperbot_chat_example"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
