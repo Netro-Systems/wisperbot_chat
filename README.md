@@ -1,4 +1,10 @@
-# wisperbot_chat
+# Wisperbot chat
+
+![WisperBot](assets/images/wb_horizontal_white.png)
+
+![pub version](https://img.shields.io/pub/v/wisperbot_chat?label=wisperbot_chat)
+![last commit](https://img.shields.io/github/last-commit/Netro-Systems/wisperbot_chat)
+![license](https://img.shields.io/badge/license-MIT-green)
 
 `wisperbot_chat` is a Flutter package for adding WisperBot customer chat to Flutter apps. It includes secure visitor sessions, public widget API communication, foreground polling, message reconciliation, typed state and errors, and optional Material UI.
 
@@ -191,5 +197,3 @@ dart format --output=none --set-exit-if-changed .
 flutter analyze
 flutter test
 ```
-
-More details are available in [API.md](doc/API.md), [ARCHITECTURE.md](doc/ARCHITECTURE.md), [DESIGN_SYSTEM.md](doc/DESIGN_SYSTEM.md), and [PROJECT_GOAL.md](doc/PROJECT_GOAL.md).
