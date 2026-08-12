@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0-dev.1
+## 0.1.0
 
 ### Added
 
@@ -26,6 +26,7 @@
 - Increased bottom-sheet presentation height to 96% of the available safe height.
 - Moved example widget key and API base URL configuration into a local `.env` file.
 - Kept built-in copy in English while leaving localization delegates and label overrides as a pre-stable API task.
+- Updated package/example dependency versions and Android example compile SDK, and removed generated iOS Flutter build files from version control.
 
 ### Fixed
 
