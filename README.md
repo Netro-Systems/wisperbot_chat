@@ -197,5 +197,3 @@ dart format --output=none --set-exit-if-changed .
 flutter analyze
 flutter test
 ```
-
-More details are available in [API.md](doc/API.md), [ARCHITECTURE.md](doc/ARCHITECTURE.md), [DESIGN_SYSTEM.md](doc/DESIGN_SYSTEM.md), and [PROJECT_GOAL.md](doc/PROJECT_GOAL.md).
