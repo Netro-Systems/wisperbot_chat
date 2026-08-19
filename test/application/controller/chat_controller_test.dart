@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
+import 'package:wisperbot_chat/src/application/services/widget_realtime_connector.dart';
+import 'package:wisperbot_chat/src/data/network/response_decoder.dart';
 import 'package:wisperbot_chat/src/data/storage/session_scope.dart';
 
 import '../../support/support.dart';
@@ -16,6 +18,7 @@ part 'delivery_tests.dart';
 part 'delivery_edge_case_tests.dart';
 part 'identity_sync_tests.dart';
 part 'pre_chat_lifecycle_tests.dart';
+part 'realtime_tests.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -35,4 +38,5 @@ void main() {
   registerDeliveryEdgeCaseTests(config);
   registerIdentitySyncTests(config);
   registerPreChatLifecycleTests(config);
+  registerRealtimeTests(config);
 }

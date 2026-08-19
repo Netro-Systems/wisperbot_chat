@@ -14,6 +14,7 @@ class WisperBotClient {
     required this.config,
     http.Client? httpClient,
     WisperBotSessionStore? sessionStore,
+    WidgetRealtimeConnector? realtimeConnector,
   })  : _httpClient = httpClient ?? http.Client(),
         _ownsHttpClient = httpClient == null {
     validateWisperBotConfig(config);
@@ -27,6 +28,8 @@ class WisperBotClient {
       remoteDataSource: _remoteDataSource,
       sessionStore: sessionStore ?? FlutterSecureWisperBotSessionStore(),
     );
+    _realtimeConnector = realtimeConnector ??
+        PusherWidgetRealtimeConnector(httpClient: _httpClient);
   }
 
   /// Immutable configuration used for every operation.
@@ -35,6 +38,7 @@ class WisperBotClient {
   final bool _ownsHttpClient;
   late final WidgetRemoteDataSource _remoteDataSource;
   late final _SessionCoordinator _sessions;
+  late final WidgetRealtimeConnector _realtimeConnector;
   bool _closed = false;
 
   WisperBotUser? get _activeUser => _sessions.activeUser;
@@ -113,6 +117,31 @@ class WisperBotClient {
 
   Future<void> _clearSession() => _sessions.clear();
 
+  Future<void> _startRealtime({
+    required WisperBotRealtimeConfig realtime,
+    required int conversationId,
+    void Function()? onConnected,
+    WidgetRealtimePayloadCallback? onMessageCreated,
+    WidgetRealtimePayloadCallback? onTypingChanged,
+    WidgetRealtimePayloadCallback? onHandoffUpdated,
+    WidgetRealtimeErrorCallback? onError,
+  }) {
+    final session = _requireSession();
+    return _realtimeConnector.start(
+      config: realtime,
+      widgetKey: config.widgetKey,
+      token: session.token,
+      conversationId: conversationId,
+      onConnected: onConnected,
+      onMessageCreated: onMessageCreated,
+      onTypingChanged: onTypingChanged,
+      onHandoffUpdated: onHandoffUpdated,
+      onError: onError,
+    );
+  }
+
+  Future<void> _stopRealtime() => _realtimeConnector.stop();
+
   WisperBotStoredSession _requireSession() {
     _ensureOpen();
     return _sessions.requireSession();
@@ -135,6 +164,7 @@ class WisperBotClient {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    await _realtimeConnector.stop();
     _sessions.disposeMemory();
     if (_ownsHttpClient) _httpClient.close();
   }

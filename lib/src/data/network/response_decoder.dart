@@ -23,6 +23,7 @@ final class WidgetResponseDecoder {
     final json = _decodeObject(response);
     final visitorId = _requiredString(json, 'visitor_id');
     final token = _requiredString(json, 'token');
+    final conversationId = _requiredInt(json, 'conversation_id');
     final configJson = _requiredObject(json, 'config');
     return WidgetSessionResult(
       session: WisperBotStoredSession(
@@ -31,6 +32,7 @@ final class WidgetResponseDecoder {
         savedAt: DateTime.now().toUtc(),
         preChatCompleted: preChatCompleted,
       ),
+      conversationId: conversationId,
       widget: _parseWidgetConfig(configJson),
       messages: _parseMessages(json['messages']),
       supportAvailability: _parseAvailability(_requiredBool(json, 'online')),
@@ -77,6 +79,34 @@ final class WidgetResponseDecoder {
   /// Decodes a handoff response.
   WisperBotHandoffState handoff(http.Response response) =>
       _parseHandoff(_decodeObject(response)['handoff']);
+
+  /// Decodes the widget-safe realtime payload for one created message.
+  WisperBotMessage? realtimeMessage(Object? value) {
+    if (value is! Map<String, dynamic>) return null;
+    final messageJson = value['message'];
+    if (messageJson is! Map<String, dynamic>) return null;
+    return _parseMessage(messageJson);
+  }
+
+  /// Decodes the widget-safe realtime payload for agent typing changes.
+  WisperBotAgentTyping? realtimeTyping(Object? value) {
+    if (value is! Map<String, dynamic>) return null;
+    final typing = value['agent_typing'];
+    if (typing is! Map<String, dynamic>) return null;
+    final isTyping = typing['is_typing'];
+    if (isTyping is! bool) return null;
+    final name = typing['name'];
+    if (name != null && name is! String) return null;
+    return isTyping ? WisperBotAgentTyping(name: name as String?) : null;
+  }
+
+  /// Decodes the widget-safe realtime payload for human-handoff updates.
+  WisperBotHandoffState? realtimeHandoff(Object? value) {
+    if (value is! Map<String, dynamic>) return null;
+    final handoff = value['handoff'];
+    if (handoff is! Map<String, dynamic>) return null;
+    return _parseHandoff(handoff);
+  }
 
   Map<String, dynamic> _decodeObject(http.Response response) {
     try {
@@ -226,7 +256,19 @@ final class WidgetResponseDecoder {
       aiEnabled: _requiredBool(json, 'ai_enabled'),
       requiresPreChat: _requiredBool(json, 'require_prechat'),
       preChatFields: preChatFields,
+      realtime: _parseRealtimeConfig(json['realtime']),
       offlineMessage: _stringOrNull(json['offline_message']),
+    );
+  }
+
+  WisperBotRealtimeConfig? _parseRealtimeConfig(Object? value) {
+    if (value is! Map<String, dynamic>) return null;
+    final authEndpoint = _safeRemoteUri(value['auth_endpoint']);
+    if (authEndpoint == null) return null;
+    return WisperBotRealtimeConfig(
+      key: _stringOrNull(value['key']) ?? '',
+      cluster: _stringOrNull(value['cluster']) ?? 'mt1',
+      authEndpoint: authEndpoint,
     );
   }
 
@@ -289,6 +331,12 @@ final class WidgetResponseDecoder {
       message: 'WisperBot returned an incomplete response.',
       retryable: false,
     );
+  }
+
+  int _requiredInt(Map<String, dynamic> json, String key) {
+    final value = json[key];
+    if (value is int) return value;
+    throw _invalidResponse();
   }
 
   String? _stringOrNull(Object? value) => value is String ? value : null;

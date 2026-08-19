@@ -37,9 +37,12 @@ class WisperBotChatController with WidgetsBindingObserver {
   DateTime? _lastTypingSentAt;
   DateTime _lastActivity = DateTime.now();
   int _pollCursor = 0;
+  int? _conversationId;
   int _pollFailures = 0;
   int _sessionRevision = 0;
   Duration? _pollRetryAfter;
+  WisperBotRealtimeConfig? _realtimeConfig;
+  bool _realtimeActive = false;
   bool _observingLifecycle = false;
   bool _disposed = false;
   bool _recoveryAttempted = false;
@@ -168,6 +171,8 @@ class WisperBotChatController with WidgetsBindingObserver {
     _pollFailures = 0;
     _pollRetryAfter = null;
     _lastActivity = DateTime.now();
+    _conversationId = result.conversationId;
+    _realtimeConfig = result.widget.realtime;
     _emit(
       _state.copyWith(
         phase: WisperBotChatPhase.ready,
@@ -183,6 +188,7 @@ class WisperBotChatController with WidgetsBindingObserver {
       ),
     );
     _addEvent(const WisperBotSessionReady());
+    unawaited(_syncRealtime().catchError((_) {}));
     _schedulePoll();
   }
 
@@ -627,13 +633,17 @@ class WisperBotChatController with WidgetsBindingObserver {
   Future<void> updateUser(WisperBotUser? user) async {
     _ensureNotDisposed();
     _cancelPoll();
+    unawaited(_client._stopRealtime().catchError((_) {}));
+    _realtimeActive = false;
     _sessionRevision++;
     if (user == null) await _stopTypingBestEffort();
     final changed = await _client._switchUser(user);
     if (!changed) return;
     _deferredVisitorPollMessages.clear();
+    _conversationId = null;
     _pollCursor = 0;
     _recoveryAttempted = false;
+    _realtimeConfig = null;
     _emit(WisperBotChatState.initial());
     if (user == null) return;
     _emit(_state.copyWith(
@@ -652,10 +662,14 @@ class WisperBotChatController with WidgetsBindingObserver {
     _cancelPoll();
     _sessionRevision++;
     await _stopTypingBestEffort();
+    await _client._stopRealtime();
+    _realtimeActive = false;
     await _client._clearSession();
     _deferredVisitorPollMessages.clear();
+    _conversationId = null;
     _pollCursor = 0;
     _recoveryAttempted = false;
+    _realtimeConfig = null;
     _addEvent(
       const WisperBotChatClosed(reason: WisperBotChatCloseReason.sessionReset),
     );
@@ -702,10 +716,13 @@ class WisperBotChatController with WidgetsBindingObserver {
     _diagnostic(WisperBotDiagnosticKind.lifecycle);
     if (_pollingCoordinator.isForeground) {
       if (_hasLease && _state.phase == WisperBotChatPhase.ready) {
+        unawaited(_syncRealtime().catchError((_) {}));
         unawaited(refresh().catchError((_) {}));
       }
     } else {
       _typingIdleTimer?.cancel();
+      unawaited(_client._stopRealtime().catchError((_) {}));
+      _realtimeActive = false;
     }
   }
 
@@ -715,7 +732,9 @@ class WisperBotChatController with WidgetsBindingObserver {
     _disposed = true;
     _pollingCoordinator.dispose();
     _typingIdleTimer?.cancel();
+    await _client._stopRealtime();
     _deferredVisitorPollMessages.clear();
+    _realtimeActive = false;
     if (_observingLifecycle) {
       WidgetsBinding.instance.removeObserver(this);
       _observingLifecycle = false;
@@ -747,6 +766,12 @@ class WisperBotChatController with WidgetsBindingObserver {
     if (_disposed) return;
     // Poll only while someone consumes state/events. This keeps headless and
     // hidden integrations from spending network and battery in the background.
+    if (_hasLease) {
+      unawaited(_syncRealtime().catchError((_) {}));
+    } else {
+      unawaited(_client._stopRealtime().catchError((_) {}));
+      _realtimeActive = false;
+    }
     _schedulePoll();
   }
 
@@ -767,6 +792,73 @@ class WisperBotChatController with WidgetsBindingObserver {
   void _expireAgentTyping() {
     if (_disposed || _state.agentTyping == null) return;
     _emit(_state.copyWith(agentTyping: null));
+  }
+
+  Future<void> _syncRealtime() async {
+    if (_disposed ||
+        !_hasLease ||
+        !_pollingCoordinator.isForeground ||
+        _state.phase != WisperBotChatPhase.ready ||
+        _conversationId == null ||
+        _realtimeConfig == null ||
+        !_realtimeConfig!.isEnabled) {
+      if (_realtimeActive) {
+        await _client._stopRealtime();
+        _realtimeActive = false;
+      }
+      return;
+    }
+
+    await _client._startRealtime(
+      realtime: _realtimeConfig!,
+      conversationId: _conversationId!,
+      onConnected: () {
+        if (!_disposed && _state.phase == WisperBotChatPhase.ready) {
+          unawaited(refresh().catchError((_) {}));
+        }
+      },
+      onMessageCreated: _handleRealtimeMessageCreated,
+      onTypingChanged: _handleRealtimeTypingChanged,
+      onHandoffUpdated: _handleRealtimeHandoffUpdated,
+      onError: (error, _) {
+        _diagnostic(
+          WisperBotDiagnosticKind.connection,
+          exception: _asWisperBotException(error),
+        );
+      },
+    );
+    _realtimeActive = true;
+  }
+
+  void _handleRealtimeMessageCreated(Object? payload) {
+    final message = const WidgetResponseDecoder().realtimeMessage(payload);
+    if (message == null) return;
+    final messages = _mergePollMessages(
+      _state.messages,
+      <WisperBotMessage>[message],
+      emitReceivedEvents: true,
+    );
+    _emit(
+      _state.copyWith(
+        messages: messages,
+        pendingCount: _pendingCount(messages),
+      ),
+    );
+  }
+
+  void _handleRealtimeTypingChanged(Object? payload) {
+    final typing = const WidgetResponseDecoder().realtimeTyping(payload);
+    _emit(_state.copyWith(agentTyping: typing));
+    _pollingCoordinator.updateAgentTyping(
+      active: typing != null,
+      onExpired: _expireAgentTyping,
+    );
+  }
+
+  void _handleRealtimeHandoffUpdated(Object? payload) {
+    final handoff = const WidgetResponseDecoder().realtimeHandoff(payload);
+    if (handoff == null) return;
+    _updateHandoff(handoff);
   }
 
   void _observeLifecycle() {
