@@ -43,9 +43,9 @@ class WisperBotClient {
 
   WisperBotUser? get _activeUser => _sessions.activeUser;
 
-  Future<WidgetSessionResult> _startSession() {
+  Future<WidgetSessionResult> _startSession({String? deviceId}) {
     _ensureOpen();
-    return _sessions.start();
+    return _sessions.start(deviceId: deviceId);
   }
 
   Future<WidgetPollResult> _poll(int after) {
@@ -107,9 +107,10 @@ class WisperBotClient {
   }
 
   Future<WidgetSessionResult> _submitPreChat(
-    WisperBotPreChatData preChat,
-  ) =>
-      _sessions.submitPreChat(preChat);
+    WisperBotPreChatData preChat, {
+    String? deviceId,
+  }) =>
+      _sessions.submitPreChat(preChat, deviceId: deviceId);
 
   Future<void> _markPreChatCompleted() => _sessions.markPreChatCompleted();
 

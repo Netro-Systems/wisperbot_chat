@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 
 import '../configuration/wisperbot_config.dart';
+import '../application/services/widget_onesignal_service.dart';
 import '../application/services/widget_realtime_connector.dart';
 import '../data/datasources/widget_remote_data_source.dart';
 import '../data/network/network_caller.dart';

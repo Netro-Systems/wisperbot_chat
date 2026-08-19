@@ -28,6 +28,7 @@ class WisperBotChatController with WidgetsBindingObserver {
   late final StreamController<WisperBotChatState> _statesController;
   late final StreamController<WisperBotChatEvent> _eventsController;
   final ChatStateMachine _stateMachine = ChatStateMachine();
+  final WidgetOneSignalService _oneSignalService = WidgetOneSignalService.instance;
   Future<void>? _initializing;
   Future<void>? _pollInFlight;
   Future<void> _sendQueue = Future<void>.value();
@@ -62,6 +63,9 @@ class WisperBotChatController with WidgetsBindingObserver {
   /// Configuration owned by the backing client.
   WisperBotConfig get config => _client.config;
 
+  /// Resolves the current OneSignal Push Subscription ID if enabled.
+  Future<String?> currentPushToken() => _oneSignalService.currentPushToken();
+
   /// Creates or restores the identity-scoped session.
   ///
   /// Concurrent calls share one initialization. The resulting phase is
@@ -93,7 +97,17 @@ class WisperBotChatController with WidgetsBindingObserver {
       ),
     );
     try {
-      final result = await _client._startSession();
+      String? deviceId;
+      if (config.enableOneSignal && config.oneSignalAppId.isNotEmpty) {
+        await _oneSignalService.initialize(appId: config.oneSignalAppId);
+        final activeExternalId = _client._activeUser?.externalId;
+        if (activeExternalId != null && activeExternalId.isNotEmpty) {
+          await _oneSignalService.login(activeExternalId);
+        }
+        deviceId = await _oneSignalService.currentPushToken();
+      }
+
+      final result = await _client._startSession(deviceId: deviceId);
       _validatePreChatFields(result.widget);
       final preChatSatisfied = result.session.preChatCompleted ||
           _activeUserSatisfiesPreChat(result.widget);
@@ -211,11 +225,16 @@ class WisperBotChatController with WidgetsBindingObserver {
     _validatePreChatSubmission(widget, data);
     _emit(_state.copyWith(connection: WisperBotConnectionState.connecting));
     try {
+      String? deviceId;
+      if (config.enableOneSignal && config.oneSignalAppId.isNotEmpty) {
+        deviceId = await _oneSignalService.currentPushToken();
+      }
       final result = await _client._submitPreChat(
         WisperBotPreChatData(
           name: data.name?.trim(),
           email: data.email?.trim(),
         ),
+        deviceId: deviceId,
       );
       _validatePreChatFields(result.widget);
       await _acceptSession(result);
@@ -636,7 +655,12 @@ class WisperBotChatController with WidgetsBindingObserver {
     unawaited(_client._stopRealtime().catchError((_) {}));
     _realtimeActive = false;
     _sessionRevision++;
-    if (user == null) await _stopTypingBestEffort();
+    if (user == null) {
+      await _stopTypingBestEffort();
+      if (config.enableOneSignal) {
+        await _oneSignalService.logout();
+      }
+    }
     final changed = await _client._switchUser(user);
     if (!changed) return;
     _deferredVisitorPollMessages.clear();
@@ -662,6 +686,9 @@ class WisperBotChatController with WidgetsBindingObserver {
     _cancelPoll();
     _sessionRevision++;
     await _stopTypingBestEffort();
+    if (config.enableOneSignal) {
+      await _oneSignalService.logout();
+    }
     await _client._stopRealtime();
     _realtimeActive = false;
     await _client._clearSession();

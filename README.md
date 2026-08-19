@@ -157,6 +157,7 @@ Anonymous and correctly signed identities persist across launches. Unsigned prof
 | Capability | Android/iOS | Web | macOS/Windows/Linux |
 |---|---:|---:|---:|
 | Anonymous and signed-user sessions | Yes | Yes* | Yes |
+| OneSignal push notifications | Yes | Yes | Yes |
 | Text, image/audio transport | Yes | Yes | Yes |
 | Foreground polling | Yes | Yes | Yes |
 | Typing and human handoff | Yes | Yes | Yes |
@@ -165,6 +166,35 @@ Anonymous and correctly signed identities persist across launches. Unsigned prof
 | Widget domain allowlist from native apps | Native policy pending | Supported by browser origin | Native policy pending |
 
 \* Web secure storage requires HTTPS or localhost and is scoped to the browser origin.
+
+## Push notifications
+
+The SDK includes built-in OneSignal push notification registration and click handling.
+
+Initialize notification handlers in `main.dart` or during app startup:
+
+```dart
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final config = WisperBotConfig(
+    widgetKey: 'YOUR_WIDGET_KEY',
+    user: const WisperBotUser(name: 'Demo User', email: 'user@demo.com'),
+  );
+
+  // Initialize notification handlers:
+  WisperBotChat.initializeNotificationHandlers(
+    config: config,
+    navigatorKey: navigatorKey,
+  );
+
+  runApp(MyApp(navigatorKey: navigatorKey));
+}
+```
+
+When a visitor starts a session, the SDK automatically collects the OneSignal device/subscription ID and submits it with the session request (`device_id`). When support agents reply, push notifications delivered to the device will automatically open the chatbox when tapped.
 
 The core upload API accepts validated bytes through `WisperBotUpload`. Supply a
 `WisperBotMediaAdapter` in `WisperBotConfig` to enable the default composer's

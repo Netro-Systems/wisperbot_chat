@@ -9,18 +9,32 @@ import 'src/theme/example_theme.dart';
 import 'src/widgets/example_brand_header.dart';
 import 'src/widgets/example_hero_card.dart';
 import 'src/widgets/integration_card.dart';
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
+  final widgetKey = dotenv.get('WISPERBOT_WIDGET_KEY').trim();
+  final config = WisperBotConfig(
+    widgetKey: widgetKey,
+    user: const WisperBotUser(name: 'Demo User', email: 'user@demo.com'),
+  );
+
+  // Initialize push notification handlers
+  WisperBotChat.initializeNotificationHandlers(
+    config: config,
+    navigatorKey: navigatorKey,
+  );
+
   runApp(
-    ExampleApp(widgetKey: dotenv.get('WISPERBOT_WIDGET_KEY').trim()),
+    ExampleApp(config: config),
   );
 }
 
 class ExampleApp extends StatefulWidget {
-  const ExampleApp({super.key, required this.widgetKey});
+  const ExampleApp({super.key, required this.config});
 
-  final String widgetKey;
+  final WisperBotConfig config;
 
   @override
   State<ExampleApp> createState() => _ExampleAppState();
@@ -29,13 +43,14 @@ class ExampleApp extends StatefulWidget {
 class _ExampleAppState extends State<ExampleApp> {
   late final ExampleMediaAdapter _mediaAdapter = ExampleMediaAdapter();
   late final WisperBotConfig _config = WisperBotConfig(
-    widgetKey: widget.widgetKey,
-    user: const WisperBotUser(name: 'Demo User', email: 'user@demo.com'),
+    widgetKey: widget.config.widgetKey,
+    user: widget.config.user,
     mediaAdapter: _mediaAdapter,
   );
 
   @override
   Widget build(BuildContext context) => MaterialApp(
+        navigatorKey: navigatorKey,
         debugShowCheckedModeBanner: false,
         title: 'WisperBot Chat',
         theme: buildExampleTheme(),
