@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.1
+
+### Documentation & Assets
+
+- Reorganized README with a developer-first flow, quick start, and platform setup instructions.
+- Added a full `WisperBotConfig` property reference table and example snippets.
+- Added visual UI showcase screenshots for all presentation styles (full screen, bottom sheet, dialog, floating launcher, embedded view).
+
 ## 0.1.0
 
 ### Added
