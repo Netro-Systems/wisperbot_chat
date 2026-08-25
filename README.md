@@ -49,7 +49,7 @@ flutter pub add wisperbot_chat
       minSdk = 23
   }
   ```
-* **iOS & macOS**: Enable **Keychain Sharing** in Xcode and include a `keychain-access-groups` entitlement. The runnable [example](example/) contains the required configuration.
+* **iOS & macOS**: Enable **Keychain Sharing** in Xcode and include a `keychain-access-groups` entitlement. The runnable [example](example) contains the required configuration.
 * **Web**: Deploy over HTTPS (browser session storage inherits the origin's security).
 
 ---
@@ -77,104 +77,121 @@ void openSupportChat(BuildContext context) async {
 
 WisperBot provides multiple ready-to-use presentation modes to fit seamlessly into any app workflow:
 
-<p align="center">
-  <img src="screenshot/test_home.png" width="300" alt="Integration Options Showcase" />
-</p>
+![Integration Options Showcase](screenshot/test_home.png)
 
 ### 1. Full Screen
 An immersive, dedicated support page with app bar navigation:
 
 ```dart
-Navigator.of(context).push(
-  MaterialPageRoute<void>(
-    builder: (_) => WisperBotChatScreen(config: config),
-  ),
-);
+import 'package:flutter/material.dart';
+import 'package:wisperbot_chat/wisperbot_chat.dart';
+
+void openFullScreen(BuildContext context, WisperBotConfig config) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => WisperBotChatScreen(config: config),
+    ),
+  );
+}
 ```
 
-<p align="center">
-  <img src="screenshot/full_screen.png" width="300" alt="Full Screen Chat" />
-</p>
+![Full Screen Chat](screenshot/full_screen.png)
 
 ### 2. Modal Bottom Sheet
 Keeps the current screen in context while sliding up the chat interface:
 
 ```dart
-await WisperBotChat.open(
-  context,
-  config: config,
-  presentation: WisperBotPresentation.bottomSheet,
-);
+import 'package:flutter/material.dart';
+import 'package:wisperbot_chat/wisperbot_chat.dart';
+
+Future<void> openBottomSheet(BuildContext context, WisperBotConfig config) async {
+  await WisperBotChat.open(
+    context,
+    config: config,
+    presentation: WisperBotPresentation.bottomSheet,
+  );
+}
 ```
 
-<p align="center">
-  <img src="screenshot/bottom_sheet.png" width="300" alt="Bottom Sheet Chat" />
-</p>
+![Bottom Sheet Chat](screenshot/bottom_sheet.png)
 
 ### 3. Dialog Popup
 A compact, centered chat window ideal for tablets, desktops, or web:
 
 ```dart
-await WisperBotChat.open(
-  context,
-  config: config,
-  presentation: WisperBotPresentation.dialog,
-);
+import 'package:flutter/material.dart';
+import 'package:wisperbot_chat/wisperbot_chat.dart';
+
+Future<void> openDialog(BuildContext context, WisperBotConfig config) async {
+  await WisperBotChat.open(
+    context,
+    config: config,
+    presentation: WisperBotPresentation.dialog,
+  );
+}
 ```
 
-<p align="center">
-  <img src="screenshot/floating.png" width="300" alt="Dialog Chat" />
-</p>
+![Dialog Chat](screenshot/floating.png)
 
 ### 4. Floating Launcher
 An expandable floating action button that overlays your screen:
 
 ```dart
-Stack(
-  children: [
-    const ApplicationContent(),
-    WisperBotChatLauncher(config: config),
-  ],
-)
+import 'package:flutter/material.dart';
+import 'package:wisperbot_chat/wisperbot_chat.dart';
+
+Widget buildFloatingLauncher(WisperBotConfig config) {
+  return Stack(
+    children: [
+      const Placeholder(), // Application content
+      WisperBotChatLauncher(config: config),
+    ],
+  );
+}
 ```
 
-<p align="center">
-  <img src="screenshot/floating_launcher.png" width="300" alt="Floating Launcher" />
-</p>
+![Floating Launcher](screenshot/floating_launcher.png)
 
 ### 5. Embedded View
 Place the chat view directly inside an existing layout, drawer, or split-view:
 
 ```dart
-WisperBotChatView(
-  config: config,
-  showHeader: true,
-)
+import 'package:flutter/material.dart';
+import 'package:wisperbot_chat/wisperbot_chat.dart';
+
+Widget buildEmbeddedChat(WisperBotConfig config) {
+  return WisperBotChatView(
+    config: config,
+    showHeader: true,
+  );
+}
 ```
 
-<p align="center">
-  <img src="screenshot/embedded.png" width="300" alt="Embedded Chat View" />
-</p>
+![Embedded Chat View](screenshot/embedded.png)
 
 ### 6. Headless & Custom UI
 Take full programmatic control with `WisperBotChatController`:
 
 ```dart
-final client = WisperBotClient(config: config);
-final controller = WisperBotChatController(client: client);
+import 'package:wisperbot_chat/wisperbot_chat.dart';
 
-// Listen to state changes
-final subscription = controller.states.listen((state) {
-  print('Phase: ${state.phase}, Messages: ${state.messages.length}');
-});
+Future<void> runHeadlessChat(WisperBotConfig config) async {
+  final client = WisperBotClient(config: config);
+  final controller = WisperBotChatController(client: client);
 
-await controller.initialize();
-await controller.sendText('Hello, I need help!');
+  // Listen to state changes
+  final subscription = controller.states.listen((state) {
+    print('Phase: ${state.phase}, Messages: ${state.messages.length}');
+  });
 
-// Cleanup
-await subscription.cancel();
-await controller.dispose();
-await client.close();
+  await controller.initialize();
+  await controller.sendText('Hello, I need help!');
+
+  // Cleanup
+  await subscription.cancel();
+  await controller.dispose();
+  await client.close();
+}
 ```
 
 ---
@@ -206,13 +223,15 @@ await client.close();
 To associate chat sessions with registered users in your application, provide a `WisperBotUser` along with an HMAC signature computed on your backend:
 
 ```dart
+import 'package:wisperbot_chat/wisperbot_chat.dart';
+
 final config = WisperBotConfig(
   widgetKey: 'YOUR_WIDGET_KEY',
   user: WisperBotUser(
-    externalId: signedInUser.id,
-    name: signedInUser.displayName,
-    email: signedInUser.email,
-    signature: signatureFetchedFromYourBackend,
+    externalId: 'user_123',
+    name: 'John Doe',
+    email: 'user@example.com',
+    signature: 'backend_hmac_signature',
   ),
 );
 ```
@@ -229,6 +248,9 @@ By default, the SDK uses the color palette configured in your WisperBot dashboar
 To customize colors locally or use custom themes:
 
 ```dart
+import 'package:flutter/material.dart';
+import 'package:wisperbot_chat/wisperbot_chat.dart';
+
 final config = WisperBotConfig(
   widgetKey: 'YOUR_WIDGET_KEY',
   useApiColors: false, // Disables server palette
@@ -249,6 +271,9 @@ The SDK provides built-in OneSignal push notification integration so visitors re
 Initialize notification handlers in `main()`:
 
 ```dart
+import 'package:flutter/material.dart';
+import 'package:wisperbot_chat/wisperbot_chat.dart';
+
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
@@ -264,7 +289,7 @@ Future<void> main() async {
     navigatorKey: navigatorKey,
   );
 
-  runApp(MyApp(navigatorKey: navigatorKey));
+  runApp(MaterialApp(navigatorKey: navigatorKey, home: const Scaffold()));
 }
 ```
 When a notification is tapped, the SDK automatically opens the chatbox.
@@ -275,12 +300,14 @@ When a notification is tapped, the SDK automatically opens the chatbox.
 To enable image picking and voice messaging buttons in the composer, supply a `WisperBotMediaAdapter` (e.g., wrapping `image_picker` and `record`):
 
 ```dart
+import 'package:wisperbot_chat/wisperbot_chat.dart';
+
 final config = WisperBotConfig(
   widgetKey: 'YOUR_WIDGET_KEY',
   mediaAdapter: MyCustomMediaAdapter(),
 );
 ```
-*(See the [example](example/) app for a full reference implementation).*
+*(See the [example](example) app for a full reference implementation).*
 
 ---
 
@@ -289,9 +316,13 @@ When a widget requires pre-chat information (such as name or email), the built-i
 
 For headless integrations, submit manually via:
 ```dart
-await controller.submitPreChat(
-  const WisperBotPreChatData(name: 'Jane Doe', email: 'jane@example.com'),
-);
+import 'package:wisperbot_chat/wisperbot_chat.dart';
+
+Future<void> submitLead(WisperBotChatController controller) async {
+  await controller.submitPreChat(
+    const WisperBotPreChatData(name: 'Jane Doe', email: 'jane@example.com'),
+  );
+}
 ```
 
 ---
