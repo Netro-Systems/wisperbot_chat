@@ -6,6 +6,28 @@ enum WisperBotLauncherPosition { bottomRight, bottomLeft, unknown }
 /// Pre-chat fields currently understood by the SDK.
 enum WisperBotPreChatField { name, email, unknown }
 
+/// Public realtime settings returned by the widget session API.
+class WisperBotRealtimeConfig {
+  /// Creates immutable realtime settings.
+  const WisperBotRealtimeConfig({
+    required this.key,
+    required this.cluster,
+    required this.authEndpoint,
+  });
+
+  /// Public Pusher key for subscribing to widget conversation updates.
+  final String key;
+
+  /// Pusher cluster name.
+  final String cluster;
+
+  /// Widget-scoped private-channel authorization endpoint.
+  final Uri authEndpoint;
+
+  /// Whether realtime can be attempted with the current config.
+  bool get isEnabled => key.trim().isNotEmpty;
+}
+
 /// Public team-member presentation data returned by widget configuration.
 class WisperBotTeamMember {
   /// Creates immutable team-member presentation data.
@@ -35,6 +57,7 @@ class WisperBotWidgetConfig {
     required this.aiEnabled,
     required this.requiresPreChat,
     required List<WisperBotPreChatField> preChatFields,
+    this.realtime,
     this.avatarUrl,
     this.launcherText,
     this.launcherLogoUrl,
@@ -83,6 +106,9 @@ class WisperBotWidgetConfig {
 
   /// Required pre-chat fields.
   final List<WisperBotPreChatField> preChatFields;
+
+  /// Optional realtime configuration for Pusher-backed conversation updates.
+  final WisperBotRealtimeConfig? realtime;
 
   /// Server message shown outside working hours.
   final String? offlineMessage;

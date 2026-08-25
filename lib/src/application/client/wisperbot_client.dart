@@ -14,6 +14,7 @@ class WisperBotClient {
     required this.config,
     http.Client? httpClient,
     WisperBotSessionStore? sessionStore,
+    WidgetRealtimeConnector? realtimeConnector,
   })  : _httpClient = httpClient ?? http.Client(),
         _ownsHttpClient = httpClient == null {
     validateWisperBotConfig(config);
@@ -27,6 +28,8 @@ class WisperBotClient {
       remoteDataSource: _remoteDataSource,
       sessionStore: sessionStore ?? FlutterSecureWisperBotSessionStore(),
     );
+    _realtimeConnector = realtimeConnector ??
+        PusherWidgetRealtimeConnector(httpClient: _httpClient);
   }
 
   /// Immutable configuration used for every operation.
@@ -35,13 +38,14 @@ class WisperBotClient {
   final bool _ownsHttpClient;
   late final WidgetRemoteDataSource _remoteDataSource;
   late final _SessionCoordinator _sessions;
+  late final WidgetRealtimeConnector _realtimeConnector;
   bool _closed = false;
 
   WisperBotUser? get _activeUser => _sessions.activeUser;
 
-  Future<WidgetSessionResult> _startSession() {
+  Future<WidgetSessionResult> _startSession({String? deviceId}) {
     _ensureOpen();
-    return _sessions.start();
+    return _sessions.start(deviceId: deviceId);
   }
 
   Future<WidgetPollResult> _poll(int after) {
@@ -103,15 +107,41 @@ class WisperBotClient {
   }
 
   Future<WidgetSessionResult> _submitPreChat(
-    WisperBotPreChatData preChat,
-  ) =>
-      _sessions.submitPreChat(preChat);
+    WisperBotPreChatData preChat, {
+    String? deviceId,
+  }) =>
+      _sessions.submitPreChat(preChat, deviceId: deviceId);
 
   Future<void> _markPreChatCompleted() => _sessions.markPreChatCompleted();
 
   Future<bool> _switchUser(WisperBotUser? user) => _sessions.switchUser(user);
 
   Future<void> _clearSession() => _sessions.clear();
+
+  Future<void> _startRealtime({
+    required WisperBotRealtimeConfig realtime,
+    required int conversationId,
+    void Function()? onConnected,
+    WidgetRealtimePayloadCallback? onMessageCreated,
+    WidgetRealtimePayloadCallback? onTypingChanged,
+    WidgetRealtimePayloadCallback? onHandoffUpdated,
+    WidgetRealtimeErrorCallback? onError,
+  }) {
+    final session = _requireSession();
+    return _realtimeConnector.start(
+      config: realtime,
+      widgetKey: config.widgetKey,
+      token: session.token,
+      conversationId: conversationId,
+      onConnected: onConnected,
+      onMessageCreated: onMessageCreated,
+      onTypingChanged: onTypingChanged,
+      onHandoffUpdated: onHandoffUpdated,
+      onError: onError,
+    );
+  }
+
+  Future<void> _stopRealtime() => _realtimeConnector.stop();
 
   WisperBotStoredSession _requireSession() {
     _ensureOpen();
@@ -135,6 +165,7 @@ class WisperBotClient {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    await _realtimeConnector.stop();
     _sessions.disposeMemory();
     if (_ownsHttpClient) _httpClient.close();
   }

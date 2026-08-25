@@ -33,6 +33,29 @@ void main() {
     });
   });
 
+  test('session body includes device_id and onesignal_id when provided', () {
+    final body = encoder.sessionBody(
+      widgetKey: 'widget-key',
+      user: const WisperBotUser(
+        name: 'Visitor',
+        email: 'visitor@example.test',
+      ),
+      storedSession: null,
+      deviceId: 'onesignal-sub-id-123',
+    );
+
+    expect(body, <String, Object>{
+      'key': 'widget-key',
+      'name': 'Visitor',
+      'email': 'visitor@example.test',
+      'device_id': 'onesignal-sub-id-123',
+      'onesignal_id': 'onesignal-sub-id-123',
+      'push': <String, Object>{
+        'token': 'onesignal-sub-id-123',
+      },
+    });
+  });
+
   test('multipart upload preserves documented fields and attachment name', () {
     final fields = encoder.uploadFields(
       widgetKey: 'widget-key',

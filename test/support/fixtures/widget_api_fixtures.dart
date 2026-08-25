@@ -1,14 +1,17 @@
 Map<String, Object?> sessionResponse({
   String visitorId = 'visitor-1',
   String token = 'token-1',
+  int conversationId = 42,
   List<Map<String, Object?>> messages = const <Map<String, Object?>>[],
   bool requirePreChat = false,
   bool online = true,
   String? avatarUrl,
   String? launcherLogoUrl,
+  String? realtimeKey,
 }) =>
     <String, Object?>{
       'visitor_id': visitorId,
+      'conversation_id': conversationId,
       'token': token,
       'config': <String, Object?>{
         'key': 'test-widget',
@@ -25,6 +28,13 @@ Map<String, Object?> sessionResponse({
         'ai_enabled': true,
         'require_prechat': requirePreChat,
         'prechat_fields': <String>['name', 'email'],
+        if (realtimeKey != null)
+          'realtime': <String, Object?>{
+            'key': realtimeKey,
+            'cluster': 'mt1',
+            'auth_endpoint':
+                'https://chat.example.com/base/widget/v1/broadcasting/auth',
+          },
         'unknown_config_field': 'ignored',
       },
       'online': online,

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../application/services/widget_onesignal_service.dart';
 import '../../application/wisperbot_runtime.dart';
 import '../../configuration/wisperbot_config.dart';
 import '../../domain/errors/wisperbot_exception.dart';
@@ -9,12 +10,95 @@ import '../../domain/events/chat_event.dart';
 import '../screen/chat_screen.dart';
 import '../view/chat_view.dart';
 
-/// Static helpers for modal chat presentation and identity-scoped reset.
+/// Static helpers for modal chat presentation, push notifications, and reset.
 abstract final class WisperBotChat {
   static final Map<String, Future<WisperBotChatResult?>> _activePresentations =
       <String, Future<WisperBotChatResult?>>{};
   static final Map<String, WisperBotChatController> _ownedControllers =
       <String, WisperBotChatController>{};
+  static StreamSubscription<Map<String, dynamic>>?
+      _notificationClickSubscription;
+  static void Function(Map<String, dynamic> payload)? _onNotificationTapped;
+  static WisperBotConfig? _lastConfig;
+  static GlobalKey<NavigatorState>? _navigatorKey;
+
+  /// Initializes OneSignal push notification handlers for visitor chat.
+  ///
+  /// Call this in your host app's `main()` or splash screen:
+  /// ```dart
+  /// WisperBotChat.initializeNotificationHandlers(
+  ///   config: config,
+  ///   navigatorKey: navigatorKey,
+  /// );
+  /// ```
+  static void initializeNotificationHandlers({
+    WisperBotConfig? config,
+    GlobalKey<NavigatorState>? navigatorKey,
+    void Function(Map<String, dynamic> payload)? onNotificationTapped,
+  }) {
+    if (config != null) _lastConfig = config;
+    if (navigatorKey != null) _navigatorKey = navigatorKey;
+    if (onNotificationTapped != null) {
+      _onNotificationTapped = onNotificationTapped;
+    }
+
+    final appId =
+        config?.oneSignalAppId ?? WisperBotConfig.defaultOneSignalAppId;
+    WidgetOneSignalService.instance.initialize(appId: appId);
+
+    _notificationClickSubscription?.cancel();
+    _notificationClickSubscription = WidgetOneSignalService
+        .instance.notificationClicks
+        .listen(_handleNotificationClick);
+  }
+
+  /// Sets or updates the custom notification tapped callback.
+  static void setOnNotificationTappedCallback(
+    void Function(Map<String, dynamic> payload) callback,
+  ) {
+    _onNotificationTapped = callback;
+  }
+
+  /// Opens the chatbox from a notification click.
+  static Future<WisperBotChatResult?> openChatboxFromNotification({
+    BuildContext? context,
+    WisperBotConfig? config,
+    Map<String, dynamic>? payload,
+  }) {
+    final effectiveConfig = config ?? _lastConfig;
+    if (effectiveConfig == null) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.configuration,
+        message: 'No WisperBotConfig provided for notification opening.',
+        retryable: false,
+      );
+    }
+    final effectiveContext = context ?? _navigatorKey?.currentContext;
+    if (effectiveContext == null) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.configuration,
+        message: 'No BuildContext or navigatorKey available to open chat.',
+        retryable: false,
+      );
+    }
+
+    return open(effectiveContext, config: effectiveConfig);
+  }
+
+  static void _handleNotificationClick(Map<String, dynamic> payload) {
+    if (_onNotificationTapped != null) {
+      _onNotificationTapped!(payload);
+      return;
+    }
+
+    if (_navigatorKey?.currentContext != null && _lastConfig != null) {
+      openChatboxFromNotification(
+        context: _navigatorKey!.currentContext,
+        config: _lastConfig,
+        payload: payload,
+      );
+    }
+  }
 
   /// Opens at most one chat presentation for the configuration scope.
   ///
