@@ -142,6 +142,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       config: const WisperBotConfig(
         widgetKey: 'test-widget',
         apiBaseUrl: 'https://chat.example.com',
+        enableOneSignal: false,
         user: WisperBotUser(name: 'Unverified display name'),
       ),
       httpClient: MockClient(
@@ -166,6 +167,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     const emptyUserConfig = WisperBotConfig(
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com/base/',
+      enableOneSignal: false,
       user: WisperBotUser(),
       polling: WisperBotPollingConfig(
         visibleInterval: Duration(minutes: 1),
@@ -228,6 +230,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     const unsignedConfig = WisperBotConfig(
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com/base/',
+      enableOneSignal: false,
       user: WisperBotUser(
         externalId: 'customer-123',
         name: 'Jane Doe',

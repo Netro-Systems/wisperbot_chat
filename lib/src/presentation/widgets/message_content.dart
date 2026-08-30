@@ -22,31 +22,14 @@ class _MessageContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        if (message.type == WisperBotMessageType.image && localUpload != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _LocalImageAttachment(
-              upload: localUpload,
-              showError: message.status == WisperBotMessageStatus.failed ||
-                  message.status == WisperBotMessageStatus.unconfirmed,
-            ),
-          ),
         if (message.type == WisperBotMessageType.image &&
-            localUpload == null &&
-            attachment != null)
+            (localUpload != null || attachment != null))
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: WisperBotRemoteImage(
-                url: attachment.url,
-                fit: BoxFit.cover,
-                semanticLabel: attachment.filename ?? 'Image attachment',
-                errorBuilder: (_) => const SizedBox(
-                  height: 96,
-                  child: Center(child: Icon(Icons.broken_image_outlined)),
-                ),
-              ),
+            child: _ImageAttachmentPreview(
+              message: message,
+              attachment: attachment,
+              localUpload: localUpload,
             ),
           ),
         if (message.type == WisperBotMessageType.audio &&
@@ -59,6 +42,15 @@ class _MessageContent extends StatelessWidget {
               colors: colors,
               visitor: message.role == WisperBotMessageRole.visitor,
               loadAttachmentBytes: controller.loadAttachmentBytes,
+            ),
+          ),
+        if (message.type == WisperBotMessageType.file &&
+            (attachment != null || localUpload != null))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _FileAttachmentBubble(
+              message: message,
+              colors: colors,
             ),
           ),
         if (_visibleMessageBody(message).isNotEmpty)
@@ -74,49 +66,233 @@ class _MessageContent extends StatelessWidget {
   }
 }
 
-class _LocalImageAttachment extends StatelessWidget {
-  const _LocalImageAttachment({required this.upload, required this.showError});
+class _ImageAttachmentPreview extends StatelessWidget {
+  const _ImageAttachmentPreview({
+    required this.message,
+    this.attachment,
+    this.localUpload,
+  });
 
-  final WisperBotUpload upload;
-  final bool showError;
+  final WisperBotMessage message;
+  final WisperBotAttachment? attachment;
+  final WisperBotUpload? localUpload;
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: Stack(
-        alignment: Alignment.topRight,
-        children: <Widget>[
-          Image.memory(
-            upload.bytes,
-            key: const ValueKey<String>('wisperbot-local-image-preview'),
-            fit: BoxFit.cover,
-            semanticLabel: upload.filename,
-            errorBuilder: (_, __, ___) => const SizedBox(
-              height: 96,
-              child: Center(child: Icon(Icons.broken_image_outlined)),
-            ),
+    final theme = Theme.of(context);
+    final filename = localUpload?.filename ?? attachment?.filename ?? 'Image';
+    final isPending = message.status == WisperBotMessageStatus.pending;
+    final isFailed = message.status == WisperBotMessageStatus.failed ||
+        message.status == WisperBotMessageStatus.unconfirmed;
+
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          fullscreenDialog: true,
+          builder: (_) => _ImageViewerScreen(
+            filename: filename,
+            upload: localUpload,
+            attachment: attachment,
           ),
-          if (showError)
-            const Padding(
-              padding: EdgeInsets.all(6),
-              child: DecoratedBox(
-                key: ValueKey<String>('wisperbot-local-image-error'),
-                decoration: BoxDecoration(
-                  color: Color(0xCC000000),
-                  shape: BoxShape.circle,
-                ),
-                child: Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(
-                    Icons.error_outline,
-                    color: Colors.white,
-                    size: 18,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          width: double.infinity,
+          height: 260,
+          child: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              ColoredBox(
+                color: Colors.black.withValues(alpha: 0.06),
+                child: localUpload != null
+                    ? Image.memory(
+                        localUpload!.bytes,
+                        key: const ValueKey<String>(
+                          'wisperbot-local-image-preview',
+                        ),
+                        fit: BoxFit.cover,
+                        semanticLabel: localUpload!.filename,
+                        errorBuilder: (context, error, stackTrace) =>
+                            _imageError(theme, filename),
+                      )
+                    : attachment != null
+                        ? Image.network(
+                            attachment!.url.toString(),
+                            key: const ValueKey<String>(
+                              'wisperbot-remote-image-preview',
+                            ),
+                            fit: BoxFit.cover,
+                            semanticLabel:
+                                attachment!.filename ?? 'Image attachment',
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Container(
+                                height: 160,
+                                width: double.infinity,
+                                color: Colors.black.withValues(alpha: 0.08),
+                                alignment: Alignment.center,
+                                child: const SizedBox(
+                                  height: 24,
+                                  width: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) =>
+                                _imageError(theme, filename),
+                          )
+                        : _imageError(theme, filename),
+              ),
+              if (isPending)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    child: Center(
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 3,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              if (isFailed)
+                const Positioned(
+                  top: 6,
+                  right: 6,
+                  child: DecoratedBox(
+                    key: ValueKey<String>('wisperbot-local-image-error'),
+                    decoration: BoxDecoration(
+                      color: Color(0xCC000000),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(
+                        Icons.error_outline,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _imageError(ThemeData theme, String filename) {
+    return Container(
+      width: double.infinity,
+      height: 160,
+      padding: const EdgeInsets.all(10),
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const Icon(Icons.broken_image_outlined),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              filename,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _ImageViewerScreen extends StatelessWidget {
+  const _ImageViewerScreen({
+    required this.filename,
+    this.upload,
+    this.attachment,
+  });
+
+  final String filename;
+  final WisperBotUpload? upload;
+  final WisperBotAttachment? attachment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text(filename, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return InteractiveViewer(
+            constrained: false,
+            minScale: 1,
+            maxScale: 5,
+            child: SizedBox(
+              width: constraints.maxWidth,
+              child: upload != null
+                  ? Image.memory(
+                      upload!.bytes,
+                      width: constraints.maxWidth,
+                      fit: BoxFit.fitWidth,
+                      errorBuilder: (context, error, stackTrace) =>
+                          _viewerError(constraints),
+                    )
+                  : attachment != null
+                      ? Image.network(
+                          attachment!.url.toString(),
+                          width: constraints.maxWidth,
+                          fit: BoxFit.fitWidth,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return SizedBox(
+                              width: constraints.maxWidth,
+                              height: constraints.maxHeight,
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                ),
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) =>
+                              _viewerError(constraints),
+                        )
+                      : _viewerError(constraints),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _viewerError(BoxConstraints constraints) {
+    return SizedBox(
+      width: constraints.maxWidth,
+      height: constraints.maxHeight,
+      child: const Center(
+        child: Icon(
+          Icons.broken_image_outlined,
+          color: Colors.white70,
+          size: 48,
+        ),
       ),
     );
   }
@@ -538,6 +714,100 @@ class _AudioProgressBar extends StatelessWidget {
   }
 }
 
+class _FileAttachmentBubble extends StatelessWidget {
+  const _FileAttachmentBubble({
+    required this.message,
+    required this.colors,
+  });
+
+  final WisperBotMessage message;
+  final WisperBotResolvedTheme colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isVisitor = message.role == WisperBotMessageRole.visitor;
+    final textColor = isVisitor ? colors.onVisitorBubble : colors.onAgentBubble;
+    final muted = textColor.withValues(alpha: 0.72);
+    final surface = textColor.withValues(alpha: isVisitor ? 0.13 : 0.06);
+    final failed = message.status == WisperBotMessageStatus.failed ||
+        message.status == WisperBotMessageStatus.unconfirmed;
+
+    final filename = message.attachment?.filename ??
+        message.localUpload?.filename ??
+        'Document';
+    final sizeBytes = message.localUpload?.bytes.length;
+
+    return Container(
+      key: message.localUpload != null && message.attachment == null
+          ? const ValueKey<String>('wisperbot-local-file-preview')
+          : null,
+      constraints: const BoxConstraints(maxWidth: 280),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: const Color(0xFF7F66FF).withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.insert_drive_file_rounded,
+                color: Color(0xFF7F66FF),
+                size: 20,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  filename,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: textColor,
+                  ),
+                ),
+                if (sizeBytes != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    _formatFileSize(sizeBytes),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: muted,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (failed)
+            Padding(
+              padding: const EdgeInsets.only(left: 6),
+              child: Icon(
+                Icons.error_outline,
+                color: colors.error,
+                size: 18,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 String _duration(Duration value) {
   final minutes = value.inMinutes.remainder(60).toString().padLeft(2, '0');
   final seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
@@ -547,16 +817,28 @@ String _duration(Duration value) {
 String _visibleMessageBody(WisperBotMessage message) {
   final body = message.body.trim();
   final attachment = message.attachment;
-  if (message.type != WisperBotMessageType.audio) return body;
-  if (body.isEmpty ||
-      body == attachment?.filename ||
-      body.toLowerCase() == 'voice message' ||
-      body.toLowerCase() == 'audio message') {
-    return '';
+  final localUpload = message.localUpload;
+  final filename = attachment?.filename ?? localUpload?.filename;
+  if (message.type == WisperBotMessageType.audio) {
+    if (body.isEmpty ||
+        body == filename ||
+        body.toLowerCase() == 'voice message' ||
+        body.toLowerCase() == 'audio message') {
+      return '';
+    }
+    final filenamePattern = RegExp(
+      r'\.(m4a|mp3|wav|webm|aac|ogg|oga|opus|amr)$',
+      caseSensitive: false,
+    );
+    return filenamePattern.hasMatch(body) ? '' : body;
   }
-  final filenamePattern = RegExp(
-    r'\.(m4a|mp3|wav|webm|aac|ogg|oga|opus|amr)$',
-    caseSensitive: false,
-  );
-  return filenamePattern.hasMatch(body) ? '' : body;
+  if (message.type == WisperBotMessageType.file) {
+    if (body.isEmpty ||
+        body == filename ||
+        body.toLowerCase() == 'document attachment' ||
+        body.toLowerCase() == 'file attachment') {
+      return '';
+    }
+  }
+  return body;
 }

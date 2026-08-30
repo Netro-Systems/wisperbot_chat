@@ -20,6 +20,7 @@ void main() {
   const config = WisperBotConfig(
     widgetKey: 'test-widget',
     apiBaseUrl: 'https://chat.example.com',
+    enableOneSignal: false,
     polling: WisperBotPollingConfig(
       visibleInterval: Duration(minutes: 1),
       idleInterval: Duration(minutes: 1),
@@ -61,6 +62,7 @@ class _TestRuntime {
 
 class _FakeMediaAdapter implements WisperBotMediaAdapter {
   int imagePicks = 0;
+  int documentPicks = 0;
   int recordingStarts = 0;
   int recordingStops = 0;
   int recordingCancels = 0;
@@ -76,6 +78,16 @@ class _FakeMediaAdapter implements WisperBotMediaAdapter {
       ),
       filename: 'photo.png',
       mimeType: 'image/png',
+    );
+  }
+
+  @override
+  Future<WisperBotUpload?> pickDocument() async {
+    documentPicks++;
+    return WisperBotUpload(
+      bytes: Uint8List.fromList(<int>[37, 80, 68, 70]), // %PDF
+      filename: 'document.pdf',
+      mimeType: 'application/pdf',
     );
   }
 

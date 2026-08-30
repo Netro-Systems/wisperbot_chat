@@ -15,6 +15,8 @@ export 'src/domain/models/models.dart';
 export 'src/presentation/screen/chat_screen.dart' show WisperBotChatScreen;
 export 'src/presentation/view/chat_view.dart'
     show
+        AttachmentOption,
+        AttachmentPickerSheet,
         WisperBotChatStateBuilder,
         WisperBotChatView,
         WisperBotComposerBuilder,

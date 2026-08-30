@@ -18,6 +18,39 @@ void main() {
     );
   });
 
+  test('validates submission using user fallback for existing fields', () {
+    final widget = _widget(<WisperBotPreChatField>[
+      WisperBotPreChatField.name,
+      WisperBotPreChatField.email,
+    ]);
+
+    // Name is in user, email is in data -> valid
+    expect(
+      () => validator.validateSubmission(
+        widget,
+        const WisperBotPreChatData(email: 'visitor@example.com'),
+        user: const WisperBotUser(name: 'Visitor'),
+      ),
+      returnsNormally,
+    );
+
+    // Name is missing in both data and user -> throws validation exception
+    expect(
+      () => validator.validateSubmission(
+        widget,
+        const WisperBotPreChatData(email: 'visitor@example.com'),
+        user: null,
+      ),
+      throwsA(
+        isA<WisperBotException>().having(
+          (error) => error.code,
+          'code',
+          WisperBotErrorCode.validation,
+        ),
+      ),
+    );
+  });
+
   test('rejects unknown backend requirements as unsupported', () {
     expect(
       () => validator.validateConfiguration(

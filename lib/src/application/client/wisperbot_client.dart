@@ -26,7 +26,9 @@ class WisperBotClient {
     _sessions = _SessionCoordinator(
       config: config,
       remoteDataSource: _remoteDataSource,
-      sessionStore: sessionStore ?? FlutterSecureWisperBotSessionStore(),
+      sessionStore: sessionStore ??
+          config.sessionStore ??
+          FlutterSecureWisperBotSessionStore(),
     );
     _realtimeConnector = realtimeConnector ??
         PusherWidgetRealtimeConnector(httpClient: _httpClient);

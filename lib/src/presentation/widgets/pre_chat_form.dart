@@ -17,17 +17,29 @@ class _PreChatForm extends StatefulWidget {
 
 class _PreChatFormState extends State<_PreChatForm> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
+  late final TextEditingController _nameController;
+  late final TextEditingController _emailController;
+
+  WisperBotUser? get _activeUser => widget.controller.config.user;
 
   bool get _requiresName =>
       widget.state.widget?.preChatFields.contains(WisperBotPreChatField.name) ==
-      true;
+          true &&
+      (_activeUser?.name?.trim().isNotEmpty != true);
 
   bool get _requiresEmail =>
       widget.state.widget?.preChatFields
-          .contains(WisperBotPreChatField.email) ==
-      true;
+              .contains(WisperBotPreChatField.email) ==
+          true &&
+      (_activeUser?.email?.trim().isNotEmpty != true);
+
+  @override
+  void initState() {
+    super.initState();
+    final user = _activeUser;
+    _nameController = TextEditingController(text: user?.name ?? '');
+    _emailController = TextEditingController(text: user?.email ?? '');
+  }
 
   @override
   void dispose() {
@@ -41,8 +53,8 @@ class _PreChatFormState extends State<_PreChatForm> {
     try {
       await widget.controller.submitPreChat(
         WisperBotPreChatData(
-          name: _requiresName ? _nameController.text : null,
-          email: _requiresEmail ? _emailController.text : null,
+          name: _requiresName ? _nameController.text : _activeUser?.name,
+          email: _requiresEmail ? _emailController.text : _activeUser?.email,
         ),
       );
     } on Object {

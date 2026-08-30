@@ -211,4 +211,36 @@ void main() {
       expect(fields['message'], isEmpty);
     }
   });
+
+  test('accepts every supported document and file format', () {
+    for (final format in <(String, String)>[
+      ('document.pdf', 'application/pdf'),
+      ('report.doc', 'application/msword'),
+      ('report.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+      ('sheet.xls', 'application/vnd.ms-excel'),
+      ('sheet.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+      ('slides.ppt', 'application/vnd.ms-powerpoint'),
+      ('slides.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'),
+      ('notes.txt', 'text/plain'),
+      ('data.csv', 'text/csv'),
+      ('archive.zip', 'application/zip'),
+      ('archive.rar', 'application/x-rar-compressed'),
+      ('document.rtf', 'application/rtf'),
+      ('data.json', 'application/json'),
+      ('config.xml', 'application/xml'),
+    ]) {
+      final fields = encoder.uploadFields(
+        widgetKey: 'widget-key',
+        upload: WisperBotUpload(
+          bytes: Uint8List.fromList(<int>[1, 2, 3]),
+          filename: format.$1,
+          mimeType: format.$2,
+        ),
+        type: WisperBotMessageType.file,
+        caption: null,
+      );
+      expect(fields['type'], 'document');
+      expect(fields['message'], isEmpty);
+    }
+  });
 }

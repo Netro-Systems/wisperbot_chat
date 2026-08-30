@@ -3,6 +3,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../domain/contracts/media_adapter.dart';
+import '../domain/contracts/session_store.dart';
 import '../domain/errors/wisperbot_exception.dart';
 import '../domain/events/chat_event.dart';
 
@@ -33,6 +34,7 @@ class WisperBotConfig {
     this.diagnostics,
     this.oneSignalAppId = defaultOneSignalAppId,
     this.enableOneSignal = true,
+    this.sessionStore,
   });
 
   /// Default OneSignal App ID used across WisperBot ecosystem.
@@ -74,4 +76,7 @@ class WisperBotConfig {
 
   /// Whether OneSignal push notification device registration is enabled.
   final bool enableOneSignal;
+
+  /// Optional custom session credential store.
+  final WisperBotSessionStore? sessionStore;
 }

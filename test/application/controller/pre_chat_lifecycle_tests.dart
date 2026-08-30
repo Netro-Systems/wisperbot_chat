@@ -99,6 +99,7 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
     final userConfig = WisperBotConfig(
       widgetKey: config.widgetKey,
       apiBaseUrl: config.apiBaseUrl,
+      enableOneSignal: false,
       user: const WisperBotUser(
         name: 'Jane Doe',
         email: 'jane@example.com',
@@ -146,6 +147,7 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
     const pollingConfig = WisperBotConfig(
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com',
+      enableOneSignal: false,
       polling: WisperBotPollingConfig(
         visibleInterval: Duration(seconds: 3),
         idleInterval: Duration(seconds: 3),

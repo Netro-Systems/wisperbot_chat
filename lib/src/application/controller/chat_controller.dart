@@ -28,7 +28,8 @@ class WisperBotChatController with WidgetsBindingObserver {
   late final StreamController<WisperBotChatState> _statesController;
   late final StreamController<WisperBotChatEvent> _eventsController;
   final ChatStateMachine _stateMachine = ChatStateMachine();
-  final WidgetOneSignalService _oneSignalService = WidgetOneSignalService.instance;
+  final WidgetOneSignalService _oneSignalService =
+      WidgetOneSignalService.instance;
   Future<void>? _initializing;
   Future<void>? _pollInFlight;
   Future<void> _sendQueue = Future<void>.value();
@@ -263,7 +264,11 @@ class WisperBotChatController with WidgetsBindingObserver {
     WisperBotWidgetConfig widget,
     WisperBotPreChatData data,
   ) {
-    _preChatValidator.validateSubmission(widget, data);
+    _preChatValidator.validateSubmission(
+      widget,
+      data,
+      user: _client._activeUser,
+    );
   }
 
   /// Performs one non-overlapping reconciliation poll immediately.
@@ -432,6 +437,22 @@ class WisperBotChatController with WidgetsBindingObserver {
         ),
       );
 
+  /// Uploads a document or file with an optional text [caption].
+  ///
+  /// Throws [WisperBotException] when the controller is not ready or the
+  /// attachment is rejected or cannot be delivered.
+  Future<WisperBotMessage> sendFile(
+    WisperBotUpload upload, {
+    String? caption,
+  }) =>
+      _enqueueSend(
+        () => _sendUploadInternal(
+          upload,
+          WisperBotMessageType.file,
+          caption?.trim(),
+        ),
+      );
+
   /// Loads protected attachment bytes through the active widget session.
   Future<Uint8List> loadAttachmentBytes(WisperBotAttachment attachment) {
     _ensureReady();
@@ -452,7 +473,11 @@ class WisperBotChatController with WidgetsBindingObserver {
           ? caption!
           : type == WisperBotMessageType.image
               ? 'Image attachment'
-              : 'Voice message',
+              : type == WisperBotMessageType.audio
+                  ? 'Voice message'
+                  : upload.filename.isNotEmpty
+                      ? upload.filename
+                      : 'Document attachment',
       status: WisperBotMessageStatus.pending,
       createdAt: DateTime.now(),
       localUpload: upload,

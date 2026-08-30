@@ -187,7 +187,7 @@ final class WidgetResponseDecoder {
       role: role,
       type: type,
       body: json['body'] as String,
-      status: WisperBotMessageStatus.sent,
+      status: _parseDeliveryStatus(json),
       createdAt: createdAt.toLocal(),
       attachment: attachmentUri == null
           ? null
@@ -201,6 +201,43 @@ final class WidgetResponseDecoder {
           : null,
       sentBy: sentBy,
     );
+  }
+
+  WisperBotMessageStatus _parseDeliveryStatus(Map<String, dynamic> json) {
+    if (json['read_at'] != null ||
+        json['is_read'] == true ||
+        json['read'] == true ||
+        json['seen'] == true ||
+        json['is_seen'] == true) {
+      return WisperBotMessageStatus.read;
+    }
+
+    if (json['delivered_at'] != null ||
+        json['is_delivered'] == true ||
+        json['delivered'] == true) {
+      return WisperBotMessageStatus.delivered;
+    }
+
+    final raw = (json['delivery_status'] ??
+            json['delivery_state'] ??
+            json['deliveryStatus'] ??
+            json['message_status'] ??
+            json['status'] ??
+            json['state'])
+        ?.toString()
+        .trim()
+        .toLowerCase();
+
+    return switch (raw) {
+      'read' || 'seen' || 'viewed' || 'opened' => WisperBotMessageStatus.read,
+      'delivered' || 'received' || 'reached' =>
+        WisperBotMessageStatus.delivered,
+      'failed' || 'error' || 'undelivered' || 'rejected' =>
+        WisperBotMessageStatus.failed,
+      'sending' || 'pending' || 'queued' => WisperBotMessageStatus.pending,
+      'unconfirmed' => WisperBotMessageStatus.unconfirmed,
+      _ => WisperBotMessageStatus.sent,
+    };
   }
 
   WisperBotWidgetConfig _parseWidgetConfig(Map<String, dynamic> json) {

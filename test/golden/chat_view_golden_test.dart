@@ -281,6 +281,9 @@ final class _GoldenMediaAdapter implements WisperBotMediaAdapter {
   Future<WisperBotUpload?> pickImage() async => null;
 
   @override
+  Future<WisperBotUpload?> pickDocument() async => null;
+
+  @override
   Future<void> startAudioRecording() async {}
 
   @override

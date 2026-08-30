@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:just_audio/just_audio.dart';
@@ -33,7 +34,9 @@ part '../widgets/default_media_adapter.dart';
 part '../widgets/typing_indicator.dart';
 part '../widgets/handoff_action.dart';
 part '../widgets/message_composer.dart';
+part '../widgets/attachment_picker_sheet.dart';
 part '../widgets/image_preview.dart';
+part '../widgets/file_preview.dart';
 part '../widgets/audio_preview.dart';
 
 /// Builds a custom chat state such as an empty or error presentation.

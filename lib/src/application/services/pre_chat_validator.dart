@@ -34,10 +34,19 @@ final class PreChatValidator {
 
   void validateSubmission(
     WisperBotWidgetConfig widget,
-    WisperBotPreChatData data,
-  ) {
-    final name = data.name?.trim() ?? '';
-    final email = data.email?.trim() ?? '';
+    WisperBotPreChatData data, {
+    WisperBotUser? user,
+  }) {
+    final name = (data.name?.trim().isNotEmpty == true
+            ? data.name
+            : user?.name)
+            ?.trim() ??
+        '';
+    final email = (data.email?.trim().isNotEmpty == true
+            ? data.email
+            : user?.email)
+            ?.trim() ??
+        '';
     if (widget.preChatFields.contains(WisperBotPreChatField.name) &&
         name.isEmpty) {
       throw const WisperBotException(
@@ -81,3 +90,4 @@ final class PreChatValidator {
     }
   }
 }
+

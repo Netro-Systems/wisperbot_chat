@@ -6,6 +6,7 @@ class _BubbleLayout extends StatelessWidget {
     required this.widgetConfig,
     required this.colors,
     required this.child,
+    this.isImage = false,
     this.bubbleKey,
   });
 
@@ -13,6 +14,7 @@ class _BubbleLayout extends StatelessWidget {
   final WisperBotWidgetConfig? widgetConfig;
   final WisperBotResolvedTheme colors;
   final Widget child;
+  final bool isImage;
   final Key? bubbleKey;
 
   @override
@@ -21,7 +23,13 @@ class _BubbleLayout extends StatelessWidget {
           final viewportWidth = constraints.hasBoundedWidth
               ? constraints.maxWidth
               : MediaQuery.sizeOf(context).width;
-          final maximumWidth = math.min(viewportWidth * 0.76, 520.0);
+          final widthFactor = isImage ? 0.9 : 0.76;
+          final widthLimit = isImage ? 520.0 : 420.0;
+          final availableMaxWidth = viewportWidth * widthFactor;
+          final maximumWidth = math.min(
+            availableMaxWidth > widthLimit ? widthLimit : availableMaxWidth,
+            520.0,
+          );
           return Align(
             alignment: visitor
                 ? AlignmentDirectional.centerEnd

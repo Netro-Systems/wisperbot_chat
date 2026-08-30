@@ -224,5 +224,6 @@ Future<void> resetWisperBotStoredSession(WisperBotConfig config) async {
     return;
   }
   final namespace = sessionNamespace(config: config, user: user);
-  await FlutterSecureWisperBotSessionStore().delete(namespace);
+  final store = config.sessionStore ?? FlutterSecureWisperBotSessionStore();
+  await store.delete(namespace);
 }

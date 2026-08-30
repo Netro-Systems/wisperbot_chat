@@ -9,6 +9,9 @@ abstract interface class WisperBotMediaAdapter {
   /// Opens the host image picker and returns null when selection is cancelled.
   Future<WisperBotUpload?> pickImage();
 
+  /// Opens the host document picker and returns null when selection is cancelled.
+  Future<WisperBotUpload?> pickDocument();
+
   /// Starts a host-owned microphone recording session.
   Future<void> startAudioRecording();
 
