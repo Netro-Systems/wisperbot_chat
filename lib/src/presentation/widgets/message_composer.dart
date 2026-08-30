@@ -43,7 +43,7 @@ class _ComposerState extends State<_Composer> {
         border: Border(top: BorderSide(color: widget.colors.outline)),
       ),
       child: Padding(
-        padding: const EdgeInsetsDirectional.fromSTEB(14, 8, 14, 8),
+        padding: const EdgeInsetsDirectional.fromSTEB(14, 8, 14, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
