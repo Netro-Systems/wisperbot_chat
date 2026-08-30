@@ -801,7 +801,8 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('partial pre-chat only shows missing fields and includes active user',
+  testWidgets(
+      'partial pre-chat only shows missing fields and includes active user',
       (tester) async {
     var calls = 0;
     Map<String, dynamic>? submitted;
@@ -854,6 +855,155 @@ void registerViewStateTests(WisperBotConfig config) {
     expect(submitted?['name'], 'Jane Doe');
     expect(submitted?['email'], 'jane@example.com');
     expect(find.byTooltip('Send message'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets(
+      'PDF document attachment renders with PDF icon, extension tag, and download action',
+      (tester) async {
+    final runtime = _runtime(
+      config,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          return http.Response(
+            jsonEncode(sessionResponse(messages: <Map<String, Object?>>[
+              message(
+                id: 1,
+                role: 'agent',
+                type: 'file',
+                body: 'Here is the invoice',
+                sentBy: 'bot',
+                attachmentUrl:
+                    'https://chat.example.com/files/invoice_august.pdf',
+                filename: 'invoice_august.pdf',
+                mimeType: 'application/pdf',
+              ),
+            ])),
+            200,
+          );
+        }
+        return http.Response(jsonEncode(pollResponse()), 200);
+      }),
+    );
+
+    await tester.pumpWidget(_app(
+      WisperBotChatView(config: config, controller: runtime.controller),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Here is the invoice'), findsOneWidget);
+    expect(find.text('invoice_august.pdf (PDF)'), findsOneWidget);
+    expect(find.byIcon(Icons.picture_as_pdf_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.download_rounded), findsOneWidget);
+
+    // Tap document row to trigger open/preview
+    await tester.tap(find.text('invoice_august.pdf (PDF)'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Tap download icon directly
+    await tester.tap(find.byIcon(Icons.download_rounded));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets(
+      'DOCX document attachment renders with Word icon and download action',
+      (tester) async {
+    final runtime = _runtime(
+      config,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          return http.Response(
+            jsonEncode(sessionResponse(messages: <Map<String, Object?>>[
+              message(
+                id: 2,
+                role: 'visitor',
+                type: 'file',
+                body: 'Project proposal',
+                sentBy: 'human',
+                attachmentUrl: 'https://chat.example.com/files/proposal.docx',
+                filename: 'proposal.docx',
+                mimeType:
+                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              ),
+            ])),
+            200,
+          );
+        }
+        return http.Response(jsonEncode(pollResponse()), 200);
+      }),
+    );
+
+    await tester.pumpWidget(_app(
+      WisperBotChatView(config: config, controller: runtime.controller),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Project proposal'), findsOneWidget);
+    expect(find.text('proposal.docx (DOCX)'), findsOneWidget);
+    expect(find.byIcon(Icons.description_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.download_rounded), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets('XLSX and ZIP document attachments render appropriate type icons',
+      (tester) async {
+    final runtime = _runtime(
+      config,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          return http.Response(
+            jsonEncode(sessionResponse(messages: <Map<String, Object?>>[
+              message(
+                id: 3,
+                role: 'agent',
+                type: 'file',
+                body: '',
+                sentBy: 'bot',
+                attachmentUrl: 'https://chat.example.com/files/sales.xlsx',
+                filename: 'sales.xlsx',
+                mimeType:
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              ),
+              message(
+                id: 4,
+                role: 'agent',
+                type: 'file',
+                body: '',
+                sentBy: 'bot',
+                attachmentUrl: 'https://chat.example.com/files/logs.zip',
+                filename: 'logs.zip',
+                mimeType: 'application/zip',
+              ),
+            ])),
+            200,
+          );
+        }
+        return http.Response(jsonEncode(pollResponse()), 200);
+      }),
+    );
+
+    await tester.pumpWidget(_app(
+      WisperBotChatView(config: config, controller: runtime.controller),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('sales.xlsx (XLSX)'), findsOneWidget);
+    expect(find.byIcon(Icons.table_chart_rounded), findsOneWidget);
+
+    expect(find.text('logs.zip (ZIP)'), findsOneWidget);
+    expect(find.byIcon(Icons.folder_zip_rounded), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();

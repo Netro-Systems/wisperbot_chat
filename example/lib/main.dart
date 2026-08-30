@@ -15,8 +15,10 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
   final widgetKey = dotenv.get('WISPERBOT_WIDGET_KEY').trim();
+  final oneSignalAppId = dotenv.maybeGet('WISPERBOT_ONESIGNAL_APP_ID')?.trim();
   final config = WisperBotConfig(
     widgetKey: widgetKey,
+    oneSignalAppId: (oneSignalAppId?.isNotEmpty == true) ? oneSignalAppId : null,
     user: const WisperBotUser(name: 'Demo User', email: 'user@demo.com'),
   );
 
@@ -44,6 +46,7 @@ class _ExampleAppState extends State<ExampleApp> {
   late final ExampleMediaAdapter _mediaAdapter = ExampleMediaAdapter();
   late final WisperBotConfig _config = WisperBotConfig(
     widgetKey: widget.config.widgetKey,
+    oneSignalAppId: widget.config.oneSignalAppId,
     user: widget.config.user,
     mediaAdapter: _mediaAdapter,
   );

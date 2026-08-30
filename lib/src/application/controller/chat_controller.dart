@@ -99,8 +99,11 @@ class WisperBotChatController with WidgetsBindingObserver {
     );
     try {
       String? deviceId;
-      if (config.enableOneSignal && config.oneSignalAppId.isNotEmpty) {
-        await _oneSignalService.initialize(appId: config.oneSignalAppId);
+      final oneSignalAppId = config.oneSignalAppId;
+      if (config.enableOneSignal &&
+          oneSignalAppId != null &&
+          oneSignalAppId.isNotEmpty) {
+        await _oneSignalService.initialize(appId: oneSignalAppId);
         final activeExternalId = _client._activeUser?.externalId;
         if (activeExternalId != null && activeExternalId.isNotEmpty) {
           await _oneSignalService.login(activeExternalId);
@@ -227,7 +230,10 @@ class WisperBotChatController with WidgetsBindingObserver {
     _emit(_state.copyWith(connection: WisperBotConnectionState.connecting));
     try {
       String? deviceId;
-      if (config.enableOneSignal && config.oneSignalAppId.isNotEmpty) {
+      final oneSignalAppId = config.oneSignalAppId;
+      if (config.enableOneSignal &&
+          oneSignalAppId != null &&
+          oneSignalAppId.isNotEmpty) {
         deviceId = await _oneSignalService.currentPushToken();
       }
       final result = await _client._submitPreChat(

@@ -18,6 +18,8 @@ class _FilePreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final ext = _documentExtension(upload.filename);
+    final (icon, badgeColor) = _documentIconAndColor(ext);
 
     return Container(
       key: const ValueKey<String>('wisperbot-file-preview'),
@@ -34,13 +36,13 @@ class _FilePreview extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: const Color(0xFF7F66FF).withValues(alpha: isDark ? 0.25 : 0.12),
+              color: badgeColor.withValues(alpha: isDark ? 0.25 : 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Center(
+            child: Center(
               child: Icon(
-                Icons.insert_drive_file_rounded,
-                color: Color(0xFF7F66FF),
+                icon,
+                color: badgeColor,
                 size: 24,
               ),
             ),
@@ -79,6 +81,33 @@ class _FilePreview extends StatelessWidget {
       ),
     );
   }
+}
+
+String _documentExtension(String fileName) {
+  if (!fileName.contains('.')) return 'DOC';
+  final ext = fileName.split('.').last.trim().toUpperCase();
+  return ext.isEmpty ? 'DOC' : ext;
+}
+
+(IconData, Color) _documentIconAndColor(String ext) {
+  return switch (ext.toUpperCase()) {
+    'PDF' => (Icons.picture_as_pdf_rounded, const Color(0xFFE53935)),
+    'DOC' || 'DOCX' => (Icons.description_rounded, const Color(0xFF1E88E5)),
+    'XLS' || 'XLSX' || 'CSV' => (
+        Icons.table_chart_rounded,
+        const Color(0xFF43A047)
+      ),
+    'PPT' || 'PPTX' => (Icons.slideshow_rounded, const Color(0xFFFB8C00)),
+    'TXT' || 'JSON' || 'XML' || 'MD' || 'LOG' || 'HTML' => (
+        Icons.article_rounded,
+        const Color(0xFF5E35B1),
+      ),
+    'ZIP' || 'RAR' || '7Z' || 'TAR' || 'GZ' => (
+        Icons.folder_zip_rounded,
+        const Color(0xFFF4511E),
+      ),
+    _ => (Icons.insert_drive_file_rounded, const Color(0xFF3949AB)),
+  };
 }
 
 String _formatFileSize(int bytes) {

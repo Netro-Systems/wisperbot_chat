@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../domain/contracts/session_store.dart';
@@ -164,13 +163,48 @@ final class WidgetResponseDecoder {
       'agent' => WisperBotMessageRole.agent,
       _ => WisperBotMessageRole.unknown,
     };
-    final type = switch (json['type']) {
-      'text' => WisperBotMessageType.text,
-      'image' => WisperBotMessageType.image,
-      'audio' => WisperBotMessageType.audio,
-      'file' => WisperBotMessageType.file,
-      _ => WisperBotMessageType.unknown,
-    };
+
+    final attachmentData =
+        json['attachment'] ?? json['media'] ?? json['payload'];
+    String? rawAttachmentUrl = _stringOrNull(json['attachment_url']) ??
+        _stringOrNull(json['file_url']) ??
+        _stringOrNull(json['media_url']);
+    String? filename =
+        _stringOrNull(json['filename']) ?? _stringOrNull(json['file_name']);
+    String? mimeType =
+        _stringOrNull(json['mime_type']) ?? _stringOrNull(json['mimeType']);
+
+    if (rawAttachmentUrl == null) {
+      if (attachmentData is String && attachmentData.trim().isNotEmpty) {
+        rawAttachmentUrl = attachmentData.trim();
+      } else if (attachmentData is Map<String, dynamic>) {
+        rawAttachmentUrl = _stringOrNull(
+          attachmentData['url'] ??
+              attachmentData['preview_url'] ??
+              attachmentData['path'] ??
+              attachmentData['link'],
+        );
+        filename ??= _stringOrNull(
+          attachmentData['filename'] ??
+              attachmentData['name'] ??
+              attachmentData['file_name'],
+        );
+        mimeType ??= _stringOrNull(
+          attachmentData['mime_type'] ?? attachmentData['mimeType'],
+        );
+      }
+    }
+
+    final attachmentUri = _safeRemoteUri(rawAttachmentUrl);
+    final rawType = _stringOrNull(json['type'])?.toLowerCase();
+    final type = _inferWisperBotMessageType(
+      rawType: rawType,
+      filename: filename,
+      mimeType: mimeType,
+      url: rawAttachmentUrl,
+      hasAttachment: attachmentUri != null,
+    );
+
     final sentBy = role == WisperBotMessageRole.visitor
         ? WisperBotSenderKind.visitor
         : switch (json['sent_by']) {
@@ -180,7 +214,7 @@ final class WidgetResponseDecoder {
             'broadcast' => WisperBotSenderKind.broadcast,
             _ => WisperBotSenderKind.unknown,
           };
-    final attachmentUri = _safeRemoteUri(json['attachment_url']);
+
     return WisperBotMessage(
       localId: 'server-$id',
       serverId: id,
@@ -193,14 +227,57 @@ final class WidgetResponseDecoder {
           ? null
           : WisperBotAttachment(
               url: attachmentUri,
-              filename: _stringOrNull(json['filename']),
-              mimeType: _stringOrNull(json['mime_type']),
+              filename: filename,
+              mimeType: mimeType,
             ),
       senderName: role == WisperBotMessageRole.agent
           ? _stringOrNull(json['agent_name'])
           : null,
       sentBy: sentBy,
     );
+  }
+
+  WisperBotMessageType _inferWisperBotMessageType({
+    String? rawType,
+    String? filename,
+    String? mimeType,
+    String? url,
+    bool hasAttachment = false,
+  }) {
+    if (rawType == 'image') return WisperBotMessageType.image;
+    if (rawType == 'audio' || rawType == 'voice') {
+      return WisperBotMessageType.audio;
+    }
+    if (rawType == 'file' ||
+        rawType == 'document' ||
+        rawType == 'pdf' ||
+        rawType == 'doc' ||
+        rawType == 'attachment' ||
+        rawType == 'media') {
+      return WisperBotMessageType.file;
+    }
+
+    final nameOrPath = (filename ?? url ?? '').toLowerCase();
+    final mime = (mimeType ?? '').toLowerCase();
+
+    if (mime.startsWith('image/') ||
+        RegExp(r'\.(jpg|jpeg|png|webp|gif|svg|heic|heif)$')
+            .hasMatch(nameOrPath)) {
+      return WisperBotMessageType.image;
+    }
+    if (mime.startsWith('audio/') ||
+        RegExp(r'\.(mp3|wav|m4a|aac|ogg|oga|webm|opus|amr)$')
+            .hasMatch(nameOrPath)) {
+      return WisperBotMessageType.audio;
+    }
+    if (hasAttachment) {
+      return WisperBotMessageType.file;
+    }
+
+    return switch (rawType) {
+      'text' => WisperBotMessageType.text,
+      _ => WisperBotMessageType.unknown,
+    };
   }
 
   WisperBotMessageStatus _parseDeliveryStatus(Map<String, dynamic> json) {
@@ -230,9 +307,14 @@ final class WidgetResponseDecoder {
 
     return switch (raw) {
       'read' || 'seen' || 'viewed' || 'opened' => WisperBotMessageStatus.read,
-      'delivered' || 'received' || 'reached' =>
+      'delivered' ||
+      'received' ||
+      'reached' =>
         WisperBotMessageStatus.delivered,
-      'failed' || 'error' || 'undelivered' || 'rejected' =>
+      'failed' ||
+      'error' ||
+      'undelivered' ||
+      'rejected' =>
         WisperBotMessageStatus.failed,
       'sending' || 'pending' || 'queued' => WisperBotMessageStatus.pending,
       'unconfirmed' => WisperBotMessageStatus.unconfirmed,
@@ -379,10 +461,11 @@ final class WidgetResponseDecoder {
   String? _stringOrNull(Object? value) => value is String ? value : null;
 
   Uri? _safeRemoteUri(Object? value) {
-    if (value is! String || value.isEmpty) return null;
-    final uri = Uri.tryParse(value);
-    if (uri == null || !uri.isAbsolute) return null;
-    if (uri.scheme != 'https' && (kReleaseMode || uri.scheme != 'http')) {
+    if (value is! String || value.trim().isEmpty) return null;
+    final text = value.trim();
+    final uri = Uri.tryParse(text);
+    if (uri == null) return null;
+    if (uri.isAbsolute && uri.scheme != 'https' && uri.scheme != 'http') {
       return null;
     }
     return uri;

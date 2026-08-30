@@ -19,11 +19,32 @@ class _MessageContent extends StatelessWidget {
         : colors.onAgentBubble;
     final attachment = message.attachment;
     final localUpload = message.localUpload;
+    final hasMedia = attachment != null || localUpload != null;
+
+    final isImage = message.type == WisperBotMessageType.image ||
+        (hasMedia &&
+            _isImageAttachment(
+              filename: attachment?.filename ?? localUpload?.filename,
+              mimeType: attachment?.mimeType ?? localUpload?.mimeType,
+              url: attachment?.url,
+            ));
+
+    final isAudio = message.type == WisperBotMessageType.audio ||
+        (hasMedia &&
+            _isAudioAttachment(
+              filename: attachment?.filename ?? localUpload?.filename,
+              mimeType: attachment?.mimeType ?? localUpload?.mimeType,
+              url: attachment?.url,
+            ));
+
+    final isFile =
+        (message.type == WisperBotMessageType.file || (!isImage && !isAudio)) &&
+            hasMedia;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        if (message.type == WisperBotMessageType.image &&
-            (localUpload != null || attachment != null))
+        if (isImage && hasMedia)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: _ImageAttachmentPreview(
@@ -32,8 +53,7 @@ class _MessageContent extends StatelessWidget {
               localUpload: localUpload,
             ),
           ),
-        if (message.type == WisperBotMessageType.audio &&
-            (attachment != null || localUpload != null))
+        if (isAudio && hasMedia)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: _AudioAttachmentPlayer(
@@ -44,8 +64,7 @@ class _MessageContent extends StatelessWidget {
               loadAttachmentBytes: controller.loadAttachmentBytes,
             ),
           ),
-        if (message.type == WisperBotMessageType.file &&
-            (attachment != null || localUpload != null))
+        if (isFile)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: _FileAttachmentBubble(
@@ -64,6 +83,22 @@ class _MessageContent extends StatelessWidget {
       ],
     );
   }
+}
+
+bool _isImageAttachment({String? filename, String? mimeType, Uri? url}) {
+  if (mimeType != null && mimeType.toLowerCase().startsWith('image/')) {
+    return true;
+  }
+  final target = (filename ?? url?.path ?? '').toLowerCase();
+  return RegExp(r'\.(jpg|jpeg|png|webp|gif|svg|heic|heif)$').hasMatch(target);
+}
+
+bool _isAudioAttachment({String? filename, String? mimeType, Uri? url}) {
+  if (mimeType != null && mimeType.toLowerCase().startsWith('audio/')) {
+    return true;
+  }
+  final target = (filename ?? url?.path ?? '').toLowerCase();
+  return RegExp(r'\.(mp3|wav|m4a|aac|ogg|oga|webm|opus|amr)$').hasMatch(target);
 }
 
 class _ImageAttachmentPreview extends StatelessWidget {
@@ -168,6 +203,37 @@ class _ImageAttachmentPreview extends StatelessWidget {
                     ),
                   ),
                 ),
+              if (!isPending &&
+                  !isFailed &&
+                  (attachment != null || localUpload != null))
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () => _downloadAttachmentToDevice(
+                        context,
+                        filename: filename,
+                        attachment: attachment,
+                        upload: localUpload,
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.download_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               if (isFailed)
                 const Positioned(
                   top: 6,
@@ -238,6 +304,18 @@ class _ImageViewerScreen extends StatelessWidget {
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         title: Text(filename, maxLines: 1, overflow: TextOverflow.ellipsis),
+        actions: <Widget>[
+          IconButton(
+            icon: const Icon(Icons.download_rounded),
+            tooltip: 'Download image',
+            onPressed: () => _downloadAttachmentToDevice(
+              context,
+              filename: filename,
+              attachment: attachment,
+              upload: upload,
+            ),
+          ),
+        ],
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -714,7 +792,7 @@ class _AudioProgressBar extends StatelessWidget {
   }
 }
 
-class _FileAttachmentBubble extends StatelessWidget {
+class _FileAttachmentBubble extends StatefulWidget {
   const _FileAttachmentBubble({
     required this.message,
     required this.colors,
@@ -724,87 +802,348 @@ class _FileAttachmentBubble extends StatelessWidget {
   final WisperBotResolvedTheme colors;
 
   @override
+  State<_FileAttachmentBubble> createState() => _FileAttachmentBubbleState();
+}
+
+class _FileAttachmentBubbleState extends State<_FileAttachmentBubble> {
+  bool _isOpening = false;
+
+  Future<void> _handleOpen() async {
+    if (_isOpening) return;
+    setState(() => _isOpening = true);
+    try {
+      final filename = _resolveDocumentFilename(widget.message);
+      await _openDocumentAttachment(
+        context,
+        filename: filename,
+        attachment: widget.message.attachment,
+        upload: widget.message.localUpload,
+      );
+    } finally {
+      if (mounted) setState(() => _isOpening = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isVisitor = message.role == WisperBotMessageRole.visitor;
-    final textColor = isVisitor ? colors.onVisitorBubble : colors.onAgentBubble;
+    final isVisitor = widget.message.role == WisperBotMessageRole.visitor;
+    final textColor =
+        isVisitor ? widget.colors.onVisitorBubble : widget.colors.onAgentBubble;
     final muted = textColor.withValues(alpha: 0.72);
     final surface = textColor.withValues(alpha: isVisitor ? 0.13 : 0.06);
-    final failed = message.status == WisperBotMessageStatus.failed ||
-        message.status == WisperBotMessageStatus.unconfirmed;
+    final failed = widget.message.status == WisperBotMessageStatus.failed ||
+        widget.message.status == WisperBotMessageStatus.unconfirmed;
 
-    final filename = message.attachment?.filename ??
-        message.localUpload?.filename ??
-        'Document';
-    final sizeBytes = message.localUpload?.bytes.length;
+    final filename = _resolveDocumentFilename(widget.message);
+    final ext = _documentExtension(filename);
+    final (icon, badgeColor) = _documentIconAndColor(ext);
+    final iconColor = isVisitor ? Colors.white : badgeColor;
+    final iconBackground = isVisitor
+        ? Colors.white.withValues(alpha: 0.22)
+        : badgeColor.withValues(alpha: 0.15);
+    final displayName = filename.toUpperCase().endsWith('($ext)')
+        ? filename
+        : '$filename ($ext)';
+    final sizeBytes = widget.message.localUpload?.bytes.length;
+    final hasSource = widget.message.attachment?.url != null ||
+        widget.message.localUpload != null;
 
-    return Container(
-      key: message.localUpload != null && message.attachment == null
-          ? const ValueKey<String>('wisperbot-local-file-preview')
-          : null,
-      constraints: const BoxConstraints(maxWidth: 280),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Container(
-            width: 38,
-            height: 38,
+    return Semantics(
+      button: hasSource,
+      label: '$filename, $ext document, tap to download or open',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: hasSource && !_isOpening ? _handleOpen : null,
+          child: Container(
+            key: widget.message.localUpload != null &&
+                    widget.message.attachment == null
+                ? const ValueKey<String>('wisperbot-local-file-preview')
+                : null,
+            constraints: const BoxConstraints(maxWidth: 280),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF7F66FF).withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(8),
+              color: surface,
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: const Center(
-              child: Icon(
-                Icons.insert_drive_file_rounded,
-                color: Color(0xFF7F66FF),
-                size: 20,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Text(
-                  filename,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: iconBackground,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: _isOpening
+                        ? SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: iconColor,
+                            ),
+                          )
+                        : Icon(
+                            icon,
+                            color: iconColor,
+                            size: 20,
+                          ),
                   ),
                 ),
-                if (sizeBytes != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    _formatFileSize(sizeBytes),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: muted,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                          decoration:
+                              hasSource ? TextDecoration.underline : null,
+                          decorationColor: textColor.withValues(alpha: 0.45),
+                        ),
+                      ),
+                      if (sizeBytes != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          _formatFileSize(sizeBytes),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: muted,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (hasSource)
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () => _downloadAttachmentToDevice(
+                        context,
+                        filename: filename,
+                        attachment: widget.message.attachment,
+                        upload: widget.message.localUpload,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.download_rounded,
+                          color: textColor.withValues(alpha: 0.85),
+                          size: 18,
+                        ),
+                      ),
                     ),
                   ),
-                ],
+                if (failed)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: Icon(
+                      Icons.error_outline,
+                      color: widget.colors.error,
+                      size: 18,
+                    ),
+                  ),
               ],
             ),
           ),
-          if (failed)
-            Padding(
-              padding: const EdgeInsets.only(left: 6),
-              child: Icon(
-                Icons.error_outline,
-                color: colors.error,
-                size: 18,
-              ),
-            ),
-        ],
+        ),
       ),
     );
+  }
+}
+
+Future<void> _openDocumentAttachment(
+  BuildContext context, {
+  required String filename,
+  WisperBotAttachment? attachment,
+  WisperBotUpload? upload,
+}) async {
+  try {
+    if (upload != null) {
+      final wisperbotTemp = Directory('${Directory.systemTemp.path}/wisperbot');
+      if (!await wisperbotTemp.exists()) {
+        await wisperbotTemp.create(recursive: true);
+      }
+      final tempFile = File('${wisperbotTemp.path}/$filename');
+      await tempFile.writeAsBytes(upload.bytes);
+      final launched = await launchUrl(
+        Uri.file(tempFile.path),
+        mode: LaunchMode.platformDefault,
+      );
+      if (launched) return;
+    }
+
+    if (attachment != null) {
+      final launched = await launchUrl(
+        attachment.url,
+        mode: LaunchMode.externalApplication,
+      );
+      if (launched) return;
+    }
+
+    if (context.mounted) {
+      await _downloadAttachmentToDevice(
+        context,
+        filename: filename,
+        attachment: attachment,
+        upload: upload,
+      );
+    }
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open document.'),
+        ),
+      );
+    }
+  }
+}
+
+Future<void> _downloadAttachmentToDevice(
+  BuildContext context, {
+  required String filename,
+  WisperBotAttachment? attachment,
+  WisperBotUpload? upload,
+}) async {
+  try {
+    Uint8List? bytes = upload?.bytes;
+    if (bytes == null && attachment != null) {
+      final request = await HttpClient().getUrl(attachment.url);
+      final response = await request.close();
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final builder = BytesBuilder(copy: false);
+        await for (final chunk in response) {
+          builder.add(chunk);
+        }
+        bytes = builder.takeBytes();
+      }
+    }
+
+    if (bytes == null || bytes.isEmpty) {
+      if (attachment != null) {
+        await launchUrl(attachment.url, mode: LaunchMode.externalApplication);
+        return;
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not download file.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    String? savedPath;
+
+    // Strategy 1: Save directly into standard "wisperbot" folder inside Downloads
+    final candidateParentDirs = <Directory>[
+      if (Platform.isAndroid) ...[
+        Directory('/storage/emulated/0/Download'),
+        Directory('/storage/emulated/0/Downloads'),
+        Directory('/sdcard/Download'),
+      ],
+      if (Platform.isMacOS || Platform.isLinux) ...[
+        if (Platform.environment['HOME'] != null)
+          Directory('${Platform.environment['HOME']}/Downloads'),
+      ],
+      if (Platform.isWindows) ...[
+        if (Platform.environment['USERPROFILE'] != null)
+          Directory('${Platform.environment['USERPROFILE']}\\Downloads'),
+      ],
+    ];
+
+    for (final baseDir in candidateParentDirs) {
+      try {
+        if (await baseDir.exists()) {
+          final wisperbotDir = Directory('${baseDir.path}/wisperbot');
+          if (!await wisperbotDir.exists()) {
+            await wisperbotDir.create(recursive: true);
+          }
+          final targetFile = File('${wisperbotDir.path}/$filename');
+          await targetFile.writeAsBytes(bytes);
+          savedPath = targetFile.path;
+          break;
+        }
+      } catch (_) {}
+    }
+
+    // Strategy 2: Use file_selector save location (Desktop / iOS / supported platforms)
+    if (savedPath == null) {
+      try {
+        final saveLocation = await getSaveLocation(suggestedName: filename);
+        if (saveLocation != null) {
+          final file = File(saveLocation.path);
+          await file.writeAsBytes(bytes);
+          savedPath = file.path;
+        }
+      } catch (_) {}
+    }
+
+    // Strategy 3: Save to system temp / documents and launch
+    if (savedPath == null) {
+      try {
+        final wisperbotTemp =
+            Directory('${Directory.systemTemp.path}/wisperbot');
+        if (!await wisperbotTemp.exists()) {
+          await wisperbotTemp.create(recursive: true);
+        }
+        final tempFile = File('${wisperbotTemp.path}/$filename');
+        await tempFile.writeAsBytes(bytes);
+        savedPath = tempFile.path;
+        await launchUrl(Uri.file(tempFile.path),
+            mode: LaunchMode.platformDefault);
+      } catch (_) {}
+    }
+
+    if (savedPath != null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('File saved to wisperbot: $filename'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } else {
+      // Strategy 4: Fallback to external application/browser downloader
+      if (attachment != null) {
+        await launchUrl(attachment.url, mode: LaunchMode.externalApplication);
+      } else if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to save file.'),
+          ),
+        );
+      }
+    }
+  } catch (_) {
+    try {
+      if (attachment != null) {
+        await launchUrl(attachment.url, mode: LaunchMode.externalApplication);
+        return;
+      }
+    } catch (_) {}
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Download failed.'),
+        ),
+      );
+    }
   }
 }
 
@@ -814,12 +1153,38 @@ String _duration(Duration value) {
   return '$minutes:$seconds';
 }
 
+String _resolveDocumentFilename(WisperBotMessage message) {
+  var name = message.attachment?.filename?.trim() ??
+      message.localUpload?.filename.trim() ??
+      '';
+  if (name.isEmpty && message.attachment?.url != null) {
+    final segments = message.attachment!.url.pathSegments;
+    if (segments.isNotEmpty && segments.last.contains('.')) {
+      name = segments.last.split('?').first;
+    }
+  }
+  if (name.isEmpty) {
+    final body = message.body.trim();
+    if (body.contains('.') && !body.contains('\n') && body.length < 80) {
+      name = body;
+    } else {
+      name = 'document.pdf';
+    }
+  }
+  return name;
+}
+
 String _visibleMessageBody(WisperBotMessage message) {
   final body = message.body.trim();
   final attachment = message.attachment;
   final localUpload = message.localUpload;
   final filename = attachment?.filename ?? localUpload?.filename;
-  if (message.type == WisperBotMessageType.audio) {
+  if (message.type == WisperBotMessageType.audio ||
+      _isAudioAttachment(
+        filename: filename,
+        mimeType: attachment?.mimeType ?? localUpload?.mimeType,
+        url: attachment?.url,
+      )) {
     if (body.isEmpty ||
         body == filename ||
         body.toLowerCase() == 'voice message' ||
@@ -832,11 +1197,19 @@ String _visibleMessageBody(WisperBotMessage message) {
     );
     return filenamePattern.hasMatch(body) ? '' : body;
   }
-  if (message.type == WisperBotMessageType.file) {
+  if (message.type == WisperBotMessageType.file ||
+      (attachment != null || localUpload != null)) {
     if (body.isEmpty ||
         body == filename ||
         body.toLowerCase() == 'document attachment' ||
-        body.toLowerCase() == 'file attachment') {
+        body.toLowerCase() == 'file attachment' ||
+        body == 'document.pdf' ||
+        body.toLowerCase().endsWith('.pdf') ||
+        body.toLowerCase().endsWith('.docx') ||
+        body.toLowerCase().endsWith('.xlsx') ||
+        body.toLowerCase().endsWith('.pptx') ||
+        body.toLowerCase().endsWith('.txt') ||
+        body.toLowerCase().endsWith('.zip')) {
       return '';
     }
   }

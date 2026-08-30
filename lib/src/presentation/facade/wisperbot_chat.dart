@@ -38,6 +38,7 @@ abstract final class WisperBotChat {
   /// ```
   static void initializeNotificationHandlers({
     WisperBotConfig? config,
+    String? oneSignalAppId,
     GlobalKey<NavigatorState>? navigatorKey,
     void Function(Map<String, dynamic> payload)? onNotificationTapped,
     void Function(Map<String, dynamic> payload)? onForegroundNotification,
@@ -51,9 +52,12 @@ abstract final class WisperBotChat {
     _onForegroundNotification = onForegroundNotification;
     _showInAppForegroundNotification = showInAppForegroundNotification;
 
-    final appId =
-        config?.oneSignalAppId ?? WisperBotConfig.defaultOneSignalAppId;
-    WidgetOneSignalService.instance.initialize(appId: appId);
+    final appId = oneSignalAppId ?? config?.oneSignalAppId;
+    if (appId != null &&
+        appId.isNotEmpty &&
+        (config?.enableOneSignal ?? true)) {
+      WidgetOneSignalService.instance.initialize(appId: appId);
+    }
 
     _notificationClickSubscription?.cancel();
     _notificationClickSubscription = WidgetOneSignalService
@@ -198,7 +202,6 @@ abstract final class WisperBotChat {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontWeight: FontWeight.w500),
           ),
-          behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 5),
           action: SnackBarAction(
             label: 'Open',
