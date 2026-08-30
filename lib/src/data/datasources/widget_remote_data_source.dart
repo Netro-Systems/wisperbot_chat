@@ -164,9 +164,7 @@ final class HttpWidgetRemoteDataSource implements WidgetRemoteDataSource {
       attachment.url,
       token: token,
       operation: WidgetOperation.media,
-      accept: attachment.mimeType?.startsWith('audio/') == true
-          ? 'audio/*,*/*'
-          : '*/*',
+      accept: attachment.mimeType?.startsWith('audio/') == true ? 'audio/*,*/*' : '*/*',
     );
     return response.bodyBytes;
   }

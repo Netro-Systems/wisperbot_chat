@@ -38,8 +38,7 @@ Uri validateAndCanonicalizeBaseUrl(String value) {
     path = path.substring(0, path.length - 1);
   }
   final effectivePort = uri.hasPort &&
-          !((uri.scheme == 'https' && uri.port == 443) ||
-              (uri.scheme == 'http' && uri.port == 80))
+          !((uri.scheme == 'https' && uri.port == 443) || (uri.scheme == 'http' && uri.port == 80))
       ? uri.port
       : null;
   return Uri(
@@ -74,8 +73,7 @@ void validateWisperBotConfig(WisperBotConfig config) {
 void _validateUser(WisperBotUser? user) {
   if (user == null) return;
   final externalId = user.externalId;
-  if (externalId != null &&
-      (externalId.isEmpty || externalId.trim() != externalId)) {
+  if (externalId != null && (externalId.isEmpty || externalId.trim() != externalId)) {
     throw const WisperBotException(
       code: WisperBotErrorCode.configuration,
       message: 'externalId must be non-empty with no surrounding whitespace.',
@@ -100,8 +98,7 @@ void _validateUser(WisperBotUser? user) {
       retryable: false,
     );
   }
-  if (user.email != null &&
-      !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(user.email!)) {
+  if (user.email != null && !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(user.email!)) {
     throw const WisperBotException(
       code: WisperBotErrorCode.configuration,
       message: 'email is not valid.',
@@ -110,8 +107,7 @@ void _validateUser(WisperBotUser? user) {
   }
   final avatar = user.avatarUrl;
   if (avatar != null &&
-      (!avatar.isAbsolute ||
-          (kReleaseMode && avatar.scheme.toLowerCase() != 'https'))) {
+      (!avatar.isAbsolute || (kReleaseMode && avatar.scheme.toLowerCase() != 'https'))) {
     throw const WisperBotException(
       code: WisperBotErrorCode.configuration,
       message: 'avatarUrl must be an absolute HTTPS URL in release builds.',

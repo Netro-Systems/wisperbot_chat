@@ -50,6 +50,9 @@ class ExampleMediaAdapter implements WisperBotMediaAdapter {
   }
 
   @override
+  Future<WisperBotUpload?> pickDocument() async => null;
+
+  @override
   Future<void> startAudioRecording() async {
     if (_recordingSubscription != null) {
       throw StateError('An audio recording is already active.');

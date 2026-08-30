@@ -7,8 +7,7 @@ part of '../wisperbot_runtime.dart';
 /// [dispose] when finished.
 class WisperBotChatController with WidgetsBindingObserver {
   /// Creates a controller backed by [client].
-  WisperBotChatController({required WisperBotClient client})
-      : _client = client {
+  WisperBotChatController({required WisperBotClient client}) : _client = client {
     _statesController = StreamController<WisperBotChatState>.broadcast(
       sync: true,
       onListen: () => _setStateLease(true),
@@ -32,8 +31,7 @@ class WisperBotChatController with WidgetsBindingObserver {
   Future<void>? _initializing;
   Future<void>? _pollInFlight;
   Future<void> _sendQueue = Future<void>.value();
-  final Map<int, WisperBotMessage> _deferredVisitorPollMessages =
-      <int, WisperBotMessage>{};
+  final Map<int, WisperBotMessage> _deferredVisitorPollMessages = <int, WisperBotMessage>{};
   Timer? _typingIdleTimer;
   DateTime? _lastTypingSentAt;
   DateTime _lastActivity = DateTime.now();
@@ -98,8 +96,9 @@ class WisperBotChatController with WidgetsBindingObserver {
     );
     try {
       String? deviceId;
-      if (config.enableOneSignal && config.oneSignalAppId.isNotEmpty) {
-        await _oneSignalService.initialize(appId: config.oneSignalAppId);
+      final oneSignalAppId = config.oneSignalAppId;
+      if (config.enableOneSignal && oneSignalAppId != null && oneSignalAppId.isNotEmpty) {
+        await _oneSignalService.initialize(appId: oneSignalAppId);
         final activeExternalId = _client._activeUser?.externalId;
         if (activeExternalId != null && activeExternalId.isNotEmpty) {
           await _oneSignalService.login(activeExternalId);
@@ -109,8 +108,8 @@ class WisperBotChatController with WidgetsBindingObserver {
 
       final result = await _client._startSession(deviceId: deviceId);
       _validatePreChatFields(result.widget);
-      final preChatSatisfied = result.session.preChatCompleted ||
-          _activeUserSatisfiesPreChat(result.widget);
+      final preChatSatisfied =
+          result.session.preChatCompleted || _activeUserSatisfiesPreChat(result.widget);
       if (result.widget.requiresPreChat && !preChatSatisfied) {
         _emit(
           _state.copyWith(
@@ -213,8 +212,7 @@ class WisperBotChatController with WidgetsBindingObserver {
   /// persisted by the package.
   Future<void> submitPreChat(WisperBotPreChatData data) async {
     _ensureNotDisposed();
-    if (_state.phase != WisperBotChatPhase.awaitingPreChat ||
-        _state.widget == null) {
+    if (_state.phase != WisperBotChatPhase.awaitingPreChat || _state.widget == null) {
       throw const WisperBotException(
         code: WisperBotErrorCode.validation,
         message: 'Pre-chat information is not currently required.',
@@ -226,7 +224,8 @@ class WisperBotChatController with WidgetsBindingObserver {
     _emit(_state.copyWith(connection: WisperBotConnectionState.connecting));
     try {
       String? deviceId;
-      if (config.enableOneSignal && config.oneSignalAppId.isNotEmpty) {
+      final oneSignalAppId = config.oneSignalAppId;
+      if (config.enableOneSignal && oneSignalAppId != null && oneSignalAppId.isNotEmpty) {
         deviceId = await _oneSignalService.currentPushToken();
       }
       final result = await _client._submitPreChat(
@@ -263,7 +262,11 @@ class WisperBotChatController with WidgetsBindingObserver {
     WisperBotWidgetConfig widget,
     WisperBotPreChatData data,
   ) {
-    _preChatValidator.validateSubmission(widget, data);
+    _preChatValidator.validateSubmission(
+      widget,
+      data,
+      user: _client._activeUser,
+    );
   }
 
   /// Performs one non-overlapping reconciliation poll immediately.
@@ -348,9 +351,8 @@ class WisperBotChatController with WidgetsBindingObserver {
       _pollRetryAfter = exception.retryAfter;
       _emit(
         _state.copyWith(
-          phase: !exception.retryable
-              ? WisperBotChatPhase.failure
-              : WisperBotChatPhase.reconnecting,
+          phase:
+              !exception.retryable ? WisperBotChatPhase.failure : WisperBotChatPhase.reconnecting,
           connection: !exception.retryable
               ? WisperBotConnectionState.disconnected
               : WisperBotConnectionState.reconnecting,
@@ -432,6 +434,22 @@ class WisperBotChatController with WidgetsBindingObserver {
         ),
       );
 
+  /// Uploads a document or file with an optional text [caption].
+  ///
+  /// Throws [WisperBotException] when the controller is not ready or the
+  /// attachment is rejected or cannot be delivered.
+  Future<WisperBotMessage> sendFile(
+    WisperBotUpload upload, {
+    String? caption,
+  }) =>
+      _enqueueSend(
+        () => _sendUploadInternal(
+          upload,
+          WisperBotMessageType.file,
+          caption?.trim(),
+        ),
+      );
+
   /// Loads protected attachment bytes through the active widget session.
   Future<Uint8List> loadAttachmentBytes(WisperBotAttachment attachment) {
     _ensureReady();
@@ -452,7 +470,11 @@ class WisperBotChatController with WidgetsBindingObserver {
           ? caption!
           : type == WisperBotMessageType.image
               ? 'Image attachment'
-              : 'Voice message',
+              : type == WisperBotMessageType.audio
+                  ? 'Voice message'
+                  : upload.filename.isNotEmpty
+                      ? upload.filename
+                      : 'Document attachment',
       status: WisperBotMessageStatus.pending,
       createdAt: DateTime.now(),
       localUpload: upload,
@@ -496,9 +518,7 @@ class WisperBotChatController with WidgetsBindingObserver {
       final ambiguous = exception.code == WisperBotErrorCode.network ||
           exception.code == WisperBotErrorCode.server;
       final failed = pending.copyWith(
-        status: ambiguous
-            ? WisperBotMessageStatus.unconfirmed
-            : WisperBotMessageStatus.failed,
+        status: ambiguous ? WisperBotMessageStatus.unconfirmed : WisperBotMessageStatus.failed,
         error: exception,
       );
       _replaceLocal(pending.localId, failed);
@@ -571,8 +591,7 @@ class WisperBotChatController with WidgetsBindingObserver {
         retryable: false,
       );
     }
-    final messages =
-        _state.messages.where((item) => item.localId != localId).toList();
+    final messages = _state.messages.where((item) => item.localId != localId).toList();
     _emit(
       _state.copyWith(
         messages: messages,
@@ -583,8 +602,7 @@ class WisperBotChatController with WidgetsBindingObserver {
 
   /// Publishes throttled visitor typing state when enabled and ready.
   Future<void> setTyping(bool isTyping) async {
-    if (!_client.config.enableTyping ||
-        _state.phase != WisperBotChatPhase.ready) {
+    if (!_client.config.enableTyping || _state.phase != WisperBotChatPhase.ready) {
       return;
     }
     _typingIdleTimer?.cancel();
@@ -933,8 +951,7 @@ class WisperBotChatController with WidgetsBindingObserver {
       );
     }
 
-    final knownServerIds =
-        existing.map((message) => message.serverId).whereType<int>().toSet();
+    final knownServerIds = existing.map((message) => message.serverId).whereType<int>().toSet();
     final immediate = <WisperBotMessage>[];
     for (final message in incoming) {
       final serverId = message.serverId;
@@ -979,13 +996,11 @@ class WisperBotChatController with WidgetsBindingObserver {
   }) =>
       _messageReconciler.greatestServerId(messages, fallback: fallback);
 
-  int _compareMessages(WisperBotMessage a, WisperBotMessage b) =>
-      _messageReconciler.compare(a, b);
+  int _compareMessages(WisperBotMessage a, WisperBotMessage b) => _messageReconciler.compare(a, b);
 
   void _upsertLocal(WisperBotMessage message) {
     final messages = <WisperBotMessage>[..._state.messages];
-    final index =
-        messages.indexWhere((item) => item.localId == message.localId);
+    final index = messages.indexWhere((item) => item.localId == message.localId);
     if (index == -1) {
       messages.add(message);
     } else {
@@ -1012,8 +1027,7 @@ class WisperBotChatController with WidgetsBindingObserver {
         }
         continue;
       }
-      if (replacementServerId != null &&
-          message.serverId == replacementServerId) {
+      if (replacementServerId != null && message.serverId == replacementServerId) {
         continue;
       }
       messages.add(message);
@@ -1039,13 +1053,11 @@ class WisperBotChatController with WidgetsBindingObserver {
     );
   }
 
-  int _pendingCount(List<WisperBotMessage> messages) => messages
-      .where((message) => message.status == WisperBotMessageStatus.pending)
-      .length;
+  int _pendingCount(List<WisperBotMessage> messages) =>
+      messages.where((message) => message.status == WisperBotMessageStatus.pending).length;
 
   void _updateHandoff(WisperBotHandoffState handoff) {
-    if (_state.handoff.status == handoff.status &&
-        _state.handoff.error == handoff.error) {
+    if (_state.handoff.status == handoff.status && _state.handoff.error == handoff.error) {
       return;
     }
     _emit(_state.copyWith(handoff: handoff));
@@ -1117,11 +1129,10 @@ class WisperBotChatController with WidgetsBindingObserver {
       '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
 }
 
-WisperBotException _asWisperBotException(Object error) =>
-    error is WisperBotException
-        ? error
-        : const WisperBotException(
-            code: WisperBotErrorCode.unknown,
-            message: 'The chat operation could not be completed.',
-            retryable: false,
-          );
+WisperBotException _asWisperBotException(Object error) => error is WisperBotException
+    ? error
+    : const WisperBotException(
+        code: WisperBotErrorCode.unknown,
+        message: 'The chat operation could not be completed.',
+        retryable: false,
+      );

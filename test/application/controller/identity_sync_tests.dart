@@ -30,8 +30,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     await controller.updateUser(
       const WisperBotUser(
         externalId: 'customer-1',
-        signature:
-            '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        signature: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
       ),
     );
 
@@ -142,6 +141,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       config: const WisperBotConfig(
         widgetKey: 'test-widget',
         apiBaseUrl: 'https://chat.example.com',
+        enableOneSignal: false,
         user: WisperBotUser(name: 'Unverified display name'),
       ),
       httpClient: MockClient(
@@ -166,6 +166,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     const emptyUserConfig = WisperBotConfig(
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com/base/',
+      enableOneSignal: false,
       user: WisperBotUser(),
       polling: WisperBotPollingConfig(
         visibleInterval: Duration(minutes: 1),
@@ -228,6 +229,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     const unsignedConfig = WisperBotConfig(
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com/base/',
+      enableOneSignal: false,
       user: WisperBotUser(
         externalId: 'customer-123',
         name: 'Jane Doe',
@@ -359,8 +361,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       }
       pollCalls++;
       activePolls++;
-      maximumActivePolls =
-          activePolls > maximumActivePolls ? activePolls : maximumActivePolls;
+      maximumActivePolls = activePolls > maximumActivePolls ? activePolls : maximumActivePolls;
       await releasePoll.future;
       activePolls--;
       return http.Response(jsonEncode(pollResponse()), 200);

@@ -40,8 +40,7 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('pre-chat validates required fields and rejects unknown requirements',
-      () async {
+  test('pre-chat validates required fields and rejects unknown requirements', () async {
     var unknownField = false;
     final httpClient = MockClient((_) async {
       final response = sessionResponse(requirePreChat: true);
@@ -93,12 +92,12 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
     await unknownClient.close();
   });
 
-  test('pre-chat skips when user data or stored completion satisfies fields',
-      () async {
+  test('pre-chat skips when user data or stored completion satisfies fields', () async {
     final userStore = MemorySessionStore();
     final userConfig = WisperBotConfig(
       widgetKey: config.widgetKey,
       apiBaseUrl: config.apiBaseUrl,
+      enableOneSignal: false,
       user: const WisperBotUser(
         name: 'Jane Doe',
         email: 'jane@example.com',
@@ -146,6 +145,7 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
     const pollingConfig = WisperBotConfig(
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com',
+      enableOneSignal: false,
       polling: WisperBotPollingConfig(
         visibleInterval: Duration(seconds: 3),
         idleInterval: Duration(seconds: 3),

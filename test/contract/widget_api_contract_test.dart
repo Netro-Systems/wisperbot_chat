@@ -52,10 +52,8 @@ http.StreamedResponse _jsonResponse(
 class _RecordingClient extends http.BaseClient {
   _RecordingClient(this.handler);
 
-  final Future<http.StreamedResponse> Function(http.BaseRequest request)
-      handler;
+  final Future<http.StreamedResponse> Function(http.BaseRequest request) handler;
 
   @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) =>
-      handler(request);
+  Future<http.StreamedResponse> send(http.BaseRequest request) => handler(request);
 }

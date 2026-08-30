@@ -46,9 +46,7 @@ WisperBotException mapWidgetHttpError(
         httpStatus: status,
       ),
     404 => WisperBotException(
-        code: sessionRequest
-            ? WisperBotErrorCode.configuration
-            : WisperBotErrorCode.sessionExpired,
+        code: sessionRequest ? WisperBotErrorCode.configuration : WisperBotErrorCode.sessionExpired,
         message: sessionRequest
             ? 'The widget is missing or disabled.'
             : 'The chat session is no longer available.',
@@ -86,9 +84,7 @@ WisperBotException mapWidgetHttpError(
         message: 'Too many requests. Try again shortly.',
         retryable: true,
         httpStatus: status,
-        retryAfter: retryAfterSeconds == null
-            ? null
-            : Duration(seconds: retryAfterSeconds),
+        retryAfter: retryAfterSeconds == null ? null : Duration(seconds: retryAfterSeconds),
       ),
     >= 500 => WisperBotException(
         code: WisperBotErrorCode.server,
@@ -130,8 +126,7 @@ String _validationMessage({
 Map<String, List<String>> _safeFieldErrors(http.Response response) {
   try {
     final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-    if (decoded is! Map<String, dynamic> ||
-        decoded['errors'] is! Map<String, dynamic>) {
+    if (decoded is! Map<String, dynamic> || decoded['errors'] is! Map<String, dynamic>) {
       return const <String, List<String>>{};
     }
     final errors = decoded['errors'] as Map<String, dynamic>;

@@ -33,8 +33,7 @@ void main() {
     expect(restored?.schemaVersion, 1);
   });
 
-  test('malformed or obsolete records are deleted during restoration',
-      () async {
+  test('malformed or obsolete records are deleted during restoration', () async {
     FlutterSecureStorage.setMockInitialValues(<String, String>{
       namespace: jsonEncode(<String, Object>{
         'visitor_id': 'visitor-1',
@@ -68,8 +67,7 @@ void main() {
     expect(await store.read('wisperbot.test.session.15'), isNotNull);
   });
 
-  test('rewriting an old session keeps it inside the fifteen-session limit',
-      () async {
+  test('rewriting an old session keeps it inside the fifteen-session limit', () async {
     final store = FlutterSecureWisperBotSessionStore(storage: storage);
 
     for (var index = 0; index < 15; index++) {
