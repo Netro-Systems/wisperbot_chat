@@ -28,8 +28,7 @@ void main() {
     WidgetOneSignalService.instance.resetForTesting();
   });
 
-  testWidgets(
-      'notification click navigates from notification directly to chat message thread',
+  testWidgets('notification click navigates from notification directly to chat message thread',
       (tester) async {
     final client = MockClient(
       (_) async => http.Response(jsonEncode(sessionResponse()), 200),
@@ -70,8 +69,7 @@ void main() {
     }, () => client);
   });
 
-  testWidgets(
-      'cold start notification click is preserved and opens message thread once mounted',
+  testWidgets('cold start notification click is preserved and opens message thread once mounted',
       (tester) async {
     final client = MockClient(
       (_) async => http.Response(jsonEncode(sessionResponse()), 200),
@@ -154,8 +152,7 @@ void main() {
     }, () => client);
   });
 
-  testWidgets('custom onNotificationTapped callback intercepts click event',
-      (tester) async {
+  testWidgets('custom onNotificationTapped callback intercepts click event', (tester) async {
     Map<String, dynamic>? interceptedPayload;
 
     await tester.pumpWidget(
@@ -186,8 +183,7 @@ void main() {
     expect(find.byType(WisperBotChatScreen), findsNothing);
   });
 
-  testWidgets(
-      'custom onForegroundNotification callback intercepts foreground event',
+  testWidgets('custom onForegroundNotification callback intercepts foreground event',
       (tester) async {
     Map<String, dynamic>? interceptedForegroundPayload;
 
@@ -219,8 +215,7 @@ void main() {
     expect(find.text('Foreground payload test'), findsNothing);
   });
 
-  testWidgets(
-      'foreground notification refreshes message thread when chat is already open',
+  testWidgets('foreground notification refreshes message thread when chat is already open',
       (tester) async {
     var pollCount = 0;
     final client = MockClient((request) async {
@@ -283,8 +278,7 @@ void main() {
 
       // Verify chat thread refreshed and no SnackBar is shown
       expect(pollCount, greaterThan(initialPolls));
-      expect(find.text('Incoming message from poll #${initialPolls + 1}'),
-          findsOneWidget);
+      expect(find.text('Incoming message from poll #${initialPolls + 1}'), findsOneWidget);
     }, () => client);
   });
 }

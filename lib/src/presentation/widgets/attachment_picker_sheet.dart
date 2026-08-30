@@ -194,9 +194,7 @@ final class _AttachmentGridItem extends StatelessWidget {
                 data.label,
                 style: theme.textTheme.labelMedium?.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: isDark
-                      ? const Color(0xFFE1E2E5)
-                      : const Color(0xFF2C2D30),
+                  color: isDark ? const Color(0xFFE1E2E5) : const Color(0xFF2C2D30),
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,

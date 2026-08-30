@@ -26,8 +26,7 @@ class _MessageBubble extends StatelessWidget {
     final visitor = message.role == WisperBotMessageRole.visitor;
     final deliveryLabel = visitor ? ', ${_deliveryLabel(message.status)}' : '';
     return Semantics(
-      label:
-          '${visitor ? 'Your' : 'Support'} message. ${message.body}$deliveryLabel',
+      label: '${visitor ? 'Your' : 'Support'} message. ${message.body}$deliveryLabel',
       child: _BubbleLayout(
         visitor: visitor,
         widgetConfig: widgetConfig,
@@ -104,8 +103,7 @@ class _MessageBubble extends StatelessWidget {
     WisperBotResolvedTheme colors,
   ) =>
       TextButton.styleFrom(
-        foregroundColor:
-            visitor ? colors.onVisitorBubble : colors.onAgentBubble,
+        foregroundColor: visitor ? colors.onVisitorBubble : colors.onAgentBubble,
       );
 
   static String _time(DateTime value) {
@@ -126,9 +124,7 @@ class _MessageBubble extends StatelessWidget {
   static IconData _deliveryIcon(WisperBotMessageStatus status) => switch (status) {
         WisperBotMessageStatus.pending => Icons.schedule,
         WisperBotMessageStatus.sent => Icons.check,
-        WisperBotMessageStatus.delivered ||
-        WisperBotMessageStatus.read =>
-          Icons.done_all,
+        WisperBotMessageStatus.delivered || WisperBotMessageStatus.read => Icons.done_all,
         WisperBotMessageStatus.failed => Icons.error_outline,
         WisperBotMessageStatus.unconfirmed => Icons.help_outline,
       };
@@ -138,8 +134,7 @@ class _MessageBubble extends StatelessWidget {
     WisperBotMessageStatus status,
   ) =>
       switch (status) {
-        WisperBotMessageStatus.pending =>
-          colors.onVisitorBubble.withValues(alpha: 0.60),
+        WisperBotMessageStatus.pending => colors.onVisitorBubble.withValues(alpha: 0.60),
         WisperBotMessageStatus.sent ||
         WisperBotMessageStatus.delivered ||
         WisperBotMessageStatus.unconfirmed =>

@@ -1,12 +1,9 @@
 /// Ready-made and headless Flutter integrations for WisperBot visitor chat.
 library;
 
-export 'src/application/wisperbot_runtime.dart'
-    show WisperBotChatController, WisperBotClient;
-export 'src/application/services/widget_onesignal_service.dart'
-    show WidgetOneSignalService;
-export 'src/domain/contracts/session_store.dart'
-    show WisperBotSessionStore, WisperBotStoredSession;
+export 'src/application/wisperbot_runtime.dart' show WisperBotChatController, WisperBotClient;
+export 'src/application/services/widget_onesignal_service.dart' show WidgetOneSignalService;
+export 'src/domain/contracts/session_store.dart' show WisperBotSessionStore, WisperBotStoredSession;
 export 'src/configuration/wisperbot_config.dart';
 export 'src/domain/errors/wisperbot_exception.dart';
 export 'src/domain/events/chat_event.dart';

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.2
+
+### Added
+
+- **OneSignal Push Notifications**: Added `oneSignalAppId` configuration in `WisperBotConfig` and push notification handling with automatic chat navigation on notification tap (`WisperBotChat.handleNotificationClick`, `WisperBotChat.openChatFromNotification`).
+- **Document & File Attachments**: Added cross-platform document picking support (`file_selector`) alongside camera and gallery image attachments.
+- **Attachment Picker Sheet**: Introduced interactive attachment bottom sheet for selecting photos, camera captures, or documents.
+- **Rich Document & File Preview**: Enhanced message bubbles to render document icons, file sizes, file extensions, and tap-to-open handlers.
+
+### Changed
+
+- Enhanced pre-chat form validation with robust field requirements checking.
+- Refined message composer bottom padding and attachment action layout.
+- Updated example application to demonstrate document attachments and OneSignal configuration.
+- Updated documentation and presentation screenshots.
+
 ## 0.1.1
 
 ### Documentation & Assets

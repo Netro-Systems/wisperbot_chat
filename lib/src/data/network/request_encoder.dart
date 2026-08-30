@@ -52,8 +52,7 @@ final class WidgetRequestEncoder {
       <String, Object>{'key': widgetKey, 'is_typing': isTyping};
 
   /// Encodes a human-handoff body.
-  Map<String, Object> handoffBody(String widgetKey) =>
-      <String, Object>{'key': widgetKey};
+  Map<String, Object> handoffBody(String widgetKey) => <String, Object>{'key': widgetKey};
 
   /// Encodes a JSON request body without exposing maps outside data.
   String jsonBody(Map<String, Object> body) => jsonEncode(body);
@@ -191,8 +190,7 @@ final class WidgetRequestEncoder {
     final matchingEntry = supported.entries.where(
       (entry) => filename.endsWith(entry.key),
     );
-    if (matchingEntry.isEmpty ||
-        !matchingEntry.first.value.contains(mimeType)) {
+    if (matchingEntry.isEmpty || !matchingEntry.first.value.contains(mimeType)) {
       throw const WisperBotException(
         code: WisperBotErrorCode.attachmentRejected,
         message: 'The attachment filename and MIME type are not supported.',

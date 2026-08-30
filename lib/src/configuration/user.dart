@@ -31,7 +31,6 @@ class WisperBotUser {
   final String? signature;
 
   @override
-  String toString() =>
-      'WisperBotUser(externalId: [redacted], name: [redacted], '
+  String toString() => 'WisperBotUser(externalId: [redacted], name: [redacted], '
       'email: [redacted], avatarUrl: [redacted], signature: [redacted])';
 }

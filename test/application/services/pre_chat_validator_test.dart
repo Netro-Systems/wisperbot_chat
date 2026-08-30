@@ -67,8 +67,7 @@ void main() {
   });
 }
 
-WisperBotWidgetConfig _widget(List<WisperBotPreChatField> fields) =>
-    WisperBotWidgetConfig(
+WisperBotWidgetConfig _widget(List<WisperBotPreChatField> fields) => WisperBotWidgetConfig(
       title: 'Support',
       subtitle: 'Online',
       welcomeMessage: 'Hello',

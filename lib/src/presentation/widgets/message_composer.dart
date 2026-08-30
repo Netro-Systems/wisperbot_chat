@@ -160,10 +160,7 @@ class _ComposerState extends State<_Composer> {
   bool get _canSend =>
       !_mediaBusy &&
       !_isRecording &&
-      (_hasText ||
-          _pendingImage != null ||
-          _pendingFile != null ||
-          _pendingAudio != null);
+      (_hasText || _pendingImage != null || _pendingFile != null || _pendingAudio != null);
 
   Future<void> _openAttachmentPicker() async {
     if (_mediaBusy || _isRecording) return;
@@ -425,9 +422,8 @@ class _ComposerState extends State<_Composer> {
       await widget.controller.sendText(text);
     } on Object catch (error) {
       if (!mounted) return;
-      final message = error is WisperBotException
-          ? error.message
-          : 'The message could not be sent.';
+      final message =
+          error is WisperBotException ? error.message : 'The message could not be sent.';
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(content: Text(message)),
       );
@@ -505,11 +501,7 @@ class _TextComposer extends StatelessWidget {
               minLines: 1,
               maxLines: 4,
               maxLength: 4000,
-              buildCounter: (_,
-                      {required currentLength,
-                      required isFocused,
-                      maxLength}) =>
-                  null,
+              buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
                 hintText: 'Type your message…',
@@ -548,10 +540,7 @@ class _TextComposer extends StatelessWidget {
                   _ComposerIconButton(
                     tooltip: 'Record voice message',
                     semanticLabel: 'Record voice message',
-                    onPressed: mediaBusy ||
-                            pendingImage ||
-                            pendingFile ||
-                            pendingAudio
+                    onPressed: mediaBusy || pendingImage || pendingFile || pendingAudio
                         ? null
                         : onToggleRecording,
                     padding: EdgeInsets.zero,
@@ -653,11 +642,10 @@ class _RecordingComposer extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         _formatRecordingDuration(elapsed),
-                        style:
-                            Theme.of(context).textTheme.labelMedium?.copyWith(
-                                  color: colors.onPrimary,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: colors.onPrimary,
+                              fontWeight: FontWeight.w700,
+                            ),
                       ),
                     ],
                   ),

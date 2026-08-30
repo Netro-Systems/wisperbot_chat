@@ -31,8 +31,7 @@ void registerDeliveryTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('performs one controlled restoration after an expired poll token',
-      () async {
+  test('performs one controlled restoration after an expired poll token', () async {
     final store = MemorySessionStore();
     var sessionCalls = 0;
     var pollCalls = 0;
@@ -72,8 +71,7 @@ void registerDeliveryTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('send echo does not advance poll cursor and poll deduplicates by id',
-      () async {
+  test('send echo does not advance poll cursor and poll deduplicates by id', () async {
     final store = MemorySessionStore();
     final pollAfter = <String?>[];
     final httpClient = MockClient((request) async {
@@ -147,8 +145,7 @@ void registerDeliveryTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('poll defers a visitor echo while its send is still in flight',
-      () async {
+  test('poll defers a visitor echo while its send is still in flight', () async {
     final sendStarted = Completer<void>();
     final releaseSend = Completer<void>();
     final httpClient = MockClient((request) async {
@@ -212,8 +209,7 @@ void registerDeliveryTests(WisperBotConfig config) {
     await controller.refresh();
     expect(controller.state.messages, hasLength(2));
     expect(
-      controller.state.messages
-          .where((message) => message.body == 'My message'),
+      controller.state.messages.where((message) => message.body == 'My message'),
       hasLength(1),
     );
     expect(
@@ -337,8 +333,7 @@ void registerDeliveryTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('pending image upload keeps local preview bytes until confirmed',
-      () async {
+  test('pending image upload keeps local preview bytes until confirmed', () async {
     final sendStarted = Completer<void>();
     final sendResponse = Completer<http.Response>();
     final httpClient = MockClient((request) async {
@@ -406,8 +401,7 @@ void registerDeliveryTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('pending audio upload keeps local preview bytes until confirmed',
-      () async {
+  test('pending audio upload keeps local preview bytes until confirmed', () async {
     final sendStarted = Completer<void>();
     final sendResponse = Completer<http.Response>();
     final httpClient = MockClient((request) async {

@@ -32,12 +32,10 @@ final class WidgetOneSignalService {
   String? _loggedInExternalId;
 
   /// Stream of data payloads from tapped push notifications.
-  Stream<Map<String, dynamic>> get notificationClicks =>
-      _notificationClicks.stream;
+  Stream<Map<String, dynamic>> get notificationClicks => _notificationClicks.stream;
 
   /// Stream of data payloads from notifications arriving while the app is in the foreground.
-  Stream<Map<String, dynamic>> get foregroundNotifications =>
-      _foregroundNotifications.stream;
+  Stream<Map<String, dynamic>> get foregroundNotifications => _foregroundNotifications.stream;
 
   /// Whether OneSignal has been successfully initialized.
   bool get isInitialized => _initialized;
@@ -152,8 +150,7 @@ final class WidgetOneSignalService {
       ...?notification.additionalData,
       if (notification.title?.isNotEmpty == true) 'title': notification.title,
       if (notification.body?.isNotEmpty == true) 'body': notification.body,
-      if (notification.launchUrl?.isNotEmpty == true)
-        'url': notification.launchUrl,
+      if (notification.launchUrl?.isNotEmpty == true) 'url': notification.launchUrl,
       'notification_id': notification.notificationId,
     };
   }

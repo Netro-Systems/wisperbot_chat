@@ -30,8 +30,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     await controller.updateUser(
       const WisperBotUser(
         externalId: 'customer-1',
-        signature:
-            '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        signature: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
       ),
     );
 
@@ -362,8 +361,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       }
       pollCalls++;
       activePolls++;
-      maximumActivePolls =
-          activePolls > maximumActivePolls ? activePolls : maximumActivePolls;
+      maximumActivePolls = activePolls > maximumActivePolls ? activePolls : maximumActivePolls;
       await releasePoll.future;
       activePolls--;
       return http.Response(jsonEncode(pollResponse()), 200);

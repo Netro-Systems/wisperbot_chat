@@ -32,8 +32,7 @@ Map<String, Object?> sessionResponse({
           'realtime': <String, Object?>{
             'key': realtimeKey,
             'cluster': 'mt1',
-            'auth_endpoint':
-                'https://chat.example.com/base/widget/v1/broadcasting/auth',
+            'auth_endpoint': 'https://chat.example.com/base/widget/v1/broadcasting/auth',
           },
         'unknown_config_field': 'ignored',
       },

@@ -9,6 +9,7 @@ import 'src/theme/example_theme.dart';
 import 'src/widgets/example_brand_header.dart';
 import 'src/widgets/example_hero_card.dart';
 import 'src/widgets/integration_card.dart';
+
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {

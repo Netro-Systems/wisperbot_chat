@@ -28,8 +28,7 @@ class WisperBotStoredSession {
   final int schemaVersion;
 
   @override
-  String toString() =>
-      'WisperBotStoredSession(visitorId: [redacted], token: [redacted], '
+  String toString() => 'WisperBotStoredSession(visitorId: [redacted], token: [redacted], '
       'savedAt: $savedAt, preChatCompleted: $preChatCompleted, '
       'schemaVersion: $schemaVersion)';
 }

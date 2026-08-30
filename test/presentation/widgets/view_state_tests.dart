@@ -1,8 +1,7 @@
 part of 'chat_widgets_test.dart';
 
 void registerViewStateTests(WisperBotConfig config) {
-  testWidgets('embedded view shows only an accessible neutral shimmer',
-      (tester) async {
+  testWidgets('embedded view shows only an accessible neutral shimmer', (tester) async {
     final response = Completer<http.Response>();
     final runtime = _runtime(
       config,
@@ -56,8 +55,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('loading shimmer becomes static when motion is reduced',
-      (tester) async {
+  testWidgets('loading shimmer becomes static when motion is reduced', (tester) async {
     final response = Completer<http.Response>();
     final runtime = _runtime(
       config,
@@ -97,8 +95,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('loading shimmer fits a short embedded container',
-      (tester) async {
+  testWidgets('loading shimmer fits a short embedded container', (tester) async {
     final response = Completer<http.Response>();
     final runtime = _runtime(
       config,
@@ -131,8 +128,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('ready empty view renders welcome text and composer semantics',
-      (tester) async {
+  testWidgets('ready empty view renders welcome text and composer semantics', (tester) async {
     var sendCalls = 0;
     final runtime = _runtime(
       config,
@@ -236,8 +232,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await tester.pumpWidget(_app(
       SizedBox(
         height: 360,
-        child:
-            WisperBotChatView(config: config, controller: runtime.controller),
+        child: WisperBotChatView(config: config, controller: runtime.controller),
       ),
     ));
     await tester.pump();
@@ -254,8 +249,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('normal message delivery does not show sending or sent labels',
-      (tester) async {
+  testWidgets('normal message delivery does not show sending or sent labels', (tester) async {
     final sendResponse = Completer<http.Response>();
     final runtime = _runtime(
       config,
@@ -316,8 +310,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('shows focused double checkmark for read/seen outbound message',
-      (tester) async {
+  testWidgets('shows focused double checkmark for read/seen outbound message', (tester) async {
     final runtime = _runtime(
       config,
       MockClient((request) async {
@@ -354,8 +347,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('shows double checkmark for delivered outbound message',
-      (tester) async {
+  testWidgets('shows double checkmark for delivered outbound message', (tester) async {
     final runtime = _runtime(
       config,
       MockClient((request) async {
@@ -393,8 +385,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('pending image upload renders local timeline preview',
-      (tester) async {
+  testWidgets('pending image upload renders local timeline preview', (tester) async {
     final sendResponse = Completer<http.Response>();
     final mediaAdapter = _FakeMediaAdapter();
     final mediaConfig = WisperBotConfig(
@@ -413,8 +404,7 @@ void registerViewStateTests(WisperBotConfig config) {
         if (request.url.path.endsWith('/typing')) {
           return http.Response('{"ok":true}', 200);
         }
-        if (request.method == 'POST' &&
-            request.url.path.endsWith('/messages')) {
+        if (request.method == 'POST' && request.url.path.endsWith('/messages')) {
           return sendResponse.future;
         }
         return http.Response(jsonEncode(pollResponse()), 200);
@@ -445,8 +435,7 @@ void registerViewStateTests(WisperBotConfig config) {
       find.byKey(const ValueKey<String>('wisperbot-image-preview')),
       findsNothing,
     );
-    expect(runtime.controller.state.messages.single.status,
-        WisperBotMessageStatus.pending);
+    expect(runtime.controller.state.messages.single.status, WisperBotMessageStatus.pending);
 
     sendResponse.complete(
       http.Response(
@@ -472,10 +461,8 @@ void registerViewStateTests(WisperBotConfig config) {
     );
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(runtime.controller.state.messages.single.status,
-        WisperBotMessageStatus.sent);
-    expect(runtime.controller.state.messages.single.localUpload?.filename,
-        'photo.png');
+    expect(runtime.controller.state.messages.single.status, WisperBotMessageStatus.sent);
+    expect(runtime.controller.state.messages.single.localUpload?.filename, 'photo.png');
     expect(
       find.byKey(const ValueKey<String>('wisperbot-local-image-preview')),
       findsOneWidget,
@@ -485,8 +472,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('failed image upload keeps local preview with error icon',
-      (tester) async {
+  testWidgets('failed image upload keeps local preview with error icon', (tester) async {
     final mediaAdapter = _FakeMediaAdapter();
     final mediaConfig = WisperBotConfig(
       widgetKey: config.widgetKey,
@@ -504,8 +490,7 @@ void registerViewStateTests(WisperBotConfig config) {
         if (request.url.path.endsWith('/typing')) {
           return http.Response('{"ok":true}', 200);
         }
-        if (request.method == 'POST' &&
-            request.url.path.endsWith('/messages')) {
+        if (request.method == 'POST' && request.url.path.endsWith('/messages')) {
           throw http.ClientException('connection dropped after upload');
         }
         return http.Response(jsonEncode(pollResponse()), 200);
@@ -535,15 +520,13 @@ void registerViewStateTests(WisperBotConfig config) {
       find.byKey(const ValueKey<String>('wisperbot-local-image-error')),
       findsOneWidget,
     );
-    expect(runtime.controller.state.messages.single.status,
-        WisperBotMessageStatus.unconfirmed);
+    expect(runtime.controller.state.messages.single.status, WisperBotMessageStatus.unconfirmed);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();
   });
 
-  testWidgets(
-      'tapping image preview opens full screen viewer with InteractiveViewer',
+  testWidgets('tapping image preview opens full screen viewer with InteractiveViewer',
       (tester) async {
     final mediaAdapter = _FakeMediaAdapter();
     final mediaConfig = WisperBotConfig(
@@ -609,8 +592,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('pending audio upload renders local timeline preview',
-      (tester) async {
+  testWidgets('pending audio upload renders local timeline preview', (tester) async {
     final sendResponse = Completer<http.Response>();
     final mediaAdapter = _FakeMediaAdapter();
     final mediaConfig = WisperBotConfig(
@@ -629,8 +611,7 @@ void registerViewStateTests(WisperBotConfig config) {
         if (request.url.path.endsWith('/typing')) {
           return http.Response('{"ok":true}', 200);
         }
-        if (request.method == 'POST' &&
-            request.url.path.endsWith('/messages')) {
+        if (request.method == 'POST' && request.url.path.endsWith('/messages')) {
           return sendResponse.future;
         }
         return http.Response(jsonEncode(pollResponse()), 200);
@@ -661,8 +642,7 @@ void registerViewStateTests(WisperBotConfig config) {
       findsNothing,
     );
     expect(find.byTooltip('Send voice message'), findsNothing);
-    expect(runtime.controller.state.messages.single.status,
-        WisperBotMessageStatus.pending);
+    expect(runtime.controller.state.messages.single.status, WisperBotMessageStatus.pending);
 
     sendResponse.complete(
       http.Response(
@@ -688,10 +668,8 @@ void registerViewStateTests(WisperBotConfig config) {
     );
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(runtime.controller.state.messages.single.status,
-        WisperBotMessageStatus.sent);
-    expect(runtime.controller.state.messages.single.localUpload?.filename,
-        'voice.wav');
+    expect(runtime.controller.state.messages.single.status, WisperBotMessageStatus.sent);
+    expect(runtime.controller.state.messages.single.localUpload?.filename, 'voice.wav');
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();
@@ -743,8 +721,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('required pre-chat collects fields before showing composer',
-      (tester) async {
+  testWidgets('required pre-chat collects fields before showing composer', (tester) async {
     var calls = 0;
     Map<String, dynamic>? submitted;
     String? submittedToken;
@@ -801,8 +778,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets(
-      'partial pre-chat only shows missing fields and includes active user',
+  testWidgets('partial pre-chat only shows missing fields and includes active user',
       (tester) async {
     var calls = 0;
     Map<String, dynamic>? submitted;
@@ -860,8 +836,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets(
-      'PDF document attachment renders with PDF icon, extension tag, and download action',
+  testWidgets('PDF document attachment renders with PDF icon, extension tag, and download action',
       (tester) async {
     final runtime = _runtime(
       config,
@@ -875,8 +850,7 @@ void registerViewStateTests(WisperBotConfig config) {
                 type: 'file',
                 body: 'Here is the invoice',
                 sentBy: 'bot',
-                attachmentUrl:
-                    'https://chat.example.com/files/invoice_august.pdf',
+                attachmentUrl: 'https://chat.example.com/files/invoice_august.pdf',
                 filename: 'invoice_august.pdf',
                 mimeType: 'application/pdf',
               ),
@@ -913,8 +887,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets(
-      'DOCX document attachment renders with Word icon and download action',
+  testWidgets('DOCX document attachment renders with Word icon and download action',
       (tester) async {
     final runtime = _runtime(
       config,
@@ -930,8 +903,7 @@ void registerViewStateTests(WisperBotConfig config) {
                 sentBy: 'human',
                 attachmentUrl: 'https://chat.example.com/files/proposal.docx',
                 filename: 'proposal.docx',
-                mimeType:
-                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
               ),
             ])),
             200,
@@ -956,8 +928,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('XLSX and ZIP document attachments render appropriate type icons',
-      (tester) async {
+  testWidgets('XLSX and ZIP document attachments render appropriate type icons', (tester) async {
     final runtime = _runtime(
       config,
       MockClient((request) async {
@@ -972,8 +943,7 @@ void registerViewStateTests(WisperBotConfig config) {
                 sentBy: 'bot',
                 attachmentUrl: 'https://chat.example.com/files/sales.xlsx',
                 filename: 'sales.xlsx',
-                mimeType:
-                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
               ),
               message(
                 id: 4,

@@ -1,13 +1,7 @@
 part of 'models.dart';
 
 /// Current human-support handoff state reported by the backend.
-enum WisperBotHandoffStatus {
-  unavailable,
-  eligible,
-  requesting,
-  connected,
-  failed
-}
+enum WisperBotHandoffStatus { unavailable, eligible, requesting, connected, failed }
 
 /// Immutable handoff state exposed by the controller.
 class WisperBotHandoffState {

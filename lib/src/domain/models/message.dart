@@ -83,8 +83,7 @@ class WisperBotMessage {
   bool get isRead => isSeen;
 
   /// Whether the message has been delivered to the recipient.
-  bool get isDelivered =>
-      status == WisperBotMessageStatus.delivered || isSeen;
+  bool get isDelivered => status == WisperBotMessageStatus.delivered || isSeen;
 
   /// Returns an updated immutable message.
   WisperBotMessage copyWith({

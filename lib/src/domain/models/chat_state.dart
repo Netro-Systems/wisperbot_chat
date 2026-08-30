@@ -13,12 +13,7 @@ enum WisperBotChatPhase {
 }
 
 /// Network synchronization state, separate from support availability.
-enum WisperBotConnectionState {
-  disconnected,
-  connecting,
-  connected,
-  reconnecting
-}
+enum WisperBotConnectionState { disconnected, connecting, connected, reconnecting }
 
 /// Working-hours availability reported by the backend.
 enum WisperBotSupportAvailability { unknown, available, unavailable }
@@ -99,9 +94,7 @@ class WisperBotChatState {
         phase: phase ?? this.phase,
         messages: messages ?? this.messages,
         connection: connection ?? this.connection,
-        widget: identical(widget, _notProvided)
-            ? this.widget
-            : widget as WisperBotWidgetConfig?,
+        widget: identical(widget, _notProvided) ? this.widget : widget as WisperBotWidgetConfig?,
         handoff: handoff ?? this.handoff,
         supportAvailability: supportAvailability ?? this.supportAvailability,
         visitorTyping: visitorTyping ?? this.visitorTyping,
@@ -109,9 +102,7 @@ class WisperBotChatState {
             ? this.agentTyping
             : agentTyping as WisperBotAgentTyping?,
         pendingCount: pendingCount ?? this.pendingCount,
-        error: identical(error, _notProvided)
-            ? this.error
-            : error as WisperBotException?,
+        error: identical(error, _notProvided) ? this.error : error as WisperBotException?,
       );
 }
 

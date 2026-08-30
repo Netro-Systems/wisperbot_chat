@@ -26,12 +26,10 @@ class WisperBotClient {
     _sessions = _SessionCoordinator(
       config: config,
       remoteDataSource: _remoteDataSource,
-      sessionStore: sessionStore ??
-          config.sessionStore ??
-          FlutterSecureWisperBotSessionStore(),
+      sessionStore: sessionStore ?? config.sessionStore ?? FlutterSecureWisperBotSessionStore(),
     );
-    _realtimeConnector = realtimeConnector ??
-        PusherWidgetRealtimeConnector(httpClient: _httpClient);
+    _realtimeConnector =
+        realtimeConnector ?? PusherWidgetRealtimeConnector(httpClient: _httpClient);
   }
 
   /// Immutable configuration used for every operation.

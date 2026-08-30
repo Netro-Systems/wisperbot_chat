@@ -23,14 +23,11 @@ class _PreChatFormState extends State<_PreChatForm> {
   WisperBotUser? get _activeUser => widget.controller.config.user;
 
   bool get _requiresName =>
-      widget.state.widget?.preChatFields.contains(WisperBotPreChatField.name) ==
-          true &&
+      widget.state.widget?.preChatFields.contains(WisperBotPreChatField.name) == true &&
       (_activeUser?.name?.trim().isNotEmpty != true);
 
   bool get _requiresEmail =>
-      widget.state.widget?.preChatFields
-              .contains(WisperBotPreChatField.email) ==
-          true &&
+      widget.state.widget?.preChatFields.contains(WisperBotPreChatField.email) == true &&
       (_activeUser?.email?.trim().isNotEmpty != true);
 
   @override
@@ -64,8 +61,7 @@ class _PreChatFormState extends State<_PreChatForm> {
 
   @override
   Widget build(BuildContext context) {
-    final submitting =
-        widget.state.connection == WisperBotConnectionState.connecting;
+    final submitting = widget.state.connection == WisperBotConnectionState.connecting;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Form(
@@ -93,13 +89,10 @@ class _PreChatFormState extends State<_PreChatForm> {
                 key: const ValueKey<String>('wisperbot-prechat-name'),
                 controller: _nameController,
                 enabled: !submitting,
-                textInputAction: _requiresEmail
-                    ? TextInputAction.next
-                    : TextInputAction.done,
+                textInputAction: _requiresEmail ? TextInputAction.next : TextInputAction.done,
                 decoration: const InputDecoration(labelText: 'Name'),
                 maxLength: 120,
-                validator: (value) =>
-                    value?.trim().isEmpty == true ? 'Name is required.' : null,
+                validator: (value) => value?.trim().isEmpty == true ? 'Name is required.' : null,
               ),
             ],
             if (_requiresEmail) ...<Widget>[

@@ -9,8 +9,7 @@ import 'package:wisperbot_chat/src/data/network/http_error_mapper.dart';
 import 'package:wisperbot_chat/src/data/network/network_caller.dart';
 
 void main() {
-  test('GET resolves endpoint, query, token, and only allowed headers',
-      () async {
+  test('GET resolves endpoint, query, token, and only allowed headers', () async {
     late http.BaseRequest recorded;
     final caller = NetworkCaller(
       baseUrl: Uri.parse('https://chat.example.test/base/'),
@@ -29,19 +28,15 @@ void main() {
 
     expect(recorded.method, 'GET');
     expect(recorded.url.path, '/base/widget/v1/messages');
-    expect(recorded.url.queryParameters,
-        <String, String>{'key': 'widget', 'after': '4'});
+    expect(recorded.url.queryParameters, <String, String>{'key': 'widget', 'after': '4'});
     expect(recorded.headers['accept'], 'application/json');
     expect(recorded.headers['x-widget-token'], 'visitor-token');
     expect(recorded.headers.containsKey('content-type'), isFalse);
-    expect(recorded.headers.keys.map((key) => key.toLowerCase()),
-        isNot(contains('origin')));
-    expect(recorded.headers.keys.map((key) => key.toLowerCase()),
-        isNot(contains('referer')));
+    expect(recorded.headers.keys.map((key) => key.toLowerCase()), isNot(contains('origin')));
+    expect(recorded.headers.keys.map((key) => key.toLowerCase()), isNot(contains('referer')));
   });
 
-  test('JSON POST applies content type and preserves the encoded body',
-      () async {
+  test('JSON POST applies content type and preserves the encoded body', () async {
     late http.Request recorded;
     final caller = NetworkCaller(
       baseUrl: Uri.parse('https://chat.example.test'),
@@ -59,8 +54,7 @@ void main() {
     );
 
     expect(recorded.headers['content-type'], 'application/json');
-    expect(jsonDecode(recorded.body),
-        <String, Object?>{'key': 'widget', 'is_typing': true});
+    expect(jsonDecode(recorded.body), <String, Object?>{'key': 'widget', 'is_typing': true});
   });
 
   test('multipart upload owns fields, file, and transport headers', () async {
@@ -118,8 +112,7 @@ void main() {
     expect(body.toLowerCase(), contains('content-type: image/png'));
   });
 
-  test('maps HTTP, timeout, and connection failures to typed exceptions',
-      () async {
+  test('maps HTTP, timeout, and connection failures to typed exceptions', () async {
     final rateLimited = NetworkCaller(
       baseUrl: Uri.parse('https://chat.example.test'),
       httpClient: _TestClient(
@@ -214,10 +207,8 @@ http.StreamedResponse _response(
 final class _TestClient extends http.BaseClient {
   _TestClient(this.handler);
 
-  final Future<http.StreamedResponse> Function(http.BaseRequest request)
-      handler;
+  final Future<http.StreamedResponse> Function(http.BaseRequest request) handler;
 
   @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) =>
-      handler(request);
+  Future<http.StreamedResponse> send(http.BaseRequest request) => handler(request);
 }
