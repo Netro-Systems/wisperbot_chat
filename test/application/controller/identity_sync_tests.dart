@@ -214,9 +214,10 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     expect(store.reads, <String>[namespace, namespace]);
     expect(store.writes, <String>[namespace, namespace]);
     expect(headers, <String?>[null, 'token-1']);
-    expect(bodies.first, <String, dynamic>{'key': 'test-widget'});
+    expect(bodies.first, <String, dynamic>{'key': 'test-widget', 'active': true});
     expect(bodies.last, <String, dynamic>{
       'key': 'test-widget',
+      'active': true,
       'visitor_id': 'visitor-1',
     });
 

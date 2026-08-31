@@ -22,6 +22,7 @@ final class WidgetRequestEncoder {
   }) =>
       <String, Object>{
         'key': widgetKey,
+        'active': true,
         if (storedSession != null) 'visitor_id': storedSession.visitorId,
         if (user?.name != null) 'name': user!.name!,
         if (user?.email != null) 'email': user!.email!,

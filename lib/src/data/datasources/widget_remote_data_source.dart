@@ -110,6 +110,8 @@ final class HttpWidgetRemoteDataSource implements WidgetRemoteDataSource {
       query: <String, String>{
         'key': widgetKey,
         'after': after.toString(),
+        'active': '1',
+        'open': '1',
       },
       operation: WidgetOperation.poll,
     );

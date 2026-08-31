@@ -25,6 +25,7 @@ void main() {
 
     expect(body, <String, Object>{
       'key': 'widget-key',
+      'active': true,
       'visitor_id': 'visitor-1',
       'name': 'Visitor',
       'email': 'visitor@example.test',
@@ -46,6 +47,7 @@ void main() {
 
     expect(body, <String, Object>{
       'key': 'widget-key',
+      'active': true,
       'name': 'Visitor',
       'email': 'visitor@example.test',
       'device_id': 'onesignal-sub-id-123',

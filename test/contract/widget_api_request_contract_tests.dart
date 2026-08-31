@@ -39,6 +39,7 @@ void _registerRequestContractTests() {
       _expectNoInventedHeaders(recorded);
       expect(body, <String, dynamic>{
         'key': 'test-widget',
+        'active': true,
         'visitor_id': 'visitor-1',
         'name': 'Jane Doe',
         'email': 'jane@example.com',
@@ -106,6 +107,8 @@ void _registerRequestContractTests() {
       expect(requests[1].url.queryParameters, <String, String>{
         'key': 'test-widget',
         'after': '42',
+        'active': '1',
+        'open': '1',
       });
       expect(requests[1].headers.containsKey('content-type'), isFalse);
       expect(bodies[1], <String, dynamic>{
