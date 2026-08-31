@@ -43,6 +43,12 @@ class WisperBotClient {
 
   WisperBotUser? get _activeUser => _sessions.activeUser;
 
+  /// Registers visitor presence in the background with the server.
+  Future<void> registerVisitorPresence({String? deviceId}) {
+    _ensureOpen();
+    return _sessions.start(deviceId: deviceId);
+  }
+
   Future<WidgetSessionResult> _startSession({String? deviceId}) {
     _ensureOpen();
     return _sessions.start(deviceId: deviceId);

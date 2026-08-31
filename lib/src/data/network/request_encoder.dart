@@ -29,6 +29,8 @@ final class WidgetRequestEncoder {
         if (user?.avatarUrl != null) 'avatar': user!.avatarUrl!.toString(),
         if (user?.externalId != null) 'external_id': user!.externalId!,
         if (user?.signature != null) 'user_hash': user!.signature!,
+        if (user?.resolvedCustomFields case final fields? when fields.isNotEmpty)
+          'custom_fields': fields,
         if (deviceId != null && deviceId.trim().isNotEmpty) ...<String, Object>{
           'device_id': deviceId.trim(),
           'onesignal_id': deviceId.trim(),

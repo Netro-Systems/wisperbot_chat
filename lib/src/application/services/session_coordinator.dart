@@ -58,6 +58,8 @@ final class _SessionCoordinator {
         email: preChat.email ?? active?.email,
         avatarUrl: active?.avatarUrl,
         signature: active?.signature,
+        location: active?.location,
+        customFields: active?.customFields,
       ),
       storedSession: current,
       preChatCompleted: true,
