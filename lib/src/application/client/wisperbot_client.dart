@@ -106,6 +106,14 @@ class WisperBotClient {
     );
   }
 
+  Future<void> _markRead() {
+    final session = _requireSession();
+    return _remoteDataSource.markRead(
+      widgetKey: config.widgetKey,
+      token: session.token,
+    );
+  }
+
   Future<WidgetSessionResult> _submitPreChat(
     WisperBotPreChatData preChat, {
     String? deviceId,

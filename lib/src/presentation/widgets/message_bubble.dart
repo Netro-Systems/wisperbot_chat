@@ -1,6 +1,6 @@
 part of '../view/chat_view.dart';
 
-const Color _deliverySeen = Color(0xFF53BDEB);
+const Color _deliverySeen = Colors.white;
 
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({

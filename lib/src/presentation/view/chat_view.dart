@@ -161,7 +161,13 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
     final grew = next.messages.length > _state.messages.length;
     final sentByVisitor =
         grew && next.messages.isNotEmpty && next.messages.last.role == WisperBotMessageRole.visitor;
+    final hasUnreadAgentMessages = next.messages.any(
+      (m) => m.role == WisperBotMessageRole.agent && m.status != WisperBotMessageStatus.read,
+    );
     setState(() => _state = next);
+    if (hasUnreadAgentMessages) {
+      unawaited(_controller.markRead().catchError((_) {}));
+    }
     if (grew && (_nearBottom || sentByVisitor)) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToEnd());
     }

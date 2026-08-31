@@ -54,6 +54,9 @@ final class WidgetRequestEncoder {
   /// Encodes a human-handoff body.
   Map<String, Object> handoffBody(String widgetKey) => <String, Object>{'key': widgetKey};
 
+  /// Encodes a mark-read body.
+  Map<String, Object> readBody(String widgetKey) => <String, Object>{'key': widgetKey};
+
   /// Encodes a JSON request body without exposing maps outside data.
   String jsonBody(Map<String, Object> body) => jsonEncode(body);
 

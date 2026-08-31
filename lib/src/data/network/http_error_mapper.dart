@@ -8,6 +8,7 @@ import '../../domain/errors/wisperbot_exception.dart';
 enum WidgetOperation {
   session,
   poll,
+  read,
   sendText,
   sendMedia,
   media,
