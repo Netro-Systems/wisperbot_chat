@@ -9,16 +9,33 @@ final class WidgetOneSignalService {
 
   static final WidgetOneSignalService instance = WidgetOneSignalService();
 
-  final StreamController<Map<String, dynamic>> _notificationClicks =
+  late final StreamController<Map<String, dynamic>> _notificationClicks =
+      StreamController<Map<String, dynamic>>.broadcast(
+    onListen: () {
+      if (_pendingNotificationClick != null) {
+        Future.microtask(() {
+          if (_pendingNotificationClick != null) {
+            _notificationClicks.add(_pendingNotificationClick!);
+            _pendingNotificationClick = null;
+          }
+        });
+      }
+    },
+  );
+
+  final StreamController<Map<String, dynamic>> _foregroundNotifications =
       StreamController<Map<String, dynamic>>.broadcast();
 
+  Map<String, dynamic>? _pendingNotificationClick;
   bool _initialized = false;
   String? _initializedAppId;
   String? _loggedInExternalId;
 
   /// Stream of data payloads from tapped push notifications.
-  Stream<Map<String, dynamic>> get notificationClicks =>
-      _notificationClicks.stream;
+  Stream<Map<String, dynamic>> get notificationClicks => _notificationClicks.stream;
+
+  /// Stream of data payloads from notifications arriving while the app is in the foreground.
+  Stream<Map<String, dynamic>> get foregroundNotifications => _foregroundNotifications.stream;
 
   /// Whether OneSignal has been successfully initialized.
   bool get isInitialized => _initialized;
@@ -37,6 +54,9 @@ final class WidgetOneSignalService {
       }
       OneSignal.initialize(appId);
       OneSignal.Notifications.addClickListener(_onNotificationClick);
+      OneSignal.Notifications.addForegroundWillDisplayListener(
+        _onForegroundWillDisplay,
+      );
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[WisperBot] OneSignal initialization failed: $e');
@@ -77,6 +97,7 @@ final class WidgetOneSignalService {
 
   /// Resolves the current OneSignal Push Subscription ID with retries.
   Future<String?> currentPushToken({bool ensureReady = true}) async {
+    if (_pushTokenOverride != null) return _pushTokenOverride;
     if (!_initialized) return null;
 
     if (ensureReady) {
@@ -102,17 +123,58 @@ final class WidgetOneSignalService {
     }
   }
 
+  String? _pushTokenOverride;
+
+  @visibleForTesting
+  void setPushTokenOverride(String? token) {
+    _pushTokenOverride = token;
+  }
+
   void _onNotificationClick(OSNotificationClickEvent event) {
-    final data = <String, dynamic>{
-      ...?event.notification.additionalData,
-      if (event.notification.title?.isNotEmpty == true)
-        'title': event.notification.title,
-      if (event.notification.body?.isNotEmpty == true)
-        'body': event.notification.body,
-      if (event.notification.launchUrl?.isNotEmpty == true)
-        'url': event.notification.launchUrl,
-      'notification_id': event.notification.notificationId,
+    event.preventDefault();
+    final data = _extractPayload(event.notification);
+    if (_notificationClicks.hasListener) {
+      _notificationClicks.add(data);
+    } else {
+      _pendingNotificationClick = data;
+    }
+  }
+
+  void _onForegroundWillDisplay(OSNotificationWillDisplayEvent event) {
+    final data = _extractPayload(event.notification);
+    _foregroundNotifications.add(data);
+  }
+
+  Map<String, dynamic> _extractPayload(OSNotification notification) {
+    return <String, dynamic>{
+      ...?notification.additionalData,
+      if (notification.title?.isNotEmpty == true) 'title': notification.title,
+      if (notification.body?.isNotEmpty == true) 'body': notification.body,
+      if (notification.launchUrl?.isNotEmpty == true) 'url': notification.launchUrl,
+      'notification_id': notification.notificationId,
     };
-    _notificationClicks.add(data);
+  }
+
+  @visibleForTesting
+  void simulateNotificationClick(Map<String, dynamic> payload) {
+    if (_notificationClicks.hasListener) {
+      _notificationClicks.add(payload);
+    } else {
+      _pendingNotificationClick = payload;
+    }
+  }
+
+  @visibleForTesting
+  void simulateForegroundNotification(Map<String, dynamic> payload) {
+    _foregroundNotifications.add(payload);
+  }
+
+  @visibleForTesting
+  void resetForTesting() {
+    _pushTokenOverride = null;
+    _pendingNotificationClick = null;
+    _initialized = false;
+    _initializedAppId = null;
+    _loggedInExternalId = null;
   }
 }

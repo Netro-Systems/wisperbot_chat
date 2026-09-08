@@ -7,7 +7,17 @@ enum WisperBotMessageRole { visitor, agent, unknown }
 enum WisperBotMessageType { text, image, audio, file, unknown }
 
 /// Delivery state of a message in controller state.
-enum WisperBotMessageStatus { pending, sent, failed, unconfirmed }
+enum WisperBotMessageStatus {
+  pending,
+  sent,
+  delivered,
+  read,
+  failed,
+  unconfirmed;
+
+  /// Alias for read status.
+  static const WisperBotMessageStatus seen = WisperBotMessageStatus.read;
+}
 
 /// Backend-reported sender category.
 enum WisperBotSenderKind { visitor, bot, human, automation, broadcast, unknown }
@@ -65,6 +75,15 @@ class WisperBotMessage {
 
   /// Safe delivery failure, when applicable.
   final WisperBotException? error;
+
+  /// Whether the message has been read or seen.
+  bool get isSeen => status == WisperBotMessageStatus.read;
+
+  /// Alias for [isSeen].
+  bool get isRead => isSeen;
+
+  /// Whether the message has been delivered to the recipient.
+  bool get isDelivered => status == WisperBotMessageStatus.delivered || isSeen;
 
   /// Returns an updated immutable message.
   WisperBotMessage copyWith({

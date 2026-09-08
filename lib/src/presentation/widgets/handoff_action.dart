@@ -17,8 +17,8 @@ class _HandoffAction extends StatelessWidget {
     if (status == WisperBotHandoffStatus.unavailable) {
       return const SizedBox.shrink();
     }
-    final isActionable = status == WisperBotHandoffStatus.eligible ||
-        status == WisperBotHandoffStatus.failed;
+    final isActionable =
+        status == WisperBotHandoffStatus.eligible || status == WisperBotHandoffStatus.failed;
     final prompt = switch (status) {
       WisperBotHandoffStatus.eligible => 'Prefer a person?',
       WisperBotHandoffStatus.requesting => 'Connecting to a human agent…',
@@ -26,8 +26,7 @@ class _HandoffAction extends StatelessWidget {
       WisperBotHandoffStatus.failed => 'Could not connect.',
       WisperBotHandoffStatus.unavailable => '',
     };
-    final actionLabel =
-        status == WisperBotHandoffStatus.failed ? 'Try again' : 'Human Agent';
+    final actionLabel = status == WisperBotHandoffStatus.failed ? 'Try again' : 'Human Agent';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),

@@ -2,14 +2,12 @@ part of 'widget_api_contract_test.dart';
 
 void _registerRequestContractTests() {
   group('backend request contract', () {
-    test('session sends only documented JSON fields and restoration header',
-        () async {
+    test('session sends only documented JSON fields and restoration header', () async {
       late http.BaseRequest recorded;
       late Map<String, dynamic> body;
       final client = _RecordingClient((request) async {
         recorded = request;
-        body = jsonDecode(await request.finalize().bytesToString())
-            as Map<String, dynamic>;
+        body = jsonDecode(await request.finalize().bytesToString()) as Map<String, dynamic>;
         return _jsonResponse(sessionResponse());
       });
       final api = _remoteDataSource(
@@ -41,6 +39,7 @@ void _registerRequestContractTests() {
       _expectNoInventedHeaders(recorded);
       expect(body, <String, dynamic>{
         'key': 'test-widget',
+        'active': true,
         'visitor_id': 'visitor-1',
         'name': 'Jane Doe',
         'email': 'jane@example.com',
@@ -58,8 +57,7 @@ void _registerRequestContractTests() {
         if (request is http.Request && request.body.isNotEmpty) {
           bodies.add(jsonDecode(request.body) as Map<String, dynamic>);
         }
-        if (request.url.path.endsWith('/messages') &&
-            request.method == 'POST') {
+        if (request.url.path.endsWith('/messages') && request.method == 'POST') {
           return _jsonResponse(<String, Object?>{
             'message': message(id: 1, role: 'visitor', sentBy: 'human'),
             'handoff': <String, Object?>{
@@ -109,6 +107,8 @@ void _registerRequestContractTests() {
       expect(requests[1].url.queryParameters, <String, String>{
         'key': 'test-widget',
         'after': '42',
+        'active': '1',
+        'open': '1',
       });
       expect(requests[1].headers.containsKey('content-type'), isFalse);
       expect(bodies[1], <String, dynamic>{

@@ -9,22 +9,41 @@ import 'src/theme/example_theme.dart';
 import 'src/widgets/example_brand_header.dart';
 import 'src/widgets/example_hero_card.dart';
 import 'src/widgets/integration_card.dart';
+
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
   final widgetKey = dotenv.get('WISPERBOT_WIDGET_KEY').trim();
+  final oneSignalAppId = dotenv.maybeGet('WISPERBOT_ONESIGNAL_APP_ID')?.trim();
   final config = WisperBotConfig(
     widgetKey: widgetKey,
-    user: const WisperBotUser(name: 'Demo User', email: 'user@demo.com'),
+    oneSignalAppId: (oneSignalAppId?.isNotEmpty == true) ? oneSignalAppId : null,
+    user: const WisperBotUser(
+      name: 'Demo Visitor',
+      email: 'visitor@demo.com',
+      location: WisperBotLocation(
+        country: 'Bangladesh',
+        countryCode: 'BD',
+        city: 'Dhaka',
+        region: 'Dhaka Division',
+        latitude: 23.8103,
+        longitude: 90.4125,
+        pageTitle: 'Example app',
+        pageUrl: 'https://example.com',
+      ),
+    ),
   );
 
-  // Initialize push notification handlers
+  // 1. Initialize push notification handlers
   WisperBotChat.initializeNotificationHandlers(
     config: config,
     navigatorKey: navigatorKey,
   );
+
+  // 2. Register live visitor presence in background
+  unawaited(WisperBotChat.registerVisitor(config: config));
 
   runApp(
     ExampleApp(config: config),
@@ -44,6 +63,7 @@ class _ExampleAppState extends State<ExampleApp> {
   late final ExampleMediaAdapter _mediaAdapter = ExampleMediaAdapter();
   late final WisperBotConfig _config = WisperBotConfig(
     widgetKey: widget.config.widgetKey,
+    oneSignalAppId: widget.config.oneSignalAppId,
     user: widget.config.user,
     mediaAdapter: _mediaAdapter,
   );

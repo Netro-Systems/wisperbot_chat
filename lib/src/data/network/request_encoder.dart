@@ -22,12 +22,15 @@ final class WidgetRequestEncoder {
   }) =>
       <String, Object>{
         'key': widgetKey,
+        'active': true,
         if (storedSession != null) 'visitor_id': storedSession.visitorId,
         if (user?.name != null) 'name': user!.name!,
         if (user?.email != null) 'email': user!.email!,
         if (user?.avatarUrl != null) 'avatar': user!.avatarUrl!.toString(),
         if (user?.externalId != null) 'external_id': user!.externalId!,
         if (user?.signature != null) 'user_hash': user!.signature!,
+        if (user?.resolvedCustomFields case final fields? when fields.isNotEmpty)
+          'custom_fields': fields,
         if (deviceId != null && deviceId.trim().isNotEmpty) ...<String, Object>{
           'device_id': deviceId.trim(),
           'onesignal_id': deviceId.trim(),
@@ -52,8 +55,10 @@ final class WidgetRequestEncoder {
       <String, Object>{'key': widgetKey, 'is_typing': isTyping};
 
   /// Encodes a human-handoff body.
-  Map<String, Object> handoffBody(String widgetKey) =>
-      <String, Object>{'key': widgetKey};
+  Map<String, Object> handoffBody(String widgetKey) => <String, Object>{'key': widgetKey};
+
+  /// Encodes a mark-read body.
+  Map<String, Object> readBody(String widgetKey) => <String, Object>{'key': widgetKey};
 
   /// Encodes a JSON request body without exposing maps outside data.
   String jsonBody(Map<String, Object> body) => jsonEncode(body);
@@ -76,7 +81,12 @@ final class WidgetRequestEncoder {
     }
     final fields = <String, String>{
       'key': widgetKey,
-      'type': type == WisperBotMessageType.image ? 'image' : 'audio',
+      'type': switch (type) {
+        WisperBotMessageType.image => 'image',
+        WisperBotMessageType.audio => 'audio',
+        WisperBotMessageType.file => 'document',
+        _ => 'document',
+      },
       // Match the browser widget's FormData shape. The backend accepts an
       // empty caption, and always including the field avoids a multipart
       // request-shape difference between web and native clients.
@@ -95,7 +105,8 @@ final class WidgetRequestEncoder {
     }
     if (upload.filename.trim().isEmpty ||
         (type != WisperBotMessageType.image &&
-            type != WisperBotMessageType.audio)) {
+            type != WisperBotMessageType.audio &&
+            type != WisperBotMessageType.file)) {
       throw const WisperBotException(
         code: WisperBotErrorCode.attachmentRejected,
         message: 'The attachment filename or message type is invalid.',
@@ -122,13 +133,70 @@ final class WidgetRequestEncoder {
           '.wav': <String>{'audio/wav'},
           '.webm': <String>{'audio/webm'},
         },
+      WisperBotMessageType.file => const <String, Set<String>>{
+          '.pdf': <String>{'application/pdf', 'application/octet-stream'},
+          '.doc': <String>{'application/msword', 'application/octet-stream'},
+          '.docx': <String>{
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/octet-stream',
+          },
+          '.xls': <String>{
+            'application/vnd.ms-excel',
+            'application/octet-stream',
+          },
+          '.xlsx': <String>{
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/octet-stream',
+          },
+          '.ppt': <String>{
+            'application/vnd.ms-powerpoint',
+            'application/octet-stream',
+          },
+          '.pptx': <String>{
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'application/octet-stream',
+          },
+          '.txt': <String>{'text/plain', 'application/octet-stream'},
+          '.csv': <String>{
+            'text/csv',
+            'text/comma-separated-values',
+            'application/csv',
+            'text/plain',
+            'application/octet-stream',
+          },
+          '.zip': <String>{
+            'application/zip',
+            'application/x-zip-compressed',
+            'application/octet-stream',
+          },
+          '.rar': <String>{
+            'application/x-rar-compressed',
+            'application/octet-stream',
+          },
+          '.rtf': <String>{
+            'application/rtf',
+            'text/rtf',
+            'application/octet-stream',
+          },
+          '.json': <String>{
+            'application/json',
+            'text/json',
+            'text/plain',
+            'application/octet-stream',
+          },
+          '.xml': <String>{
+            'application/xml',
+            'text/xml',
+            'text/plain',
+            'application/octet-stream',
+          },
+        },
       _ => const <String, Set<String>>{},
     };
     final matchingEntry = supported.entries.where(
       (entry) => filename.endsWith(entry.key),
     );
-    if (matchingEntry.isEmpty ||
-        !matchingEntry.first.value.contains(mimeType)) {
+    if (matchingEntry.isEmpty || !matchingEntry.first.value.contains(mimeType)) {
       throw const WisperBotException(
         code: WisperBotErrorCode.attachmentRejected,
         message: 'The attachment filename and MIME type are not supported.',

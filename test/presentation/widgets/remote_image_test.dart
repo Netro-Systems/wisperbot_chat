@@ -4,8 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wisperbot_chat/src/presentation/media/remote_image.dart';
 
 void main() {
-  testWidgets('selects the SVG renderer from the URL extension',
-      (tester) async {
+  testWidgets('selects the SVG renderer from the URL extension', (tester) async {
     final result = await _buildRemoteImage(
       tester,
       Uri.parse('https://chat.example.com/support-avatar.SVG'),
@@ -23,8 +22,7 @@ void main() {
     expect(result.widget, isA<SvgPicture>());
   });
 
-  testWidgets('uses Flutter image decoding for known raster formats',
-      (tester) async {
+  testWidgets('uses Flutter image decoding for known raster formats', (tester) async {
     final result = await _buildRemoteImage(
       tester,
       Uri.parse('https://chat.example.com/support-avatar.webp'),

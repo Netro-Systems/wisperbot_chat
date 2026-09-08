@@ -61,8 +61,7 @@ void _registerResponseContractTests() {
       );
     });
 
-    test('requires a positive numeric server id for send confirmation',
-        () async {
+    test('requires a positive numeric server id for send confirmation', () async {
       Future<WisperBotException> sendFailure(Object? id) async {
         final api = _remoteDataSource(
           baseUrl: Uri.parse('https://chat.example.com'),

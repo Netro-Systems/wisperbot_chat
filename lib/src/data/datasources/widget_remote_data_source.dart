@@ -55,6 +55,11 @@ abstract interface class WidgetRemoteDataSource {
     required String widgetKey,
     required String token,
   });
+
+  Future<void> markRead({
+    required String widgetKey,
+    required String token,
+  });
 }
 
 /// HTTP implementation of the visitor widget remote data source.
@@ -105,10 +110,25 @@ final class HttpWidgetRemoteDataSource implements WidgetRemoteDataSource {
       query: <String, String>{
         'key': widgetKey,
         'after': after.toString(),
+        'active': '1',
+        'open': '1',
       },
       operation: WidgetOperation.poll,
     );
     return _decoder.poll(response);
+  }
+
+  @override
+  Future<void> markRead({
+    required String widgetKey,
+    required String token,
+  }) async {
+    await _networkCaller.postJson(
+      ApiEndpoints.read,
+      body: _encoder.jsonBody(_encoder.readBody(widgetKey)),
+      token: token,
+      operation: WidgetOperation.read,
+    );
   }
 
   @override
@@ -164,9 +184,7 @@ final class HttpWidgetRemoteDataSource implements WidgetRemoteDataSource {
       attachment.url,
       token: token,
       operation: WidgetOperation.media,
-      accept: attachment.mimeType?.startsWith('audio/') == true
-          ? 'audio/*,*/*'
-          : '*/*',
+      accept: attachment.mimeType?.startsWith('audio/') == true ? 'audio/*,*/*' : '*/*',
     );
     return response.bodyBytes;
   }

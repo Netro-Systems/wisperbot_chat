@@ -4,8 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wisperbot_chat_example/src/widgets/example_brand_header.dart';
 
 void main() {
-  testWidgets('example header targets the package-owned brand logo',
-      (tester) async {
+  testWidgets('example header targets the package-owned brand logo', (tester) async {
     await tester.pumpWidget(
       DefaultAssetBundle(
         bundle: _TestAssetBundle(),

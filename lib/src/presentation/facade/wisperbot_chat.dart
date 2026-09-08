@@ -16,9 +16,12 @@ abstract final class WisperBotChat {
       <String, Future<WisperBotChatResult?>>{};
   static final Map<String, WisperBotChatController> _ownedControllers =
       <String, WisperBotChatController>{};
-  static StreamSubscription<Map<String, dynamic>>?
-      _notificationClickSubscription;
+  static StreamSubscription<Map<String, dynamic>>? _notificationClickSubscription;
+  static StreamSubscription<Map<String, dynamic>>? _foregroundNotificationSubscription;
   static void Function(Map<String, dynamic> payload)? _onNotificationTapped;
+  static void Function(Map<String, dynamic> payload)? _onForegroundNotification;
+  static bool _showInAppForegroundNotification = true;
+  static Map<String, dynamic>? _pendingNotificationPayload;
   static WisperBotConfig? _lastConfig;
   static GlobalKey<NavigatorState>? _navigatorKey;
 
@@ -33,23 +36,54 @@ abstract final class WisperBotChat {
   /// ```
   static void initializeNotificationHandlers({
     WisperBotConfig? config,
+    String? oneSignalAppId,
     GlobalKey<NavigatorState>? navigatorKey,
     void Function(Map<String, dynamic> payload)? onNotificationTapped,
+    void Function(Map<String, dynamic> payload)? onForegroundNotification,
+    bool showInAppForegroundNotification = true,
   }) {
     if (config != null) _lastConfig = config;
     if (navigatorKey != null) _navigatorKey = navigatorKey;
     if (onNotificationTapped != null) {
       _onNotificationTapped = onNotificationTapped;
     }
+    _onForegroundNotification = onForegroundNotification;
+    _showInAppForegroundNotification = showInAppForegroundNotification;
 
-    final appId =
-        config?.oneSignalAppId ?? WisperBotConfig.defaultOneSignalAppId;
-    WidgetOneSignalService.instance.initialize(appId: appId);
+    final appId = oneSignalAppId ?? config?.oneSignalAppId;
+    if (appId != null && appId.isNotEmpty && (config?.enableOneSignal ?? true)) {
+      WidgetOneSignalService.instance.initialize(appId: appId);
+    }
 
     _notificationClickSubscription?.cancel();
-    _notificationClickSubscription = WidgetOneSignalService
-        .instance.notificationClicks
-        .listen(_handleNotificationClick);
+    _notificationClickSubscription =
+        WidgetOneSignalService.instance.notificationClicks.listen(_handleNotificationClick);
+
+    _foregroundNotificationSubscription?.cancel();
+    _foregroundNotificationSubscription = WidgetOneSignalService.instance.foregroundNotifications
+        .listen(_handleForegroundNotification);
+  }
+
+  /// Registers visitor presence in the background so agents can see them in the
+  /// Live Visitors list even before the chat UI is opened.
+  ///
+  /// Call this when your app launches or visitor context changes:
+  /// ```dart
+  /// await WisperBotChat.registerVisitor(config: config);
+  /// ```
+  static Future<void> registerVisitor({
+    required WisperBotConfig config,
+    String? deviceId,
+  }) async {
+    validateWisperBotRuntimeConfig(config);
+    final client = WisperBotClient(config: config);
+    try {
+      await client.registerVisitorPresence(deviceId: deviceId);
+    } catch (_) {
+      // Fail silently for background presence registration
+    } finally {
+      await client.close();
+    }
   }
 
   /// Sets or updates the custom notification tapped callback.
@@ -59,12 +93,19 @@ abstract final class WisperBotChat {
     _onNotificationTapped = callback;
   }
 
-  /// Opens the chatbox from a notification click.
+  /// Sets or updates the custom foreground notification callback.
+  static void setOnForegroundNotificationCallback(
+    void Function(Map<String, dynamic> payload) callback,
+  ) {
+    _onForegroundNotification = callback;
+  }
+
+  /// Opens the chatbox from a notification click and ensures the thread is refreshed.
   static Future<WisperBotChatResult?> openChatboxFromNotification({
     BuildContext? context,
     WisperBotConfig? config,
     Map<String, dynamic>? payload,
-  }) {
+  }) async {
     final effectiveConfig = config ?? _lastConfig;
     if (effectiveConfig == null) {
       throw const WisperBotException(
@@ -82,6 +123,12 @@ abstract final class WisperBotChat {
       );
     }
 
+    final scope = wisperBotPresentationScope(effectiveConfig);
+    final existingController = _ownedControllers[scope];
+    if (existingController != null) {
+      unawaited(existingController.refresh().catchError((_) {}));
+    }
+
     return open(effectiveContext, config: effectiveConfig);
   }
 
@@ -91,13 +138,103 @@ abstract final class WisperBotChat {
       return;
     }
 
-    if (_navigatorKey?.currentContext != null && _lastConfig != null) {
-      openChatboxFromNotification(
-        context: _navigatorKey!.currentContext,
-        config: _lastConfig,
-        payload: payload,
+    final config = _lastConfig;
+    if (config == null) return;
+
+    final context = _navigatorKey?.currentContext;
+    if (context != null) {
+      unawaited(
+        openChatboxFromNotification(
+          context: context,
+          config: config,
+          payload: payload,
+        ).catchError((_) => null),
       );
+    } else {
+      _pendingNotificationPayload = payload;
+      _schedulePendingNotificationOpen();
     }
+  }
+
+  static void _schedulePendingNotificationOpen() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final payload = _pendingNotificationPayload;
+      if (payload == null) return;
+      final context = _navigatorKey?.currentContext;
+      final config = _lastConfig;
+      if (context != null && config != null) {
+        _pendingNotificationPayload = null;
+        unawaited(
+          openChatboxFromNotification(
+            context: context,
+            config: config,
+            payload: payload,
+          ).catchError((_) => null),
+        );
+      }
+    });
+  }
+
+  static void _handleForegroundNotification(Map<String, dynamic> payload) {
+    if (_onForegroundNotification != null) {
+      _onForegroundNotification!(payload);
+      return;
+    }
+
+    final config = _lastConfig;
+    if (config == null) return;
+
+    final scope = wisperBotPresentationScope(config);
+    final activeController = _ownedControllers[scope];
+    if (activeController != null) {
+      unawaited(activeController.refresh().catchError((_) {}));
+      return;
+    }
+
+    if (!_showInAppForegroundNotification) return;
+
+    final context = _navigatorKey?.currentContext;
+    if (context == null) return;
+
+    final title = payload['title']?.toString();
+    final body = payload['body']?.toString();
+    if ((title == null || title.isEmpty) && (body == null || body.isEmpty)) {
+      return;
+    }
+
+    final messageText =
+        body?.trim().isNotEmpty == true ? body!.trim() : (title ?? 'New message received');
+
+    try {
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      if (messenger == null) return;
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            messageText,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Open',
+            textColor: const Color(0xFFFF762E),
+            onPressed: () {
+              messenger.hideCurrentSnackBar();
+              unawaited(
+                openChatboxFromNotification(
+                  context: context,
+                  config: config,
+                  payload: payload,
+                ).catchError((_) => null),
+              );
+            },
+          ),
+        ),
+      );
+    } catch (_) {}
   }
 
   /// Opens at most one chat presentation for the configuration scope.
@@ -117,12 +254,10 @@ abstract final class WisperBotChat {
     final active = _activePresentations[scope];
     if (active != null) return active;
 
-    if (controller != null &&
-        wisperBotPresentationScope(controller.config) != scope) {
+    if (controller != null && wisperBotPresentationScope(controller.config) != scope) {
       throw const WisperBotException(
         code: WisperBotErrorCode.configuration,
-        message:
-            'The supplied controller does not match the chat configuration.',
+        message: 'The supplied controller does not match the chat configuration.',
         retryable: false,
       );
     }
@@ -257,5 +392,21 @@ abstract final class WisperBotChat {
     }
 
     await resetWisperBotStoredSession(config);
+  }
+
+  @visibleForTesting
+  static void resetForTesting() {
+    _activePresentations.clear();
+    _ownedControllers.clear();
+    _notificationClickSubscription?.cancel();
+    _notificationClickSubscription = null;
+    _foregroundNotificationSubscription?.cancel();
+    _foregroundNotificationSubscription = null;
+    _onNotificationTapped = null;
+    _onForegroundNotification = null;
+    _pendingNotificationPayload = null;
+    _lastConfig = null;
+    _navigatorKey = null;
+    _showInAppForegroundNotification = true;
   }
 }

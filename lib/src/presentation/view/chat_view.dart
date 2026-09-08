@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:record/record.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../application/wisperbot_runtime.dart';
 import '../../configuration/wisperbot_config.dart';
@@ -33,7 +36,9 @@ part '../widgets/default_media_adapter.dart';
 part '../widgets/typing_indicator.dart';
 part '../widgets/handoff_action.dart';
 part '../widgets/message_composer.dart';
+part '../widgets/attachment_picker_sheet.dart';
 part '../widgets/image_preview.dart';
+part '../widgets/file_preview.dart';
 part '../widgets/audio_preview.dart';
 
 /// Builds a custom chat state such as an empty or error presentation.
@@ -154,10 +159,15 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
   void _onState(WisperBotChatState next) {
     if (!mounted) return;
     final grew = next.messages.length > _state.messages.length;
-    final sentByVisitor = grew &&
-        next.messages.isNotEmpty &&
-        next.messages.last.role == WisperBotMessageRole.visitor;
+    final sentByVisitor =
+        grew && next.messages.isNotEmpty && next.messages.last.role == WisperBotMessageRole.visitor;
+    final hasUnreadAgentMessages = next.messages.any(
+      (m) => m.role == WisperBotMessageRole.agent && m.status != WisperBotMessageStatus.read,
+    );
     setState(() => _state = next);
+    if (hasUnreadAgentMessages) {
+      unawaited(_controller.markRead().catchError((_) {}));
+    }
     if (grew && (_nearBottom || sentByVisitor)) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToEnd());
     }
@@ -171,8 +181,7 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
 
   void _scrollToEnd() {
     if (!mounted || !_scrollController.hasClients) return;
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final target = _scrollController.position.minScrollExtent;
     if (reduceMotion) {
       _scrollController.jumpTo(target);
@@ -223,8 +232,7 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
                     ),
                   if (_state.phase == WisperBotChatPhase.reconnecting)
                     ChatConnectionBanner(colors: colors),
-                  if (_state.supportAvailability ==
-                      WisperBotSupportAvailability.unavailable)
+                  if (_state.supportAvailability == WisperBotSupportAvailability.unavailable)
                     ChatAvailabilityBanner(state: _state, colors: colors),
                   Expanded(child: _buildBody(colors)),
                   if (_canCompose(_state)) _buildComposer(colors),
@@ -276,9 +284,8 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
 
   Widget _timeline(WisperBotResolvedTheme colors) {
     final configuredWelcome = _state.widget?.welcomeMessage.trim();
-    final welcome = configuredWelcome?.isNotEmpty == true
-        ? configuredWelcome!
-        : 'Hi there! How can we help?';
+    final welcome =
+        configuredWelcome?.isNotEmpty == true ? configuredWelcome! : 'Hi there! How can we help?';
     const welcomeCount = 1;
     final typingCount = _state.agentTyping == null ? 0 : 1;
     return RefreshIndicator(
@@ -299,8 +306,7 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
                   colors: colors,
                 );
               }
-              final messageIndex =
-                  _state.messages.length - 1 - (index - typingCount);
+              final messageIndex = _state.messages.length - 1 - (index - typingCount);
               if (messageIndex < 0) {
                 return Padding(
                   padding: EdgeInsets.only(bottom: colors.messageSpacing),
@@ -320,29 +326,25 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
                       controller: _controller,
                       widgetConfig: _state.widget,
                       colors: colors,
-                      onRetry:
-                          message.status == WisperBotMessageStatus.failed &&
-                                  message.error?.retryable == true
-                              ? () => unawaited(
-                                    _controller
-                                        .retryMessage(message.localId)
-                                        .catchError((_) => message),
-                                  )
-                              : null,
-                      onRemove:
-                          message.status == WisperBotMessageStatus.failed ||
-                                  message.status ==
-                                      WisperBotMessageStatus.unconfirmed
-                              ? () => unawaited(
-                                    _controller.removeMessage(message.localId),
-                                  )
-                              : null,
-                      onRefresh:
-                          message.status == WisperBotMessageStatus.unconfirmed
-                              ? () => unawaited(
-                                    _controller.refresh().catchError((_) {}),
-                                  )
-                              : null,
+                      onRetry: message.status == WisperBotMessageStatus.failed &&
+                              message.error?.retryable == true
+                          ? () => unawaited(
+                                _controller
+                                    .retryMessage(message.localId)
+                                    .catchError((_) => message),
+                              )
+                          : null,
+                      onRemove: message.status == WisperBotMessageStatus.failed ||
+                              message.status == WisperBotMessageStatus.unconfirmed
+                          ? () => unawaited(
+                                _controller.removeMessage(message.localId),
+                              )
+                          : null,
+                      onRefresh: message.status == WisperBotMessageStatus.unconfirmed
+                          ? () => unawaited(
+                                _controller.refresh().catchError((_) {}),
+                              )
+                          : null,
                     ),
               );
             },
@@ -400,8 +402,7 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
   }
 
   bool _canCompose(WisperBotChatState state) =>
-      state.phase == WisperBotChatPhase.ready ||
-      state.phase == WisperBotChatPhase.reconnecting;
+      state.phase == WisperBotChatPhase.ready || state.phase == WisperBotChatPhase.reconnecting;
 
   @override
   void dispose() {

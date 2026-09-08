@@ -18,8 +18,7 @@ class _ChatLoadingShimmerState extends State<_ChatLoadingShimmer>
 
   @override
   Widget build(BuildContext context) {
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     if (reduceMotion) {
       _controller.stop();
     } else if (!_controller.isAnimating) {
@@ -28,8 +27,7 @@ class _ChatLoadingShimmerState extends State<_ChatLoadingShimmer>
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final base = isDark ? const Color(0xFF2B2F35) : const Color(0xFFE1E5EA);
-    final highlight =
-        isDark ? const Color(0xFF3A3F47) : const Color(0xFFF3F5F7);
+    final highlight = isDark ? const Color(0xFF3A3F47) : const Color(0xFFF3F5F7);
     final canvas = isDark ? const Color(0xFF17191D) : const Color(0xFFF7F8FA);
     final skeleton = _LoadingSkeleton(showHeader: widget.showHeader);
 
@@ -92,8 +90,7 @@ class _LoadingSkeleton extends StatelessWidget {
                 children: <Widget>[
                   Padding(
                     key: const ValueKey<String>('wisperbot-loading-header'),
-                    padding:
-                        const EdgeInsetsDirectional.fromSTEB(12, 10, 12, 10),
+                    padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 12, 10),
                     child: Row(
                       children: <Widget>[
                         const _ShimmerBlock.circle(size: 36),

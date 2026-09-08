@@ -1,8 +1,7 @@
 part of 'chat_widgets_test.dart';
 
 void registerViewStateTests(WisperBotConfig config) {
-  testWidgets('embedded view shows only an accessible neutral shimmer',
-      (tester) async {
+  testWidgets('embedded view shows only an accessible neutral shimmer', (tester) async {
     final response = Completer<http.Response>();
     final runtime = _runtime(
       config,
@@ -56,8 +55,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('loading shimmer becomes static when motion is reduced',
-      (tester) async {
+  testWidgets('loading shimmer becomes static when motion is reduced', (tester) async {
     final response = Completer<http.Response>();
     final runtime = _runtime(
       config,
@@ -97,8 +95,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('loading shimmer fits a short embedded container',
-      (tester) async {
+  testWidgets('loading shimmer fits a short embedded container', (tester) async {
     final response = Completer<http.Response>();
     final runtime = _runtime(
       config,
@@ -131,8 +128,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('ready empty view renders welcome text and composer semantics',
-      (tester) async {
+  testWidgets('ready empty view renders welcome text and composer semantics', (tester) async {
     var sendCalls = 0;
     final runtime = _runtime(
       config,
@@ -236,8 +232,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await tester.pumpWidget(_app(
       SizedBox(
         height: 360,
-        child:
-            WisperBotChatView(config: config, controller: runtime.controller),
+        child: WisperBotChatView(config: config, controller: runtime.controller),
       ),
     ));
     await tester.pump();
@@ -254,8 +249,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('normal message delivery does not show sending or sent labels',
-      (tester) async {
+  testWidgets('normal message delivery does not show sending or sent labels', (tester) async {
     final sendResponse = Completer<http.Response>();
     final runtime = _runtime(
       config,
@@ -306,6 +300,7 @@ void registerViewStateTests(WisperBotConfig config) {
 
     expect(find.text('Sending'), findsNothing);
     expect(find.text('Sent'), findsNothing);
+    expect(find.byIcon(Icons.check), findsOneWidget);
     expect(
       runtime.controller.state.messages.single.status,
       WisperBotMessageStatus.sent,
@@ -315,8 +310,82 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('pending image upload renders local timeline preview',
-      (tester) async {
+  testWidgets('shows focused double checkmark for read/seen outbound message', (tester) async {
+    final runtime = _runtime(
+      config,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          return http.Response(
+            jsonEncode(sessionResponse(messages: <Map<String, Object?>>[
+              message(
+                id: 1,
+                role: 'visitor',
+                body: 'Hello seen message',
+                sentBy: 'human',
+              )..['status'] = 'seen',
+            ])),
+            200,
+          );
+        }
+        return http.Response(jsonEncode(pollResponse()), 200);
+      }),
+    );
+
+    await tester.pumpWidget(_app(
+      WisperBotChatView(config: config, controller: runtime.controller),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    final iconFinder = find.byIcon(Icons.done_all);
+    expect(iconFinder, findsOneWidget);
+    final icon = tester.widget<Icon>(iconFinder);
+    expect(icon.color, equals(Colors.white));
+    expect(runtime.controller.state.messages.single.isSeen, isTrue);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets('shows double checkmark for delivered outbound message', (tester) async {
+    final runtime = _runtime(
+      config,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          return http.Response(
+            jsonEncode(sessionResponse(messages: <Map<String, Object?>>[
+              message(
+                id: 1,
+                role: 'visitor',
+                body: 'Delivered message',
+                sentBy: 'human',
+              )..['status'] = 'delivered',
+            ])),
+            200,
+          );
+        }
+        return http.Response(jsonEncode(pollResponse()), 200);
+      }),
+    );
+
+    await tester.pumpWidget(_app(
+      WisperBotChatView(config: config, controller: runtime.controller),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    final iconFinder = find.byIcon(Icons.done_all);
+    expect(iconFinder, findsOneWidget);
+    final icon = tester.widget<Icon>(iconFinder);
+    expect(icon.color, isNot(equals(Colors.white)));
+    expect(runtime.controller.state.messages.single.isDelivered, isTrue);
+    expect(runtime.controller.state.messages.single.isSeen, isFalse);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets('pending image upload renders local timeline preview', (tester) async {
     final sendResponse = Completer<http.Response>();
     final mediaAdapter = _FakeMediaAdapter();
     final mediaConfig = WisperBotConfig(
@@ -324,6 +393,7 @@ void registerViewStateTests(WisperBotConfig config) {
       apiBaseUrl: config.apiBaseUrl,
       polling: config.polling,
       mediaAdapter: mediaAdapter,
+      enableOneSignal: false,
     );
     final runtime = _runtime(
       mediaConfig,
@@ -334,8 +404,7 @@ void registerViewStateTests(WisperBotConfig config) {
         if (request.url.path.endsWith('/typing')) {
           return http.Response('{"ok":true}', 200);
         }
-        if (request.method == 'POST' &&
-            request.url.path.endsWith('/messages')) {
+        if (request.method == 'POST' && request.url.path.endsWith('/messages')) {
           return sendResponse.future;
         }
         return http.Response(jsonEncode(pollResponse()), 200);
@@ -350,8 +419,10 @@ void registerViewStateTests(WisperBotConfig config) {
     ));
     await tester.pump();
     await tester.pump();
-    await tester.tap(find.bySemanticsLabel('Attach image'));
-    await tester.pump();
+    await tester.tap(find.bySemanticsLabel('Attach file'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Gallery'));
+    await tester.pumpAndSettle();
     await tester.tap(find.bySemanticsLabel('Send message'));
     await tester.pump(const Duration(milliseconds: 100));
 
@@ -364,8 +435,7 @@ void registerViewStateTests(WisperBotConfig config) {
       find.byKey(const ValueKey<String>('wisperbot-image-preview')),
       findsNothing,
     );
-    expect(runtime.controller.state.messages.single.status,
-        WisperBotMessageStatus.pending);
+    expect(runtime.controller.state.messages.single.status, WisperBotMessageStatus.pending);
 
     sendResponse.complete(
       http.Response(
@@ -391,10 +461,8 @@ void registerViewStateTests(WisperBotConfig config) {
     );
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(runtime.controller.state.messages.single.status,
-        WisperBotMessageStatus.sent);
-    expect(runtime.controller.state.messages.single.localUpload?.filename,
-        'photo.png');
+    expect(runtime.controller.state.messages.single.status, WisperBotMessageStatus.sent);
+    expect(runtime.controller.state.messages.single.localUpload?.filename, 'photo.png');
     expect(
       find.byKey(const ValueKey<String>('wisperbot-local-image-preview')),
       findsOneWidget,
@@ -404,14 +472,14 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('failed image upload keeps local preview with error icon',
-      (tester) async {
+  testWidgets('failed image upload keeps local preview with error icon', (tester) async {
     final mediaAdapter = _FakeMediaAdapter();
     final mediaConfig = WisperBotConfig(
       widgetKey: config.widgetKey,
       apiBaseUrl: config.apiBaseUrl,
       polling: config.polling,
       mediaAdapter: mediaAdapter,
+      enableOneSignal: false,
     );
     final runtime = _runtime(
       mediaConfig,
@@ -422,8 +490,7 @@ void registerViewStateTests(WisperBotConfig config) {
         if (request.url.path.endsWith('/typing')) {
           return http.Response('{"ok":true}', 200);
         }
-        if (request.method == 'POST' &&
-            request.url.path.endsWith('/messages')) {
+        if (request.method == 'POST' && request.url.path.endsWith('/messages')) {
           throw http.ClientException('connection dropped after upload');
         }
         return http.Response(jsonEncode(pollResponse()), 200);
@@ -438,8 +505,10 @@ void registerViewStateTests(WisperBotConfig config) {
     ));
     await tester.pump();
     await tester.pump();
-    await tester.tap(find.bySemanticsLabel('Attach image'));
-    await tester.pump();
+    await tester.tap(find.bySemanticsLabel('Attach file'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Gallery'));
+    await tester.pumpAndSettle();
     await tester.tap(find.bySemanticsLabel('Send message'));
     await tester.pump(const Duration(milliseconds: 100));
 
@@ -451,15 +520,79 @@ void registerViewStateTests(WisperBotConfig config) {
       find.byKey(const ValueKey<String>('wisperbot-local-image-error')),
       findsOneWidget,
     );
-    expect(runtime.controller.state.messages.single.status,
-        WisperBotMessageStatus.unconfirmed);
+    expect(runtime.controller.state.messages.single.status, WisperBotMessageStatus.unconfirmed);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();
   });
 
-  testWidgets('pending audio upload renders local timeline preview',
+  testWidgets('tapping image preview opens full screen viewer with InteractiveViewer',
       (tester) async {
+    final mediaAdapter = _FakeMediaAdapter();
+    final mediaConfig = WisperBotConfig(
+      widgetKey: config.widgetKey,
+      apiBaseUrl: config.apiBaseUrl,
+      polling: config.polling,
+      mediaAdapter: mediaAdapter,
+      enableOneSignal: false,
+    );
+    final runtime = _runtime(
+      mediaConfig,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          return http.Response(
+            jsonEncode(sessionResponse(
+              messages: <Map<String, Object?>>[
+                message(
+                  id: 1,
+                  role: 'agent',
+                  type: 'image',
+                  body: 'Screenshot',
+                  sentBy: 'bot',
+                  attachmentUrl: 'https://cdn.example.com/screenshot.png',
+                  filename: 'screenshot.png',
+                  mimeType: 'image/png',
+                ),
+              ],
+            )),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/typing')) {
+          return http.Response('{"ok":true}', 200);
+        }
+        return http.Response(jsonEncode(pollResponse()), 200);
+      }),
+    );
+
+    await tester.pumpWidget(_app(
+      WisperBotChatView(
+        config: mediaConfig,
+        controller: runtime.controller,
+      ),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(InteractiveViewer), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('wisperbot-remote-image-preview')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('wisperbot-remote-image-preview')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(InteractiveViewer), findsOneWidget);
+    expect(find.text('screenshot.png'), findsWidgets);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets('pending audio upload renders local timeline preview', (tester) async {
     final sendResponse = Completer<http.Response>();
     final mediaAdapter = _FakeMediaAdapter();
     final mediaConfig = WisperBotConfig(
@@ -467,6 +600,7 @@ void registerViewStateTests(WisperBotConfig config) {
       apiBaseUrl: config.apiBaseUrl,
       polling: config.polling,
       mediaAdapter: mediaAdapter,
+      enableOneSignal: false,
     );
     final runtime = _runtime(
       mediaConfig,
@@ -477,8 +611,7 @@ void registerViewStateTests(WisperBotConfig config) {
         if (request.url.path.endsWith('/typing')) {
           return http.Response('{"ok":true}', 200);
         }
-        if (request.method == 'POST' &&
-            request.url.path.endsWith('/messages')) {
+        if (request.method == 'POST' && request.url.path.endsWith('/messages')) {
           return sendResponse.future;
         }
         return http.Response(jsonEncode(pollResponse()), 200);
@@ -509,8 +642,7 @@ void registerViewStateTests(WisperBotConfig config) {
       findsNothing,
     );
     expect(find.byTooltip('Send voice message'), findsNothing);
-    expect(runtime.controller.state.messages.single.status,
-        WisperBotMessageStatus.pending);
+    expect(runtime.controller.state.messages.single.status, WisperBotMessageStatus.pending);
 
     sendResponse.complete(
       http.Response(
@@ -536,10 +668,8 @@ void registerViewStateTests(WisperBotConfig config) {
     );
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(runtime.controller.state.messages.single.status,
-        WisperBotMessageStatus.sent);
-    expect(runtime.controller.state.messages.single.localUpload?.filename,
-        'voice.wav');
+    expect(runtime.controller.state.messages.single.status, WisperBotMessageStatus.sent);
+    expect(runtime.controller.state.messages.single.localUpload?.filename, 'voice.wav');
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();
@@ -591,8 +721,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('required pre-chat collects fields before showing composer',
-      (tester) async {
+  testWidgets('required pre-chat collects fields before showing composer', (tester) async {
     var calls = 0;
     Map<String, dynamic>? submitted;
     String? submittedToken;
@@ -644,6 +773,207 @@ void registerViewStateTests(WisperBotConfig config) {
     expect(submitted?['name'], 'Jane Doe');
     expect(submitted?['email'], 'jane@example.com');
     expect(find.byTooltip('Send message'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets('partial pre-chat only shows missing fields and includes active user',
+      (tester) async {
+    var calls = 0;
+    Map<String, dynamic>? submitted;
+    final partialConfig = WisperBotConfig(
+      widgetKey: config.widgetKey,
+      apiBaseUrl: config.apiBaseUrl,
+      enableOneSignal: false,
+      user: const WisperBotUser(name: 'Jane Doe'),
+    );
+    final runtime = _runtime(
+      partialConfig,
+      MockClient((request) async {
+        calls++;
+        if (calls == 2) {
+          submitted = jsonDecode(request.body) as Map<String, dynamic>;
+        }
+        return http.Response(
+          jsonEncode(sessionResponse(requirePreChat: true)),
+          200,
+        );
+      }),
+    );
+
+    await tester.pumpWidget(_app(
+      WisperBotChatView(
+        config: partialConfig,
+        controller: runtime.controller,
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('wisperbot-prechat-name')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('wisperbot-prechat-email')),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('wisperbot-prechat-email')),
+      'jane@example.com',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('wisperbot-prechat-submit')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(submitted?['name'], 'Jane Doe');
+    expect(submitted?['email'], 'jane@example.com');
+    expect(find.byTooltip('Send message'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets('PDF document attachment renders with PDF icon, extension tag, and download action',
+      (tester) async {
+    final runtime = _runtime(
+      config,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          return http.Response(
+            jsonEncode(sessionResponse(messages: <Map<String, Object?>>[
+              message(
+                id: 1,
+                role: 'agent',
+                type: 'file',
+                body: 'Here is the invoice',
+                sentBy: 'bot',
+                attachmentUrl: 'https://chat.example.com/files/invoice_august.pdf',
+                filename: 'invoice_august.pdf',
+                mimeType: 'application/pdf',
+              ),
+            ])),
+            200,
+          );
+        }
+        return http.Response(jsonEncode(pollResponse()), 200);
+      }),
+    );
+
+    await tester.pumpWidget(_app(
+      WisperBotChatView(config: config, controller: runtime.controller),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Here is the invoice'), findsOneWidget);
+    expect(find.text('invoice_august.pdf (PDF)'), findsOneWidget);
+    expect(find.byIcon(Icons.picture_as_pdf_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.download_rounded), findsOneWidget);
+
+    // Tap document row to trigger open/preview
+    await tester.tap(find.text('invoice_august.pdf (PDF)'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Tap download icon directly
+    await tester.tap(find.byIcon(Icons.download_rounded));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets('DOCX document attachment renders with Word icon and download action',
+      (tester) async {
+    final runtime = _runtime(
+      config,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          return http.Response(
+            jsonEncode(sessionResponse(messages: <Map<String, Object?>>[
+              message(
+                id: 2,
+                role: 'visitor',
+                type: 'file',
+                body: 'Project proposal',
+                sentBy: 'human',
+                attachmentUrl: 'https://chat.example.com/files/proposal.docx',
+                filename: 'proposal.docx',
+                mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              ),
+            ])),
+            200,
+          );
+        }
+        return http.Response(jsonEncode(pollResponse()), 200);
+      }),
+    );
+
+    await tester.pumpWidget(_app(
+      WisperBotChatView(config: config, controller: runtime.controller),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Project proposal'), findsOneWidget);
+    expect(find.text('proposal.docx (DOCX)'), findsOneWidget);
+    expect(find.byIcon(Icons.description_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.download_rounded), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets('XLSX and ZIP document attachments render appropriate type icons', (tester) async {
+    final runtime = _runtime(
+      config,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          return http.Response(
+            jsonEncode(sessionResponse(messages: <Map<String, Object?>>[
+              message(
+                id: 3,
+                role: 'agent',
+                type: 'file',
+                body: '',
+                sentBy: 'bot',
+                attachmentUrl: 'https://chat.example.com/files/sales.xlsx',
+                filename: 'sales.xlsx',
+                mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              ),
+              message(
+                id: 4,
+                role: 'agent',
+                type: 'file',
+                body: '',
+                sentBy: 'bot',
+                attachmentUrl: 'https://chat.example.com/files/logs.zip',
+                filename: 'logs.zip',
+                mimeType: 'application/zip',
+              ),
+            ])),
+            200,
+          );
+        }
+        return http.Response(jsonEncode(pollResponse()), 200);
+      }),
+    );
+
+    await tester.pumpWidget(_app(
+      WisperBotChatView(config: config, controller: runtime.controller),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('sales.xlsx (XLSX)'), findsOneWidget);
+    expect(find.byIcon(Icons.table_chart_rounded), findsOneWidget);
+
+    expect(find.text('logs.zip (ZIP)'), findsOneWidget);
+    expect(find.byIcon(Icons.folder_zip_rounded), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();

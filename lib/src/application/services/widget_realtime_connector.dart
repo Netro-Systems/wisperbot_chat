@@ -35,8 +35,7 @@ final class PusherWidgetRealtimeConnector implements WidgetRealtimeConnector {
 
   final http.Client _httpClient;
   final bool _ownsHttpClient;
-  final List<StreamSubscription<dynamic>> _subscriptions =
-      <StreamSubscription<dynamic>>[];
+  final List<StreamSubscription<dynamic>> _subscriptions = <StreamSubscription<dynamic>>[];
 
   PusherChannelsClient? _client;
   PrivateChannel? _channel;
@@ -54,8 +53,7 @@ final class PusherWidgetRealtimeConnector implements WidgetRealtimeConnector {
     WidgetRealtimePayloadCallback? onHandoffUpdated,
     WidgetRealtimeErrorCallback? onError,
   }) async {
-    final signature =
-        '${config.key}|${config.cluster}|$widgetKey|$conversationId|$token';
+    final signature = '${config.key}|${config.cluster}|$widgetKey|$conversationId|$token';
     if (_activeSignature == signature && _client != null) return;
 
     await stop();
@@ -168,9 +166,7 @@ final class PusherWidgetRealtimeConnector implements WidgetRealtimeConnector {
 }
 
 final class _WidgetPrivateChannelAuthorizationDelegate
-    implements
-        EndpointAuthorizableChannelAuthorizationDelegate<
-            PrivateChannelAuthorizationData> {
+    implements EndpointAuthorizableChannelAuthorizationDelegate<PrivateChannelAuthorizationData> {
   const _WidgetPrivateChannelAuthorizationDelegate({
     required this.httpClient,
     required this.authorizationEndpoint,
@@ -210,8 +206,7 @@ final class _WidgetPrivateChannelAuthorizationDelegate
     }
     final decoded = jsonDecode(response.body);
     if (decoded is! Map<String, dynamic>) {
-      throw const FormatException(
-          'Widget realtime auth returned invalid JSON.');
+      throw const FormatException('Widget realtime auth returned invalid JSON.');
     }
     final auth = decoded['auth'];
     if (auth is! String || auth.isEmpty) {

@@ -6,13 +6,7 @@ typedef WisperBotDiagnosticsCallback = void Function(
 );
 
 /// Stable categories of redacted operational diagnostics.
-enum WisperBotDiagnosticKind {
-  initialization,
-  lifecycle,
-  connection,
-  poll,
-  send
-}
+enum WisperBotDiagnosticKind { initialization, lifecycle, connection, poll, send }
 
 /// A redacted operational event that contains no visitor or message content.
 @immutable

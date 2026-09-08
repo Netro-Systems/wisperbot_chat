@@ -3,6 +3,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../domain/contracts/media_adapter.dart';
+import '../domain/contracts/session_store.dart';
 import '../domain/errors/wisperbot_exception.dart';
 import '../domain/events/chat_event.dart';
 
@@ -31,13 +32,10 @@ class WisperBotConfig {
     this.mediaAdapter,
     this.polling = const WisperBotPollingConfig(),
     this.diagnostics,
-    this.oneSignalAppId = defaultOneSignalAppId,
+    this.oneSignalAppId,
     this.enableOneSignal = true,
+    this.sessionStore,
   });
-
-  /// Default OneSignal App ID used across WisperBot ecosystem.
-  static const String defaultOneSignalAppId =
-      'b9113548-23d3-4540-9320-6ef5023d2ed3';
 
   /// Public widget routing key issued by WisperBot.
   final String widgetKey;
@@ -69,9 +67,12 @@ class WisperBotConfig {
   /// Optional receiver for redacted operational diagnostics.
   final WisperBotDiagnosticsCallback? diagnostics;
 
-  /// OneSignal App ID used for push notifications.
-  final String oneSignalAppId;
+  /// Optional OneSignal App ID used for push notifications.
+  final String? oneSignalAppId;
 
   /// Whether OneSignal push notification device registration is enabled.
   final bool enableOneSignal;
+
+  /// Optional custom session credential store.
+  final WisperBotSessionStore? sessionStore;
 }

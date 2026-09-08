@@ -26,10 +26,10 @@ class WisperBotClient {
     _sessions = _SessionCoordinator(
       config: config,
       remoteDataSource: _remoteDataSource,
-      sessionStore: sessionStore ?? FlutterSecureWisperBotSessionStore(),
+      sessionStore: sessionStore ?? config.sessionStore ?? FlutterSecureWisperBotSessionStore(),
     );
-    _realtimeConnector = realtimeConnector ??
-        PusherWidgetRealtimeConnector(httpClient: _httpClient);
+    _realtimeConnector =
+        realtimeConnector ?? PusherWidgetRealtimeConnector(httpClient: _httpClient);
   }
 
   /// Immutable configuration used for every operation.
@@ -42,6 +42,12 @@ class WisperBotClient {
   bool _closed = false;
 
   WisperBotUser? get _activeUser => _sessions.activeUser;
+
+  /// Registers visitor presence in the background with the server.
+  Future<void> registerVisitorPresence({String? deviceId}) {
+    _ensureOpen();
+    return _sessions.start(deviceId: deviceId);
+  }
 
   Future<WidgetSessionResult> _startSession({String? deviceId}) {
     _ensureOpen();
@@ -101,6 +107,14 @@ class WisperBotClient {
   Future<WisperBotHandoffState> _requestHandoff() {
     final session = _requireSession();
     return _remoteDataSource.requestHandoff(
+      widgetKey: config.widgetKey,
+      token: session.token,
+    );
+  }
+
+  Future<void> _markRead() {
+    final session = _requireSession();
+    return _remoteDataSource.markRead(
       widgetKey: config.widgetKey,
       token: session.token,
     );

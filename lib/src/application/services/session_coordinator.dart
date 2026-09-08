@@ -58,6 +58,8 @@ final class _SessionCoordinator {
         email: preChat.email ?? active?.email,
         avatarUrl: active?.avatarUrl,
         signature: active?.signature,
+        location: active?.location,
+        customFields: active?.customFields,
       ),
       storedSession: current,
       preChatCompleted: true,
@@ -210,8 +212,7 @@ void validateWisperBotRuntimeConfig(WisperBotConfig config) {
 }
 
 /// Returns the identity-scoped key used to prevent duplicate presentations.
-String wisperBotPresentationScope(WisperBotConfig config) =>
-    presentationScopeKey(config);
+String wisperBotPresentationScope(WisperBotConfig config) => presentationScopeKey(config);
 
 /// Clears default secure credentials without exposing storage to presentation.
 Future<void> resetWisperBotStoredSession(WisperBotConfig config) async {
@@ -224,5 +225,6 @@ Future<void> resetWisperBotStoredSession(WisperBotConfig config) async {
     return;
   }
   final namespace = sessionNamespace(config: config, user: user);
-  await FlutterSecureWisperBotSessionStore().delete(namespace);
+  final store = config.sessionStore ?? FlutterSecureWisperBotSessionStore();
+  await store.delete(namespace);
 }

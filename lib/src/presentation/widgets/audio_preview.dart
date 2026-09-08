@@ -108,17 +108,12 @@ class _AudioPreviewState extends State<_AudioPreview> {
                     state?.processingState == ProcessingState.loading ||
                     state?.processingState == ProcessingState.buffering;
                 return IconButton.filledTonal(
-                  tooltip:
-                      playing ? 'Pause voice preview' : 'Play voice preview',
-                  onPressed: loading || _failed || widget.sending
-                      ? null
-                      : _togglePlayback,
+                  tooltip: playing ? 'Pause voice preview' : 'Play voice preview',
+                  onPressed: loading || _failed || widget.sending ? null : _togglePlayback,
                   icon: loading
                       ? const Icon(Icons.graphic_eq_rounded)
                       : Icon(
-                          playing
-                              ? Icons.pause_rounded
-                              : Icons.play_arrow_rounded,
+                          playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
                         ),
                   style: IconButton.styleFrom(
                     foregroundColor: widget.colors.primary,

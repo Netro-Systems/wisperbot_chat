@@ -25,8 +25,7 @@ void main() {
       body: 'authoritative',
     );
 
-    final result = reconciler
-        .merge(<WisperBotMessage>[existing], <WisperBotMessage>[replacement]);
+    final result = reconciler.merge(<WisperBotMessage>[existing], <WisperBotMessage>[replacement]);
 
     expect(result, hasLength(1));
     expect(result.single.localId, 'pending-1');
@@ -43,8 +42,7 @@ void main() {
       ],
     );
 
-    expect(result.map((message) => message.localId),
-        <String>['one', 'two', 'pending']);
+    expect(result.map((message) => message.localId), <String>['one', 'two', 'pending']);
     expect(reconciler.greatestServerId(result, fallback: 0), 2);
   });
 }

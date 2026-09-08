@@ -1,8 +1,7 @@
 part of 'chat_controller_test.dart';
 
 void registerRealtimeTests(WisperBotConfig config) {
-  test('decodes session conversation id and optional realtime config',
-      () async {
+  test('decodes session conversation id and optional realtime config', () async {
     final decoder = const WidgetResponseDecoder();
     final result = decoder.session(
       http.Response(

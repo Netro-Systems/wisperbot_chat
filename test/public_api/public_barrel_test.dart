@@ -11,9 +11,15 @@ void main() {
     final controller = WisperBotChatController(client: client);
 
     expect(controller.config, same(config));
-    expect(config.oneSignalAppId, WisperBotConfig.defaultOneSignalAppId);
+    expect(config.oneSignalAppId, isNull);
     expect(config.enableOneSignal, isTrue);
     expect(WidgetOneSignalService.instance, isNotNull);
+
+    const customConfig = WisperBotConfig(
+      widgetKey: 'public-widget-key',
+      oneSignalAppId: 'custom-onesignal-app-id',
+    );
+    expect(customConfig.oneSignalAppId, 'custom-onesignal-app-id');
 
     controller.dispose();
     client.close();
