@@ -22,12 +22,15 @@ final class WidgetRequestEncoder {
   }) =>
       <String, Object>{
         'key': widgetKey,
+        'active': true,
         if (storedSession != null) 'visitor_id': storedSession.visitorId,
         if (user?.name != null) 'name': user!.name!,
         if (user?.email != null) 'email': user!.email!,
         if (user?.avatarUrl != null) 'avatar': user!.avatarUrl!.toString(),
         if (user?.externalId != null) 'external_id': user!.externalId!,
         if (user?.signature != null) 'user_hash': user!.signature!,
+        if (user?.resolvedCustomFields case final fields? when fields.isNotEmpty)
+          'custom_fields': fields,
         if (deviceId != null && deviceId.trim().isNotEmpty) ...<String, Object>{
           'device_id': deviceId.trim(),
           'onesignal_id': deviceId.trim(),
@@ -53,6 +56,9 @@ final class WidgetRequestEncoder {
 
   /// Encodes a human-handoff body.
   Map<String, Object> handoffBody(String widgetKey) => <String, Object>{'key': widgetKey};
+
+  /// Encodes a mark-read body.
+  Map<String, Object> readBody(String widgetKey) => <String, Object>{'key': widgetKey};
 
   /// Encodes a JSON request body without exposing maps outside data.
   String jsonBody(Map<String, Object> body) => jsonEncode(body);

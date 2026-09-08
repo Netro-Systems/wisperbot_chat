@@ -722,6 +722,15 @@ class WisperBotChatController with WidgetsBindingObserver {
     if (_hasLease) await initialize();
   }
 
+  /// Manually marks unread agent messages as seen/read.
+  Future<void> markRead() async {
+    _ensureNotDisposed();
+    if (_state.phase != WisperBotChatPhase.ready) return;
+    try {
+      await _client._markRead();
+    } catch (_) {}
+  }
+
   Future<void> _stopTypingBestEffort() async {
     _typingIdleTimer?.cancel();
     _typingIdleTimer = null;
@@ -746,6 +755,12 @@ class WisperBotChatController with WidgetsBindingObserver {
   /// Records that a prebuilt chat presentation opened.
   void handlePresentationOpened() {
     _addEvent(const WisperBotChatOpened());
+    if (_state.phase == WisperBotChatPhase.ready &&
+        _state.messages.any(
+          (m) => m.role == WisperBotMessageRole.agent && m.status != WisperBotMessageStatus.read,
+        )) {
+      unawaited(_client._markRead().catchError((_) {}));
+    }
   }
 
   @internal
@@ -878,6 +893,9 @@ class WisperBotChatController with WidgetsBindingObserver {
   void _handleRealtimeMessageCreated(Object? payload) {
     final message = const WidgetResponseDecoder().realtimeMessage(payload);
     if (message == null) return;
+    if (message.role == WisperBotMessageRole.agent) {
+      unawaited(_client._markRead().catchError((_) {}));
+    }
     final messages = _mergePollMessages(
       _state.messages,
       <WisperBotMessage>[message],

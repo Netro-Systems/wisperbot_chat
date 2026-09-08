@@ -25,6 +25,7 @@ void main() {
 
     expect(body, <String, Object>{
       'key': 'widget-key',
+      'active': true,
       'visitor_id': 'visitor-1',
       'name': 'Visitor',
       'email': 'visitor@example.test',
@@ -46,12 +47,73 @@ void main() {
 
     expect(body, <String, Object>{
       'key': 'widget-key',
+      'active': true,
       'name': 'Visitor',
       'email': 'visitor@example.test',
       'device_id': 'onesignal-sub-id-123',
       'onesignal_id': 'onesignal-sub-id-123',
       'push': <String, Object>{
         'token': 'onesignal-sub-id-123',
+      },
+    });
+  });
+
+  test('session body includes custom_fields when provided', () {
+    final body = encoder.sessionBody(
+      widgetKey: 'widget-key',
+      user: const WisperBotUser(
+        name: 'Visitor',
+        customFields: {
+          'webchat_country': 'Bangladesh',
+          'webchat_city': 'Dhaka',
+        },
+      ),
+      storedSession: null,
+    );
+
+    expect(body, <String, Object>{
+      'key': 'widget-key',
+      'active': true,
+      'name': 'Visitor',
+      'custom_fields': {
+        'webchat_country': 'Bangladesh',
+        'webchat_city': 'Dhaka',
+      },
+    });
+  });
+
+  test('session body converts strongly-typed WisperBotLocation to webchat custom fields', () {
+    final body = encoder.sessionBody(
+      widgetKey: 'widget-key',
+      user: const WisperBotUser(
+        name: 'Visitor',
+        location: WisperBotLocation(
+          country: 'Bangladesh',
+          countryCode: 'BD',
+          city: 'Dhaka',
+          region: 'Dhaka Division',
+          latitude: 23.8103,
+          longitude: 90.4125,
+          pageTitle: 'Pricing Page',
+          pageUrl: 'https://telzen.net/pricing',
+        ),
+      ),
+      storedSession: null,
+    );
+
+    expect(body, <String, Object>{
+      'key': 'widget-key',
+      'active': true,
+      'name': 'Visitor',
+      'custom_fields': {
+        'webchat_country': 'Bangladesh',
+        'webchat_country_code': 'BD',
+        'webchat_city': 'Dhaka',
+        'webchat_region': 'Dhaka Division',
+        'webchat_lat': 23.8103,
+        'webchat_lon': 90.4125,
+        'webchat_page_title': 'Pricing Page',
+        'webchat_page_url': 'https://telzen.net/pricing',
       },
     });
   });

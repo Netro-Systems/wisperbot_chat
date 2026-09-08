@@ -340,7 +340,7 @@ void registerViewStateTests(WisperBotConfig config) {
     final iconFinder = find.byIcon(Icons.done_all);
     expect(iconFinder, findsOneWidget);
     final icon = tester.widget<Icon>(iconFinder);
-    expect(icon.color, equals(const Color(0xFF53BDEB)));
+    expect(icon.color, equals(Colors.white));
     expect(runtime.controller.state.messages.single.isSeen, isTrue);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -377,7 +377,7 @@ void registerViewStateTests(WisperBotConfig config) {
     final iconFinder = find.byIcon(Icons.done_all);
     expect(iconFinder, findsOneWidget);
     final icon = tester.widget<Icon>(iconFinder);
-    expect(icon.color, isNot(equals(const Color(0xFF53BDEB))));
+    expect(icon.color, isNot(equals(Colors.white)));
     expect(runtime.controller.state.messages.single.isDelivered, isTrue);
     expect(runtime.controller.state.messages.single.isSeen, isFalse);
 

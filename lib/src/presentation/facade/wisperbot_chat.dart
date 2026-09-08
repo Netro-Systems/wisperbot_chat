@@ -64,6 +64,28 @@ abstract final class WisperBotChat {
         .listen(_handleForegroundNotification);
   }
 
+  /// Registers visitor presence in the background so agents can see them in the
+  /// Live Visitors list even before the chat UI is opened.
+  ///
+  /// Call this when your app launches or visitor context changes:
+  /// ```dart
+  /// await WisperBotChat.registerVisitor(config: config);
+  /// ```
+  static Future<void> registerVisitor({
+    required WisperBotConfig config,
+    String? deviceId,
+  }) async {
+    validateWisperBotRuntimeConfig(config);
+    final client = WisperBotClient(config: config);
+    try {
+      await client.registerVisitorPresence(deviceId: deviceId);
+    } catch (_) {
+      // Fail silently for background presence registration
+    } finally {
+      await client.close();
+    }
+  }
+
   /// Sets or updates the custom notification tapped callback.
   static void setOnNotificationTappedCallback(
     void Function(Map<String, dynamic> payload) callback,

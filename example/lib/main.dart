@@ -20,14 +20,30 @@ Future<void> main() async {
   final config = WisperBotConfig(
     widgetKey: widgetKey,
     oneSignalAppId: (oneSignalAppId?.isNotEmpty == true) ? oneSignalAppId : null,
-    user: const WisperBotUser(name: 'Demo User', email: 'user@demo.com'),
+    user: const WisperBotUser(
+      name: 'Demo Visitor',
+      email: 'visitor@demo.com',
+      location: WisperBotLocation(
+        country: 'Bangladesh',
+        countryCode: 'BD',
+        city: 'Dhaka',
+        region: 'Dhaka Division',
+        latitude: 23.8103,
+        longitude: 90.4125,
+        pageTitle: 'Example app',
+        pageUrl: 'https://example.com',
+      ),
+    ),
   );
 
-  // Initialize push notification handlers
+  // 1. Initialize push notification handlers
   WisperBotChat.initializeNotificationHandlers(
     config: config,
     navigatorKey: navigatorKey,
   );
+
+  // 2. Register live visitor presence in background
+  unawaited(WisperBotChat.registerVisitor(config: config));
 
   runApp(
     ExampleApp(config: config),
