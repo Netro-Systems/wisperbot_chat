@@ -1,7 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+
+import '../../configuration/wisperbot_config.dart';
+import '../../domain/errors/wisperbot_exception.dart';
 
 /// Manages OneSignal device registration, identity, and push notification clicks.
 final class WidgetOneSignalService {
@@ -32,13 +36,57 @@ final class WidgetOneSignalService {
   String? _loggedInExternalId;
 
   /// Stream of data payloads from tapped push notifications.
-  Stream<Map<String, dynamic>> get notificationClicks => _notificationClicks.stream;
+  Stream<Map<String, dynamic>> get notificationClicks =>
+      _notificationClicks.stream;
 
   /// Stream of data payloads from notifications arriving while the app is in the foreground.
-  Stream<Map<String, dynamic>> get foregroundNotifications => _foregroundNotifications.stream;
+  Stream<Map<String, dynamic>> get foregroundNotifications =>
+      _foregroundNotifications.stream;
 
   /// Whether OneSignal has been successfully initialized.
   bool get isInitialized => _initialized;
+
+  /// Checks permission and requests the native prompt when allowed.
+  /// Throws a typed failure without starting chat if permission is denied.
+  Future<void> ensureChatPermission(WisperBotConfig config) async {
+    if (!config.requireNotificationPermission) return;
+    if (!config.enableOneSignal ||
+        (config.oneSignalAppId?.trim().isEmpty ?? true)) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.configuration,
+        message: 'Support is unavailable because notification setup is incomplete.',
+        retryable: false,
+      );
+    }
+    if (kIsWeb ||
+        (defaultTargetPlatform != TargetPlatform.android &&
+            defaultTargetPlatform != TargetPlatform.iOS)) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.unsupported,
+        message: 'Notification permission gating supports Android and iOS.',
+        retryable: false,
+      );
+    }
+    await initialize(appId: config.oneSignalAppId!);
+    // Query the native state on every attempt, including returns from settings.
+    // The plugin's public permission getter is cached until its observer fires.
+    final granted = await const MethodChannel('OneSignal#notifications')
+        .invokeMethod<bool>('OneSignal#permission');
+    if (granted == true) return;
+    final canRequest = await OneSignal.Notifications.canRequest();
+    if (canRequest && await OneSignal.Notifications.requestPermission(false)) {
+      return;
+    }
+    final canRequestAgain =
+        canRequest && await OneSignal.Notifications.canRequest();
+    throw WisperBotException(
+      code: WisperBotErrorCode.notificationPermission,
+      message: canRequestAgain
+          ? 'Notification permission is required to use support.'
+          : 'Enable notifications from settings to use the support feature.',
+      retryable: true,
+    );
+  }
 
   /// Initializes OneSignal with [appId] and attaches notification click listeners.
   Future<void> initialize({required String appId}) async {
@@ -50,9 +98,9 @@ final class WidgetOneSignalService {
 
     try {
       if (kDebugMode) {
-        OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
+        await OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
       }
-      OneSignal.initialize(appId);
+      await OneSignal.initialize(appId);
       OneSignal.Notifications.addClickListener(_onNotificationClick);
       OneSignal.Notifications.addForegroundWillDisplayListener(
         _onForegroundWillDisplay,
@@ -150,7 +198,8 @@ final class WidgetOneSignalService {
       ...?notification.additionalData,
       if (notification.title?.isNotEmpty == true) 'title': notification.title,
       if (notification.body?.isNotEmpty == true) 'body': notification.body,
-      if (notification.launchUrl?.isNotEmpty == true) 'url': notification.launchUrl,
+      if (notification.launchUrl?.isNotEmpty == true)
+        'url': notification.launchUrl,
       'notification_id': notification.notificationId,
     };
   }

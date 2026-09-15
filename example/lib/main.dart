@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 
-import 'src/example_media_adapter.dart';
 import 'src/theme/example_theme.dart';
 import 'src/widgets/example_brand_header.dart';
 import 'src/widgets/example_hero_card.dart';
@@ -19,7 +18,9 @@ Future<void> main() async {
   final oneSignalAppId = dotenv.maybeGet('WISPERBOT_ONESIGNAL_APP_ID')?.trim();
   final config = WisperBotConfig(
     widgetKey: widgetKey,
-    oneSignalAppId: (oneSignalAppId?.isNotEmpty == true) ? oneSignalAppId : null,
+    requireNotificationPermission: true,
+    oneSignalAppId:
+        (oneSignalAppId?.isNotEmpty == true) ? oneSignalAppId : null,
     user: const WisperBotUser(
       name: 'Demo Visitor',
       email: 'visitor@demo.com',
@@ -50,23 +51,10 @@ Future<void> main() async {
   );
 }
 
-class ExampleApp extends StatefulWidget {
+class ExampleApp extends StatelessWidget {
   const ExampleApp({super.key, required this.config});
 
   final WisperBotConfig config;
-
-  @override
-  State<ExampleApp> createState() => _ExampleAppState();
-}
-
-class _ExampleAppState extends State<ExampleApp> {
-  late final ExampleMediaAdapter _mediaAdapter = ExampleMediaAdapter();
-  late final WisperBotConfig _config = WisperBotConfig(
-    widgetKey: widget.config.widgetKey,
-    oneSignalAppId: widget.config.oneSignalAppId,
-    user: widget.config.user,
-    mediaAdapter: _mediaAdapter,
-  );
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -74,20 +62,28 @@ class _ExampleAppState extends State<ExampleApp> {
         debugShowCheckedModeBanner: false,
         title: 'WisperBot Chat',
         theme: buildExampleTheme(),
-        home: ExampleHome(config: _config),
+        home: ExampleHome(config: config),
       );
-
-  @override
-  void dispose() {
-    unawaited(_mediaAdapter.dispose());
-    super.dispose();
-  }
 }
 
 class ExampleHome extends StatelessWidget {
   const ExampleHome({super.key, required this.config});
 
   final WisperBotConfig config;
+
+  Future<void> _openChat(BuildContext context,
+      {WisperBotPresentation? presentation}) async {
+    try {
+      await WisperBotChat.open(context,
+          config: config, presentation: presentation);
+    } on WisperBotException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -128,9 +124,8 @@ class ExampleHome extends StatelessWidget {
                   icon: Icons.fullscreen_rounded,
                   title: 'Full-screen chat',
                   subtitle: 'An immersive support experience',
-                  onTap: () => WisperBotChat.open(
+                  onTap: () => _openChat(
                     context,
-                    config: config,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -138,9 +133,8 @@ class ExampleHome extends StatelessWidget {
                   icon: Icons.vertical_align_top_rounded,
                   title: 'Bottom sheet',
                   subtitle: 'Keep the current screen in context',
-                  onTap: () => WisperBotChat.open(
+                  onTap: () => _openChat(
                     context,
-                    config: config,
                     presentation: WisperBotPresentation.bottomSheet,
                   ),
                 ),
@@ -149,9 +143,8 @@ class ExampleHome extends StatelessWidget {
                   icon: Icons.web_asset_rounded,
                   title: 'Dialog',
                   subtitle: 'A focused, compact chat window',
-                  onTap: () => WisperBotChat.open(
+                  onTap: () => _openChat(
                     context,
-                    config: config,
                     presentation: WisperBotPresentation.dialog,
                   ),
                 ),

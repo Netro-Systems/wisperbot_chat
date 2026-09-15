@@ -32,7 +32,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  wisperbot_chat: ^0.1.2
+  wisperbot_chat: ^0.1.3
 ```
 
 Or run:
@@ -268,6 +268,27 @@ final config = WisperBotConfig(
 ### 🔔 Push Notifications
 The SDK provides built-in OneSignal push notification integration so visitors receive notifications when agents reply.
 
+To require notification permission before support chat starts on Android or iOS:
+
+```dart
+final config = WisperBotConfig(
+  widgetKey: 'YOUR_WIDGET_KEY',
+  oneSignalAppId: 'YOUR_ONESIGNAL_APP_ID',
+  requireNotificationPermission: true,
+);
+```
+
+Tapping the launcher or calling `WisperBotChat.open` requests the native permission
+prompt when notifications are disabled and the OS permits a request. Chat starts
+only after permission is granted. If another prompt cannot be shown, a snackbar
+says: "Enable notifications from settings to use the support feature."
+After enabling notifications in settings, the user can tap chat again.
+The launcher defers chat initialization until tapped when this option is enabled.
+Direct screens, embedded views, and headless controllers enforce the same session
+requirement; custom UI should handle `WisperBotErrorCode.notificationPermission`.
+The option defaults to `false` and requires OneSignal to be enabled with an app ID.
+Open chat from a context with a `ScaffoldMessenger` to show the snackbar.
+
 Initialize notification handlers in `main()`:
 
 ```dart
@@ -297,17 +318,22 @@ When a notification is tapped, the SDK automatically opens the chatbox.
 ---
 
 ### 📷 Media & Voice Attachments
-To enable image picking and voice messaging buttons in the composer, supply a `WisperBotMediaAdapter` (e.g., wrapping `image_picker` and `record`):
+The prebuilt composer includes image picking, document picking, and voice recording
+using the SDK's built-in media adapter. No custom adapter is needed:
 
 ```dart
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 
 final config = WisperBotConfig(
   widgetKey: 'YOUR_WIDGET_KEY',
-  mediaAdapter: MyCustomMediaAdapter(),
 );
 ```
-*(See the [example](example) app for a full reference implementation).*
+The app must provide the platform permission declarations for the media features
+it uses, including iOS photo-library and microphone usage descriptions. See the
+[example](example) app for platform setup.
+
+`mediaAdapter` is an optional override for apps that need custom picker or recording
+behavior. Most integrations should leave it unset.
 
 ---
 

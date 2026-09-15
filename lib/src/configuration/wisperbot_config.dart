@@ -34,6 +34,7 @@ class WisperBotConfig {
     this.diagnostics,
     this.oneSignalAppId,
     this.enableOneSignal = true,
+    this.requireNotificationPermission = false,
     this.sessionStore,
   });
 
@@ -58,7 +59,8 @@ class WisperBotConfig {
   /// Whether the controller may publish throttled visitor typing updates.
   final bool enableTyping;
 
-  /// Optional host bridge for image selection and audio recording.
+  /// Optional override for built-in image/document picking and audio recording.
+  /// When omitted, the prebuilt composer uses the SDK's default media adapter.
   final WisperBotMediaAdapter? mediaAdapter;
 
   /// Foreground polling intervals.
@@ -72,6 +74,10 @@ class WisperBotConfig {
 
   /// Whether OneSignal push notification device registration is enabled.
   final bool enableOneSignal;
+
+  /// Requires notification permission before chat starts. Requires OneSignal
+  /// to be enabled with an app ID on Android or iOS.
+  final bool requireNotificationPermission;
 
   /// Optional custom session credential store.
   final WisperBotSessionStore? sessionStore;
