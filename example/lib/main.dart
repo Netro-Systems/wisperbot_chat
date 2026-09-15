@@ -19,6 +19,7 @@ Future<void> main() async {
   final config = WisperBotConfig(
     widgetKey: widgetKey,
     requireNotificationPermission: true,
+    useApiColors: true,
     oneSignalAppId:
         (oneSignalAppId?.isNotEmpty == true) ? oneSignalAppId : null,
     user: const WisperBotUser(
