@@ -53,7 +53,11 @@ class _ImagePreview extends StatelessWidget {
             IconButton(
               tooltip: 'Discard image',
               onPressed: sending ? null : onDiscard,
-              icon: const Icon(Icons.close),
+              icon: _ComposerAssetIcon(
+                assetName: 'assets/icons/remove.png',
+                color: sending ? colors.onSurfaceMuted : colors.onSurface,
+                size: 26,
+              ),
             ),
           ],
         ),

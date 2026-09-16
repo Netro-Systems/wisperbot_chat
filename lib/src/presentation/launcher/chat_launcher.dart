@@ -61,6 +61,7 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
   StreamSubscription<WisperBotChatState>? _subscription;
   late WisperBotChatState _state;
   bool _opening = false;
+  bool _configurationPending = false;
 
   @override
   void initState() {
@@ -77,8 +78,21 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
     _subscription = _controller.states.listen((state) {
       if (mounted) setState(() => _state = state);
     });
-    if (!widget.config.requireNotificationPermission) {
+    if (widget.config.requireNotificationPermission) {
+      _configurationPending = _state.widget == null;
+      unawaited(_loadConfiguration());
+    } else {
       unawaited(_controller.initialize().catchError((_) {}));
+    }
+  }
+
+  Future<void> _loadConfiguration() async {
+    try {
+      await _controller.loadConfiguration();
+    } on Object {
+      // The fallback launcher remains usable when configuration cannot load.
+    } finally {
+      if (mounted) setState(() => _configurationPending = false);
     }
   }
 
@@ -88,8 +102,8 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
     final custom = widget.builder;
     if (custom != null) return custom(context, _state, open);
 
-    final isConfigurationLoaded =
-        _state.widget != null || widget.config.requireNotificationPermission;
+    final isConfigurationLoaded = _state.widget != null ||
+        (widget.config.requireNotificationPermission && !_configurationPending);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     if (reduceMotion) {

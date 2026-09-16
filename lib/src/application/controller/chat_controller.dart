@@ -31,6 +31,7 @@ class WisperBotChatController with WidgetsBindingObserver {
   final WidgetOneSignalService _oneSignalService =
       WidgetOneSignalService.instance;
   Future<void>? _initializing;
+  Future<void>? _configurationLoading;
   Future<void>? _pollInFlight;
   Future<void> _sendQueue = Future<void>.value();
   final Map<int, WisperBotMessage> _deferredVisitorPollMessages =
@@ -87,6 +88,36 @@ class WisperBotChatController with WidgetsBindingObserver {
     });
   }
 
+  /// Loads server widget configuration without starting the chat lifecycle.
+  ///
+  /// This lets surfaces such as the launcher resolve server colors and
+  /// placement before chat is opened. It does not request notification
+  /// permission or move the controller out of its current lifecycle phase.
+  Future<void> loadConfiguration() {
+    _ensureNotDisposed();
+    if (_state.widget != null) return Future<void>.value();
+    final active = _configurationLoading;
+    if (active != null) return active;
+    final future = _loadConfigurationInternal();
+    _configurationLoading = future;
+    return future.whenComplete(() {
+      if (identical(_configurationLoading, future)) {
+        _configurationLoading = null;
+      }
+    });
+  }
+
+  Future<void> _loadConfigurationInternal() async {
+    final result = await _client._startSession();
+    if (_disposed || _state.widget != null) return;
+    _emit(
+      _state.copyWith(
+        widget: result.widget,
+        supportAvailability: result.supportAvailability,
+      ),
+    );
+  }
+
   Future<void> _initializeInternal() async {
     final started = DateTime.now();
     _observeLifecycle();
@@ -99,6 +130,14 @@ class WisperBotChatController with WidgetsBindingObserver {
     );
     try {
       await _oneSignalService.ensureChatPermission(config);
+      final configurationLoading = _configurationLoading;
+      if (configurationLoading != null) {
+        try {
+          await configurationLoading;
+        } on Object {
+          // Initialization retries the session request below.
+        }
+      }
       String? deviceId;
       final oneSignalAppId = config.oneSignalAppId;
       if (config.enableOneSignal &&

@@ -53,6 +53,19 @@ void main() {
     expect(find.text('Camera'), findsOneWidget);
     expect(find.text('Gallery'), findsOneWidget);
     expect(find.text('Audio'), findsOneWidget);
+    final iconAssets = tester
+        .widgetList<Image>(find.byType(Image))
+        .map((image) => (image.image as AssetImage).assetName)
+        .toSet();
+    expect(
+      iconAssets,
+      containsAll(<String>{
+        'assets/icons/document.png',
+        'assets/icons/camera.png',
+        'assets/icons/gallery.png',
+        'assets/icons/headphones.png',
+      }),
+    );
   });
 
   testWidgets('hides Document item when showDocument is false', (tester) async {

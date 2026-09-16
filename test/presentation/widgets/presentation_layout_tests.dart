@@ -1,6 +1,43 @@
 part of 'chat_widgets_test.dart';
 
 void registerPresentationLayoutTests(WisperBotConfig config) {
+  testWidgets('full-screen chat can use light status-bar icons',
+      (tester) async {
+    const lightStatusConfig = WisperBotConfig(
+      widgetKey: 'test-widget',
+      apiBaseUrl: 'https://chat.example.com',
+      enableOneSignal: false,
+      lightStatusBarIcons: true,
+    );
+    final runtime = _runtime(
+      lightStatusConfig,
+      MockClient(
+        (_) async => http.Response(jsonEncode(sessionResponse()), 200),
+      ),
+    );
+
+    await tester.pumpWidget(_app(WisperBotChatScreen(
+      config: lightStatusConfig,
+      controller: runtime.controller,
+    )));
+    await tester.pump();
+
+    final overlay = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
+      find
+          .descendant(
+            of: find.byType(WisperBotChatScreen),
+            matching: find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
+          )
+          .first,
+    );
+    expect(overlay.value.statusBarIconBrightness, Brightness.light);
+    expect(overlay.value.statusBarBrightness, Brightness.dark);
+    expect(overlay.value.statusBarColor, Colors.transparent);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
   testWidgets('composer shares a row and expands on focus', (tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1;
@@ -20,24 +57,37 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
 
     final field = find.byType(TextField);
     final attachment = find.byTooltip('Attach file');
+    final microphone = find.byTooltip('Record voice message');
     final send = find.byTooltip('Send message');
+    final sendIcon = find.descendant(of: send, matching: find.byType(Image));
+    final disabledSendIconColor = tester.widget<Image>(sendIcon).color;
     final compactSize = tester.getSize(field);
     expect(compactSize.height, closeTo(42, 1));
+    expect(tester.getSize(attachment).height, closeTo(compactSize.height, 1));
+    expect(tester.getSize(microphone).height, closeTo(compactSize.height, 1));
     expect(tester.getSize(send).height, closeTo(compactSize.height, 1));
-    expect(tester.getCenter(attachment).dy,
-        closeTo(tester.getCenter(field).dy, 1));
-    expect(tester.getCenter(send).dy, closeTo(tester.getCenter(field).dy, 1));
+    expect(tester.getBottomLeft(attachment).dy,
+        closeTo(tester.getBottomLeft(field).dy, 1));
+    expect(tester.getBottomLeft(send).dy,
+        closeTo(tester.getBottomLeft(field).dy, 1));
 
     await tester.tap(field);
     await tester.pumpAndSettle();
     expect(tester.getSize(field).width, greaterThan(compactSize.width));
     expect(tester.getSize(field).height, closeTo(compactSize.height, 1));
-    expect(tester.getCenter(attachment).dy,
-        closeTo(tester.getCenter(field).dy, 1));
-    expect(tester.getCenter(send).dy, closeTo(tester.getCenter(field).dy, 1));
+    expect(tester.getBottomLeft(attachment).dy,
+        closeTo(tester.getBottomLeft(field).dy, 1));
+    expect(tester.getBottomLeft(send).dy,
+        closeTo(tester.getBottomLeft(field).dy, 1));
     await tester.enterText(field, 'First line\nSecond line\nThird line');
     await tester.pumpAndSettle();
+    expect(tester.widget<Image>(sendIcon).color, isNot(disabledSendIconColor));
+    expect(tester.widget<Image>(sendIcon).color, const Color(0xFFFFFFFF));
     expect(tester.getSize(field).height, greaterThan(compactSize.height));
+    expect(tester.getBottomLeft(attachment).dy,
+        closeTo(tester.getBottomLeft(field).dy, 1));
+    expect(tester.getBottomLeft(send).dy,
+        closeTo(tester.getBottomLeft(field).dy, 1));
     expect(tester.takeException(), isNull);
 
     final focusNode = tester.widget<TextField>(field).focusNode!;

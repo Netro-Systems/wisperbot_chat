@@ -20,6 +20,7 @@ Future<void> main() async {
     widgetKey: widgetKey,
     requireNotificationPermission: true,
     useApiColors: true,
+    lightStatusBarIcons: true,
     oneSignalAppId:
         (oneSignalAppId?.isNotEmpty == true) ? oneSignalAppId : null,
     user: const WisperBotUser(

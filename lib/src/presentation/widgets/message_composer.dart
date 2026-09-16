@@ -497,7 +497,7 @@ class _TextComposer extends StatelessWidget {
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: <Widget>[
               if (showImage)
                 _ComposerIconButton(
@@ -514,7 +514,7 @@ class _TextComposer extends StatelessWidget {
                   duration: const Duration(milliseconds: 180),
                   curve: Curves.easeOutCubic,
                   width: focused ? 0 : 36,
-                  height: 32,
+                  height: 42,
                   clipBehavior: Clip.hardEdge,
                   decoration: const BoxDecoration(),
                   child: ExcludeFocus(
@@ -595,23 +595,29 @@ class _TextComposer extends StatelessWidget {
               Semantics(
                 button: true,
                 label: 'Send message',
-                child: IconButton.filled(
-                  tooltip: 'Send message',
-                  onPressed: canSend ? onSend : null,
-                  style: IconButton.styleFrom(
-                    fixedSize: const Size.square(42),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    backgroundColor: colors.primary,
-                    foregroundColor: colors.onPrimary,
-                    disabledBackgroundColor: colors.surfaceMuted,
-                    disabledForegroundColor: colors.onSurfaceMuted,
-                    shape: const CircleBorder(),
-                  ),
-                  icon: _ComposerAssetIcon(
-                    assetName: _ComposerState._sendIcon,
-                    angle: -math.pi / 4,
-                    color: mediaIconColor,
-                    size: 22,
+                child: SizedBox.square(
+                  dimension: 48,
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: IconButton.filled(
+                      tooltip: 'Send message',
+                      onPressed: canSend ? onSend : null,
+                      style: IconButton.styleFrom(
+                        fixedSize: const Size.square(42),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        backgroundColor: colors.primary,
+                        foregroundColor: colors.onPrimary,
+                        disabledBackgroundColor: colors.surfaceMuted,
+                        disabledForegroundColor: colors.onSurfaceMuted,
+                        shape: const CircleBorder(),
+                      ),
+                      icon: _ComposerAssetIcon(
+                        assetName: _ComposerState._sendIcon,
+                        color:
+                            canSend ? colors.onPrimary : colors.onSurfaceMuted,
+                        size: 22,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -661,9 +667,9 @@ class _RecordingComposer extends StatelessWidget {
                   tooltip: 'Cancel recording',
                   semanticLabel: 'Cancel recording',
                   onPressed: busy ? null : onCancel,
-                  icon: Icon(
-                    Icons.delete_outline,
-                    color: colors.error,
+                  icon: _ComposerAssetIcon(
+                    assetName: 'assets/icons/trash.png',
+                    color: busy ? colors.onSurfaceMuted : colors.error,
                     size: 22,
                   ),
                 ),
@@ -707,8 +713,7 @@ class _RecordingComposer extends StatelessWidget {
                   ),
                   icon: _ComposerAssetIcon(
                     assetName: _ComposerState._sendIcon,
-                    angle: -math.pi / 4,
-                    color: colors.onSurface,
+                    color: colors.onPrimary,
                     size: 22,
                   ),
                 ),
@@ -832,7 +837,7 @@ class _ComposerIconButton extends StatelessWidget {
           onTap: onPressed,
           child: Container(
             width: 28,
-            height: 32,
+            height: 42,
             alignment: Alignment.center,
             child: icon,
           ),
@@ -847,26 +852,21 @@ class _ComposerAssetIcon extends StatelessWidget {
     required this.assetName,
     required this.color,
     this.size = 22,
-    this.angle = 0,
   });
 
   final String assetName;
   final Color color;
   final double size;
-  final double angle;
 
   @override
   Widget build(BuildContext context) {
-    return Transform.rotate(
-      angle: angle,
-      child: Image.asset(
-        assetName,
-        color: color,
-        package: 'wisperbot_chat',
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-      ),
+    return Image.asset(
+      assetName,
+      color: color,
+      package: 'wisperbot_chat',
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
     );
   }
 }

@@ -14,8 +14,9 @@ class _ChatHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final widgetConfig = state.widget;
-    final title =
-        widgetConfig?.title.trim().isNotEmpty == true ? widgetConfig!.title : 'Chat with us';
+    final title = widgetConfig?.title.trim().isNotEmpty == true
+        ? widgetConfig!.title
+        : 'Chat with us';
     final subtitle = _subtitle(state);
     return Material(
       key: const ValueKey<String>('wisperbot-chat-header'),
@@ -67,8 +68,12 @@ class _ChatHeader extends StatelessWidget {
                             subtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                  color: colors.onPrimary.withValues(alpha: 0.92),
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
+                                  color:
+                                      colors.onPrimary.withValues(alpha: 0.92),
                                 ),
                           ),
                         ),
@@ -82,7 +87,11 @@ class _ChatHeader extends StatelessWidget {
                   tooltip: 'Close chat',
                   onPressed: onClose,
                   color: colors.onPrimary,
-                  icon: const Icon(Icons.close_rounded, size: 20),
+                  icon: _ComposerAssetIcon(
+                    assetName: 'assets/icons/remove.png',
+                    color: colors.onPrimary,
+                    size: 26,
+                  ),
                 ),
             ],
           ),

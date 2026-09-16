@@ -152,6 +152,10 @@ Widget buildFloatingLauncher(WisperBotConfig config) {
 
 ![Floating Launcher](screenshot/floating_launcher.png)
 
+When `useApiColors` is enabled, the launcher waits for the dashboard widget
+configuration before appearing. This prevents the fallback brand color from
+flashing before the API color is applied.
+
 ### 5. Embedded View
 Place the chat view directly inside an existing layout, drawer, or split-view:
 
@@ -207,13 +211,16 @@ Future<void> runHeadlessChat(WisperBotConfig config) async {
 | `user` | `WisperBotUser?` | `null` | Visitor identity, profile data, and HMAC signature for verified users. |
 | `theme` | `WisperBotThemeData?` | `null` | Presentation overrides for colors, bubble radius, spacing, and brightness. |
 | `useApiColors` | `bool` | `true` | When true, applies the dashboard-configured branding palette automatically. |
+| `lightStatusBarIcons` | `bool` | `false` | Uses white status-bar icons and text in full-screen chat. Enable it for dark or strongly colored headers. |
 | `presentation` | `WisperBotPresentation` | `WisperBotPresentation.fullScreen` | Default modal style (`fullScreen`, `bottomSheet`, or `dialog`) used by `WisperBotChat.open`. |
 | `enableTyping` | `bool` | `true` | Whether the controller publishes throttled visitor typing updates. |
 | `mediaAdapter` | `WisperBotMediaAdapter?` | `null` | Optional bridge for image selection and voice recording plugins. |
 | `polling` | `WisperBotPollingConfig` | `const WisperBotPollingConfig()` | Intervals for active (`3s`), idle (`8s`), and failure backoff (`30s`) foreground polling. |
 | `diagnostics` | `WisperBotDiagnosticsCallback?` | `null` | Callback receiving redacted operational metrics and lifecycle events. |
-| `oneSignalAppId` | `String` | `WisperBotConfig.defaultOneSignalAppId` | OneSignal App ID used for push notification registration. |
+| `oneSignalAppId` | `String?` | `null` | OneSignal App ID used for push notification registration. |
 | `enableOneSignal` | `bool` | `true` | Whether device push notification tokens are registered on session start. |
+| `requireNotificationPermission` | `bool` | `false` | Requires notification permission before chat starts on Android or iOS. The launcher can still preload visual configuration. |
+| `sessionStore` | `WisperBotSessionStore?` | `null` | Optional custom storage for identity-scoped session credentials. |
 
 ---
 
@@ -254,6 +261,7 @@ import 'package:wisperbot_chat/wisperbot_chat.dart';
 final config = WisperBotConfig(
   widgetKey: 'YOUR_WIDGET_KEY',
   useApiColors: false, // Disables server palette
+  lightStatusBarIcons: true, // White status-bar content in full-screen chat
   theme: const WisperBotThemeData(
     primaryColor: Color(0xFF087F5B),
     visitorBubbleColor: Color(0xFF087F5B),
@@ -262,6 +270,10 @@ final config = WisperBotConfig(
   ),
 );
 ```
+
+`lightStatusBarIcons` affects full-screen chat only. Leave it `false` for dark
+status-bar content on light headers. Set it to `true` for white status-bar
+content on dark or strongly colored headers.
 
 ---
 
@@ -283,7 +295,9 @@ prompt when notifications are disabled and the OS permits a request. Chat starts
 only after permission is granted. If another prompt cannot be shown, a snackbar
 says: "Enable notifications from settings to use the support feature."
 After enabling notifications in settings, the user can tap chat again.
-The launcher defers chat initialization until tapped when this option is enabled.
+The launcher preloads visual widget configuration for API colors and placement,
+but defers chat initialization and the notification permission prompt until
+tapped when this option is enabled.
 Direct screens, embedded views, and headless controllers enforce the same session
 requirement; custom UI should handle `WisperBotErrorCode.notificationPermission`.
 The option defaults to `false` and requires OneSignal to be enabled with an app ID.

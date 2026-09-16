@@ -27,6 +27,7 @@ class WisperBotConfig {
     this.user,
     this.theme,
     this.useApiColors = true,
+    this.lightStatusBarIcons = false,
     this.presentation = WisperBotPresentation.fullScreen,
     this.enableTyping = true,
     this.mediaAdapter,
@@ -52,6 +53,12 @@ class WisperBotConfig {
 
   /// Whether server-provided colors participate in theme resolution.
   final bool useApiColors;
+
+  /// Whether full-screen chat uses light (white) status-bar icons and text.
+  ///
+  /// Enable this for dark or strongly colored chat headers. This setting does
+  /// not affect bottom-sheet or dialog presentations.
+  final bool lightStatusBarIcons;
 
   /// Default presentation used by [WisperBotChat.open].
   final WisperBotPresentation presentation;

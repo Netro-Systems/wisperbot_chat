@@ -1,7 +1,46 @@
 part of 'chat_widgets_test.dart';
 
 void registerLauncherTests(WisperBotConfig config) {
-  testWidgets('launcher has an accessible 48dp target and server alignment', (tester) async {
+  testWidgets('permission-gated launcher applies API color before chat opens',
+      (tester) async {
+    const gatedConfig = WisperBotConfig(
+      widgetKey: 'test-widget',
+      apiBaseUrl: 'https://chat.example.com',
+      enableOneSignal: false,
+      requireNotificationPermission: true,
+    );
+    final response = Completer<http.Response>();
+    final runtime = _runtime(
+      gatedConfig,
+      MockClient((_) => response.future),
+    );
+
+    await tester.pumpWidget(_app(WisperBotChatLauncher(
+      config: gatedConfig,
+      controller: runtime.controller,
+    )));
+
+    expect(find.byType(FloatingActionButton), findsNothing);
+
+    response.complete(http.Response(jsonEncode(sessionResponse()), 200));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(runtime.controller.state.phase, WisperBotChatPhase.idle);
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(
+      tester
+          .widget<FloatingActionButton>(find.byType(FloatingActionButton))
+          .backgroundColor,
+      const Color(0xFF6258F9),
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets('launcher has an accessible 48dp target and server alignment',
+      (tester) async {
     final runtime = _runtime(
       config,
       MockClient(
@@ -39,7 +78,8 @@ void registerLauncherTests(WisperBotConfig config) {
 
   for (final alignment in <Alignment?>[null, Alignment.topLeft]) {
     final alignmentName = alignment == null ? 'server' : 'custom';
-    testWidgets('launcher zoom stays fixed with $alignmentName alignment', (tester) async {
+    testWidgets('launcher zoom stays fixed with $alignmentName alignment',
+        (tester) async {
       final response = Completer<http.Response>();
       final runtime = _runtime(
         config,
@@ -113,7 +153,8 @@ void registerLauncherTests(WisperBotConfig config) {
     });
   }
 
-  testWidgets('custom launcher builder retains loading-state control', (tester) async {
+  testWidgets('custom launcher builder retains loading-state control',
+      (tester) async {
     final response = Completer<http.Response>();
     final runtime = _runtime(
       config,
@@ -137,7 +178,8 @@ void registerLauncherTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('launcher skips its entrance transition for reduced motion', (tester) async {
+  testWidgets('launcher skips its entrance transition for reduced motion',
+      (tester) async {
     final response = Completer<http.Response>();
     final runtime = _runtime(
       config,
@@ -175,7 +217,8 @@ void registerLauncherTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('remote brand assets use contained web-widget sizing', (tester) async {
+  testWidgets('remote brand assets use contained web-widget sizing',
+      (tester) async {
     final runtime = _runtime(
       config,
       MockClient(
