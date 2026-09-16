@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../application/wisperbot_runtime.dart';
 import '../../configuration/wisperbot_config.dart';
@@ -59,13 +60,25 @@ class _WisperBotChatScreenState extends State<WisperBotChatScreen> {
   Widget build(BuildContext context) {
     final usesBrandedHeader = widget.appBar == null;
     final navigator = Navigator.of(context);
-    return Scaffold(
-      appBar: widget.appBar,
-      body: WisperBotChatView(
-        config: widget.config,
-        controller: _controller,
-        showHeader: usesBrandedHeader,
-        onClose: usesBrandedHeader && navigator.canPop() ? () => navigator.maybePop() : null,
+    final lightStatusBarIcons = widget.config.lightStatusBarIcons;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness:
+            lightStatusBarIcons ? Brightness.light : Brightness.dark,
+        statusBarBrightness:
+            lightStatusBarIcons ? Brightness.dark : Brightness.light,
+      ),
+      child: Scaffold(
+        appBar: widget.appBar,
+        body: WisperBotChatView(
+          config: widget.config,
+          controller: _controller,
+          showHeader: usesBrandedHeader,
+          onClose: usesBrandedHeader && navigator.canPop()
+              ? () => navigator.maybePop()
+              : null,
+        ),
       ),
     );
   }

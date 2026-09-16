@@ -107,6 +107,7 @@ final class _SessionCoordinator {
       user: user,
       theme: config.theme,
       useApiColors: config.useApiColors,
+      lightStatusBarIcons: config.lightStatusBarIcons,
       presentation: config.presentation,
       enableTyping: config.enableTyping,
       mediaAdapter: config.mediaAdapter,
@@ -212,7 +213,8 @@ void validateWisperBotRuntimeConfig(WisperBotConfig config) {
 }
 
 /// Returns the identity-scoped key used to prevent duplicate presentations.
-String wisperBotPresentationScope(WisperBotConfig config) => presentationScopeKey(config);
+String wisperBotPresentationScope(WisperBotConfig config) =>
+    presentationScopeKey(config);
 
 /// Clears default secure credentials without exposing storage to presentation.
 Future<void> resetWisperBotStoredSession(WisperBotConfig config) async {

@@ -16,8 +16,10 @@ abstract final class WisperBotChat {
       <String, Future<WisperBotChatResult?>>{};
   static final Map<String, WisperBotChatController> _ownedControllers =
       <String, WisperBotChatController>{};
-  static StreamSubscription<Map<String, dynamic>>? _notificationClickSubscription;
-  static StreamSubscription<Map<String, dynamic>>? _foregroundNotificationSubscription;
+  static StreamSubscription<Map<String, dynamic>>?
+      _notificationClickSubscription;
+  static StreamSubscription<Map<String, dynamic>>?
+      _foregroundNotificationSubscription;
   static void Function(Map<String, dynamic> payload)? _onNotificationTapped;
   static void Function(Map<String, dynamic> payload)? _onForegroundNotification;
   static bool _showInAppForegroundNotification = true;
@@ -51,16 +53,20 @@ abstract final class WisperBotChat {
     _showInAppForegroundNotification = showInAppForegroundNotification;
 
     final appId = oneSignalAppId ?? config?.oneSignalAppId;
-    if (appId != null && appId.isNotEmpty && (config?.enableOneSignal ?? true)) {
+    if (appId != null &&
+        appId.isNotEmpty &&
+        (config?.enableOneSignal ?? true)) {
       WidgetOneSignalService.instance.initialize(appId: appId);
     }
 
     _notificationClickSubscription?.cancel();
-    _notificationClickSubscription =
-        WidgetOneSignalService.instance.notificationClicks.listen(_handleNotificationClick);
+    _notificationClickSubscription = WidgetOneSignalService
+        .instance.notificationClicks
+        .listen(_handleNotificationClick);
 
     _foregroundNotificationSubscription?.cancel();
-    _foregroundNotificationSubscription = WidgetOneSignalService.instance.foregroundNotifications
+    _foregroundNotificationSubscription = WidgetOneSignalService
+        .instance.foregroundNotifications
         .listen(_handleForegroundNotification);
   }
 
@@ -202,8 +208,9 @@ abstract final class WisperBotChat {
       return;
     }
 
-    final messageText =
-        body?.trim().isNotEmpty == true ? body!.trim() : (title ?? 'New message received');
+    final messageText = body?.trim().isNotEmpty == true
+        ? body!.trim()
+        : (title ?? 'New message received');
 
     try {
       final messenger = ScaffoldMessenger.maybeOf(context);
@@ -254,10 +261,12 @@ abstract final class WisperBotChat {
     final active = _activePresentations[scope];
     if (active != null) return active;
 
-    if (controller != null && wisperBotPresentationScope(controller.config) != scope) {
+    if (controller != null &&
+        wisperBotPresentationScope(controller.config) != scope) {
       throw const WisperBotException(
         code: WisperBotErrorCode.configuration,
-        message: 'The supplied controller does not match the chat configuration.',
+        message:
+            'The supplied controller does not match the chat configuration.',
         retryable: false,
       );
     }
@@ -272,7 +281,9 @@ abstract final class WisperBotChat {
         suppliedController: controller,
         presentation: presentation ?? config.presentation,
       ).then(completer.complete, onError: completer.completeError).whenComplete(
-            () => _activePresentations.remove(scope),
+            () {
+              _activePresentations.remove(scope);
+            },
           ),
     );
     return completer.future;
@@ -286,6 +297,18 @@ abstract final class WisperBotChat {
     required WisperBotPresentation presentation,
   }) async {
     WisperBotClient? ownedClient;
+    try {
+      await WidgetOneSignalService.instance.ensureChatPermission(config);
+    } on WisperBotException catch (error) {
+      if (error.code != WisperBotErrorCode.notificationPermission) rethrow;
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+      return null;
+    }
+    if (!context.mounted) return null;
     final controller = suppliedController ??
         (() {
           final client = WisperBotClient(config: config);

@@ -75,7 +75,11 @@ class _FilePreview extends StatelessWidget {
           IconButton(
             tooltip: 'Discard file',
             onPressed: sending ? null : onDiscard,
-            icon: const Icon(Icons.close, size: 20),
+            icon: _ComposerAssetIcon(
+              assetName: 'assets/icons/remove.png',
+              color: sending ? colors.onSurfaceMuted : colors.onSurface,
+              size: 26,
+            ),
           ),
         ],
       ),
@@ -93,7 +97,10 @@ String _documentExtension(String fileName) {
   return switch (ext.toUpperCase()) {
     'PDF' => (Icons.picture_as_pdf_rounded, const Color(0xFFE53935)),
     'DOC' || 'DOCX' => (Icons.description_rounded, const Color(0xFF1E88E5)),
-    'XLS' || 'XLSX' || 'CSV' => (Icons.table_chart_rounded, const Color(0xFF43A047)),
+    'XLS' || 'XLSX' || 'CSV' => (
+        Icons.table_chart_rounded,
+        const Color(0xFF43A047)
+      ),
     'PPT' || 'PPTX' => (Icons.slideshow_rounded, const Color(0xFFFB8C00)),
     'TXT' || 'JSON' || 'XML' || 'MD' || 'LOG' || 'HTML' => (
         Icons.article_rounded,

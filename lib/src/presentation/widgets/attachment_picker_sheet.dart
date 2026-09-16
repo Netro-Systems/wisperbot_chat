@@ -49,7 +49,7 @@ final class AttachmentPickerSheet extends StatelessWidget {
         const _AttachmentItemData(
           option: AttachmentOption.document,
           label: 'Document',
-          icon: Icons.insert_drive_file_rounded,
+          iconAsset: 'assets/icons/document.png',
           gradientColors: <Color>[Color(0xFF7F66FF), Color(0xFF5F66CD)],
           tooltip: 'Send document or file',
         ),
@@ -57,7 +57,7 @@ final class AttachmentPickerSheet extends StatelessWidget {
         const _AttachmentItemData(
           option: AttachmentOption.camera,
           label: 'Camera',
-          icon: Icons.camera_alt_rounded,
+          iconAsset: 'assets/icons/camera.png',
           gradientColors: <Color>[Color(0xFFEC407A), Color(0xFFD3396D)],
           tooltip: 'Take photo with camera',
         ),
@@ -65,7 +65,7 @@ final class AttachmentPickerSheet extends StatelessWidget {
         const _AttachmentItemData(
           option: AttachmentOption.gallery,
           label: 'Gallery',
-          icon: Icons.photo_library_rounded,
+          iconAsset: 'assets/icons/gallery.png',
           gradientColors: <Color>[Color(0xFFAC44CF), Color(0xFF8E24AA)],
           tooltip: 'Choose photo from gallery',
         ),
@@ -73,7 +73,7 @@ final class AttachmentPickerSheet extends StatelessWidget {
         const _AttachmentItemData(
           option: AttachmentOption.audio,
           label: 'Audio',
-          icon: Icons.headphones_rounded,
+          iconAsset: 'assets/icons/headphones.png',
           gradientColors: <Color>[Color(0xFFFA6A26), Color(0xFFF57C00)],
           tooltip: 'Record voice message',
         ),
@@ -133,14 +133,14 @@ final class _AttachmentItemData {
   const _AttachmentItemData({
     required this.option,
     required this.label,
-    required this.icon,
+    required this.iconAsset,
     required this.gradientColors,
     required this.tooltip,
   });
 
   final AttachmentOption option;
   final String label;
-  final IconData icon;
+  final String iconAsset;
   final List<Color> gradientColors;
   final String tooltip;
 }
@@ -186,7 +186,14 @@ final class _AttachmentGridItem extends StatelessWidget {
                   ],
                 ),
                 child: Center(
-                  child: Icon(data.icon, color: Colors.white, size: 26),
+                  child: Image.asset(
+                    data.iconAsset,
+                    package: 'wisperbot_chat',
+                    width: 28,
+                    height: 28,
+                    color: Colors.white,
+                    fit: BoxFit.contain,
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
