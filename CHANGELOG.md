@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.3
+
+### Added
+
+- Added `WisperBotConfig.lightStatusBarIcons` to use white status-bar content over dark or strongly colored headers in full-screen chat.
+- Added lightweight widget-configuration preloading so launchers can resolve dashboard colors and placement without opening chat or requesting notification permission.
+- Added custom attachment, microphone, send, document, camera, gallery, audio, close, and delete icon assets.
+
+### Changed
+
+- Redesigned the message composer into a compact, single-row layout inspired by modern messaging apps.
+- The text field now starts at one line, expands horizontally on focus, and grows vertically only for multiline messages.
+- Attachment, microphone, and send controls now share the compact field height and remain bottom-aligned while the field expands.
+- Updated the attachment picker to use the new document, camera, gallery, and audio assets.
+- Updated chat-header and pending-attachment close actions to use the new close asset, and recording cancellation to use the new delete asset.
+- Updated README configuration and launcher behavior documentation.
+
+### Fixed
+
+- Fixed `WisperBotChatLauncher` briefly showing the fallback brand color before applying the API-provided color.
+- Fixed API colors not appearing on notification-gated launchers until chat had been opened once.
+- Fixed the enabled send icon retaining its dark disabled color instead of using the contrasting `onPrimary` color.
+- Preserved a 48 dp accessible send target while keeping the visible button aligned with the 42 px compact composer.
+
 ## 0.1.2
 
 ### Added
