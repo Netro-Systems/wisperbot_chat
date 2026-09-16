@@ -1,13 +1,15 @@
 # WisperBot Chat SDK example
 
 This app demonstrates the full-screen facade, floating launcher, embedded view,
-bottom sheet, dialog, gallery-image upload, and microphone recording. Media
-plugins live in the example and are connected through `WisperBotMediaAdapter`,
-so applications can choose their own maintained picker/recorder packages
-without adding them to the core SDK.
+bottom sheet, dialog, image/document upload, and microphone recording. The SDK
+handles media with its built-in adapter; the app does not create a custom adapter.
+One shared `WisperBotConfig` is used for notifications, visitor registration,
+and every chat integration.
 
 1. Copy `.env.example` to `.env`.
 2. Put your public widget key in `WISPERBOT_WIDGET_KEY`. Change `WISPERBOT_API_BASE_URL` only for staging or a self-hosted API.
+   Set `WISPERBOT_ONESIGNAL_APP_ID` for Android/iOS notification permission gating,
+   which this example enables. Disable `requireNotificationPermission` for web runs.
 3. For native runs, use a widget without a browser-domain allowlist; the SDK
    does not spoof browser origin headers. Required name/email pre-chat is
    supported by the example and SDK. The production LiteSpeed/ModSecurity

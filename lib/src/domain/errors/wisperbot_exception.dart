@@ -1,6 +1,7 @@
 /// Stable categories exposed for failures produced by the SDK.
 enum WisperBotErrorCode {
   configuration,
+  notificationPermission,
   unauthorized,
   sessionExpired,
   forbidden,

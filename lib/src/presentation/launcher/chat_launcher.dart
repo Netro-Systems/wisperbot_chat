@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/wisperbot_runtime.dart';
 import '../../configuration/wisperbot_config.dart';
+import '../../domain/errors/wisperbot_exception.dart';
 import '../../domain/models/models.dart';
 import '../facade/wisperbot_chat.dart';
 import '../media/remote_image.dart';
@@ -60,6 +61,7 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
   StreamSubscription<WisperBotChatState>? _subscription;
   late WisperBotChatState _state;
   bool _opening = false;
+  bool _configurationPending = false;
 
   @override
   void initState() {
@@ -76,7 +78,22 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
     _subscription = _controller.states.listen((state) {
       if (mounted) setState(() => _state = state);
     });
-    unawaited(_controller.initialize().catchError((_) {}));
+    if (widget.config.requireNotificationPermission) {
+      _configurationPending = _state.widget == null;
+      unawaited(_loadConfiguration());
+    } else {
+      unawaited(_controller.initialize().catchError((_) {}));
+    }
+  }
+
+  Future<void> _loadConfiguration() async {
+    try {
+      await _controller.loadConfiguration();
+    } on Object {
+      // The fallback launcher remains usable when configuration cannot load.
+    } finally {
+      if (mounted) setState(() => _configurationPending = false);
+    }
   }
 
   @override
@@ -85,8 +102,10 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
     final custom = widget.builder;
     if (custom != null) return custom(context, _state, open);
 
-    final isConfigurationLoaded = _state.widget != null;
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final isConfigurationLoaded = _state.widget != null ||
+        (widget.config.requireNotificationPermission && !_configurationPending);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     if (reduceMotion) {
       if (!isConfigurationLoaded) return const SizedBox.shrink();
       return _buildPositionedLauncher(
@@ -120,7 +139,8 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
       Align(
         alignment: widget.alignment ?? _serverAlignment(_state),
         child: SafeArea(
-          minimum: (widget.margin ?? const EdgeInsets.all(16)).resolve(Directionality.of(context)),
+          minimum: (widget.margin ?? const EdgeInsets.all(16))
+              .resolve(Directionality.of(context)),
           child: child,
         ),
       );
@@ -213,6 +233,12 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
         controller: _controller,
         presentation: widget.presentation,
       );
+    } on WisperBotException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
     } finally {
       if (mounted) setState(() => _opening = false);
     }

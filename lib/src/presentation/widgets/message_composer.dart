@@ -20,8 +20,7 @@ class _Composer extends StatefulWidget {
 }
 
 class _ComposerState extends State<_Composer> {
-  static const String _microphoneIcon = 'assets/icons/microphone.png';
-  static const String _sendIcon = 'assets/icons/send.png';
+  static const String _sendIcon = 'assets/icons/sent-fast.png';
 
   final TextEditingController _textController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
@@ -160,7 +159,10 @@ class _ComposerState extends State<_Composer> {
   bool get _canSend =>
       !_mediaBusy &&
       !_isRecording &&
-      (_hasText || _pendingImage != null || _pendingFile != null || _pendingAudio != null);
+      (_hasText ||
+          _pendingImage != null ||
+          _pendingFile != null ||
+          _pendingAudio != null);
 
   Future<void> _openAttachmentPicker() async {
     if (_mediaBusy || _isRecording) return;
@@ -208,7 +210,9 @@ class _ComposerState extends State<_Composer> {
       }
     } on Object catch (error) {
       WisperBotDebugUploadLogger.selectionFailed(error);
-      if (mounted) _showMediaError(error, 'The document could not be selected.');
+      if (mounted) {
+        _showMediaError(error, 'The document could not be selected.');
+      }
     } finally {
       if (mounted) setState(() => _mediaBusy = false);
     }
@@ -422,8 +426,9 @@ class _ComposerState extends State<_Composer> {
       await widget.controller.sendText(text);
     } on Object catch (error) {
       if (!mounted) return;
-      final message =
-          error is WisperBotException ? error.message : 'The message could not be sent.';
+      final message = error is WisperBotException
+          ? error.message
+          : 'The message could not be sent.';
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(content: Text(message)),
       );
@@ -485,100 +490,141 @@ class _TextComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mediaIconColor = colors.onSurface;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 86),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: colors.surfaceMuted,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: TextField(
-              controller: textController,
-              focusNode: focusNode,
-              minLines: 1,
-              maxLines: 4,
-              maxLength: 4000,
-              buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: InputDecoration(
-                hintText: 'Type your message…',
-                hintStyle: TextStyle(
-                  color: colors.onSurfaceMuted,
-                  fontWeight: FontWeight.w400,
+    return AnimatedBuilder(
+      animation: focusNode,
+      builder: (context, _) {
+        final focused = focusNode.hasFocus;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              if (showImage)
+                _ComposerIconButton(
+                  tooltip: 'Attach file',
+                  semanticLabel: 'Attach file',
+                  onPressed: mediaBusy || pendingAudio ? null : onAttachment,
+                  icon: _ComposerAssetIcon(
+                    color: mediaIconColor,
+                    assetName: 'assets/icons/attachment.png',
+                  ),
                 ),
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                isDense: true,
-                contentPadding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-              ),
-              onChanged: onTextChanged,
-              onSubmitted: (_) => onSend(),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 6, 6, 4),
-            child: Row(
-              children: <Widget>[
-                if (showImage)
-                  _ComposerIconButton(
-                    tooltip: 'Attach file',
-                    semanticLabel: 'Attach file',
-                    onPressed: mediaBusy || pendingAudio ? null : onAttachment,
-                    padding: EdgeInsets.zero,
-                    icon: Icon(
-                      Icons.attach_file_rounded,
-                      color: mediaIconColor,
-                      size: 22,
-                    ),
-                  ),
-                SizedBox(width: showImage && showAudio ? 8 : 0),
-                if (showAudio)
-                  _ComposerIconButton(
-                    tooltip: 'Record voice message',
-                    semanticLabel: 'Record voice message',
-                    onPressed: mediaBusy || pendingImage || pendingFile || pendingAudio
-                        ? null
-                        : onToggleRecording,
-                    padding: EdgeInsets.zero,
-                    icon: _ComposerAssetIcon(
-                      assetName: _ComposerState._microphoneIcon,
-                      color: mediaIconColor,
-                      size: 21,
-                    ),
-                  ),
-                const Spacer(),
-                Semantics(
-                  button: true,
-                  label: 'Send message',
-                  child: IconButton.filled(
-                    tooltip: 'Send message',
-                    onPressed: canSend ? onSend : null,
-                    style: IconButton.styleFrom(
-                      minimumSize: const Size.square(42),
-                      backgroundColor: colors.primary,
-                      foregroundColor: colors.onPrimary,
-                      disabledBackgroundColor: colors.surfaceMuted,
-                      disabledForegroundColor: colors.onSurfaceMuted,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+              if (showAudio)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  width: focused ? 0 : 36,
+                  height: 42,
+                  clipBehavior: Clip.hardEdge,
+                  decoration: const BoxDecoration(),
+                  child: ExcludeFocus(
+                    excluding: focused,
+                    child: ExcludeSemantics(
+                      excluding: focused,
+                      child: OverflowBox(
+                        minWidth: 36,
+                        maxWidth: 36,
+                        child: _ComposerIconButton(
+                          tooltip: 'Record voice message',
+                          semanticLabel: 'Record voice message',
+                          onPressed: focused ||
+                                  mediaBusy ||
+                                  pendingImage ||
+                                  pendingFile ||
+                                  pendingAudio
+                              ? null
+                              : onToggleRecording,
+                          icon: _ComposerAssetIcon(
+                            color: mediaIconColor,
+                            assetName: 'assets/icons/microphone.png',
+                            size: 20,
+                          ),
+                        ),
                       ),
                     ),
-                    icon: _ComposerAssetIcon(
-                      assetName: _ComposerState._sendIcon,
-                      color: canSend ? colors.onPrimary : colors.onSurfaceMuted,
-                      size: 21,
+                  ),
+                ),
+              if (showImage || showAudio) const SizedBox(width: 6),
+              Expanded(
+                child: AnimatedSize(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.bottomCenter,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colors.surfaceMuted,
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: TextField(
+                      controller: textController,
+                      focusNode: focusNode,
+                      style: TextStyle(
+                          fontSize: 16, height: 1.5, color: colors.onSurface),
+                      minLines: 1,
+                      maxLines: 4,
+                      maxLength: 4000,
+                      buildCounter: (_,
+                              {required currentLength,
+                              required isFocused,
+                              maxLength}) =>
+                          null,
+                      textCapitalization: TextCapitalization.sentences,
+                      textInputAction: TextInputAction.newline,
+                      decoration: InputDecoration(
+                        hintText: 'Type your message…',
+                        hintMaxLines: 1,
+                        hintStyle: TextStyle(
+                          color: colors.onSurfaceMuted,
+                          fontWeight: FontWeight.w400,
+                        ),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 9),
+                      ),
+                      onTapOutside: (_) => focusNode.unfocus(),
+                      onChanged: onTextChanged,
+                      onSubmitted: (_) => onSend(),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 6),
+              Semantics(
+                button: true,
+                label: 'Send message',
+                child: SizedBox.square(
+                  dimension: 48,
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: IconButton.filled(
+                      tooltip: 'Send message',
+                      onPressed: canSend ? onSend : null,
+                      style: IconButton.styleFrom(
+                        fixedSize: const Size.square(42),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        backgroundColor: colors.primary,
+                        foregroundColor: colors.onPrimary,
+                        disabledBackgroundColor: colors.surfaceMuted,
+                        disabledForegroundColor: colors.onSurfaceMuted,
+                        shape: const CircleBorder(),
+                      ),
+                      icon: _ComposerAssetIcon(
+                        assetName: _ComposerState._sendIcon,
+                        color:
+                            canSend ? colors.onPrimary : colors.onSurfaceMuted,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -621,9 +667,9 @@ class _RecordingComposer extends StatelessWidget {
                   tooltip: 'Cancel recording',
                   semanticLabel: 'Cancel recording',
                   onPressed: busy ? null : onCancel,
-                  icon: Icon(
-                    Icons.delete_outline,
-                    color: colors.error,
+                  icon: _ComposerAssetIcon(
+                    assetName: 'assets/icons/trash.png',
+                    color: busy ? colors.onSurfaceMuted : colors.error,
                     size: 22,
                   ),
                 ),
@@ -642,10 +688,11 @@ class _RecordingComposer extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         _formatRecordingDuration(elapsed),
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                              color: colors.onPrimary,
-                              fontWeight: FontWeight.w700,
-                            ),
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: colors.onPrimary,
+                                  fontWeight: FontWeight.w700,
+                                ),
                       ),
                     ],
                   ),
@@ -667,7 +714,7 @@ class _RecordingComposer extends StatelessWidget {
                   icon: _ComposerAssetIcon(
                     assetName: _ComposerState._sendIcon,
                     color: colors.onPrimary,
-                    size: 21,
+                    size: 22,
                   ),
                 ),
               ],
@@ -772,14 +819,12 @@ class _ComposerIconButton extends StatelessWidget {
     required this.semanticLabel,
     required this.icon,
     required this.onPressed,
-    this.padding = EdgeInsets.zero,
   });
 
   final String tooltip;
   final String semanticLabel;
   final Widget icon;
   final VoidCallback? onPressed;
-  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
@@ -792,8 +837,7 @@ class _ComposerIconButton extends StatelessWidget {
           onTap: onPressed,
           child: Container(
             width: 28,
-            height: 32,
-            padding: padding,
+            height: 42,
             alignment: Alignment.center,
             child: icon,
           ),
@@ -807,7 +851,7 @@ class _ComposerAssetIcon extends StatelessWidget {
   const _ComposerAssetIcon({
     required this.assetName,
     required this.color,
-    this.size = 16,
+    this.size = 22,
   });
 
   final String assetName;
