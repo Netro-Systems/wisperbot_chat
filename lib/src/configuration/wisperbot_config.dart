@@ -8,7 +8,6 @@ import '../domain/errors/wisperbot_exception.dart';
 import '../domain/events/chat_event.dart';
 
 part '../diagnostics/diagnostic_event.dart';
-part 'polling_config.dart';
 part 'presentation_config.dart';
 part 'theme_data.dart';
 part 'user.dart';
@@ -31,7 +30,6 @@ class WisperBotConfig {
     this.presentation = WisperBotPresentation.fullScreen,
     this.enableTyping = true,
     this.mediaAdapter,
-    this.polling = const WisperBotPollingConfig(),
     this.diagnostics,
     this.oneSignalAppId,
     this.enableOneSignal = true,
@@ -69,9 +67,6 @@ class WisperBotConfig {
   /// Optional override for built-in image/document picking and audio recording.
   /// When omitted, the prebuilt composer uses the SDK's default media adapter.
   final WisperBotMediaAdapter? mediaAdapter;
-
-  /// Foreground polling intervals.
-  final WisperBotPollingConfig polling;
 
   /// Optional receiver for redacted operational diagnostics.
   final WisperBotDiagnosticsCallback? diagnostics;

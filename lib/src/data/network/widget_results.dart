@@ -35,26 +35,18 @@ final class WidgetSessionResult {
   final WisperBotHandoffState handoff;
 }
 
-/// Parsed result of one forward-poll page.
-final class WidgetPollResult {
-  /// Creates a fully decoded poll result.
-  WidgetPollResult({
+/// Parsed result of one user-requested or initialization catch-up page.
+final class WidgetRefreshResult {
+  WidgetRefreshResult({
     required this.messages,
     required this.supportAvailability,
     required this.handoff,
     required this.agentTyping,
   });
 
-  /// Messages returned after the requested receive cursor.
   final List<WisperBotMessage> messages;
-
-  /// Current working-hours availability.
   final WisperBotSupportAvailability supportAvailability;
-
-  /// Current human-handoff state.
   final WisperBotHandoffState handoff;
-
-  /// Current agent typing state, or null when inactive.
   final WisperBotAgentTyping? agentTyping;
 }
 

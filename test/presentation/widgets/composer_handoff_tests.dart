@@ -8,11 +8,6 @@ void registerComposerHandoffTests(WisperBotConfig config) {
       apiBaseUrl: 'https://chat.example.com',
       mediaAdapter: mediaAdapter,
       enableOneSignal: false,
-      polling: const WisperBotPollingConfig(
-        visibleInterval: Duration(minutes: 1),
-        idleInterval: Duration(minutes: 1),
-        failureMaxInterval: Duration(minutes: 1),
-      ),
     );
     var uploadCount = 0;
     final uploadedContentTypes = <String>[];

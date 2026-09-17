@@ -135,11 +135,6 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
       apiBaseUrl: 'https://chat.example.com',
       useApiColors: false,
       enableOneSignal: false,
-      polling: WisperBotPollingConfig(
-        visibleInterval: Duration(minutes: 1),
-        idleInterval: Duration(minutes: 1),
-        failureMaxInterval: Duration(minutes: 1),
-      ),
     );
     final runtime = _runtime(
       brandConfig,
@@ -191,11 +186,6 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
       useApiColors: false,
       enableOneSignal: false,
       theme: WisperBotThemeData(primaryColor: Color(0xFF087F5B)),
-      polling: WisperBotPollingConfig(
-        visibleInterval: Duration(minutes: 1),
-        idleInterval: Duration(minutes: 1),
-        failureMaxInterval: Duration(minutes: 1),
-      ),
     );
     final runtime = _runtime(
       themedConfig,

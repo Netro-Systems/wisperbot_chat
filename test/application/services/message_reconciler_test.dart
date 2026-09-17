@@ -43,7 +43,6 @@ void main() {
     );
 
     expect(result.map((message) => message.localId), <String>['one', 'two', 'pending']);
-    expect(reconciler.greatestServerId(result, fallback: 0), 2);
   });
 }
 

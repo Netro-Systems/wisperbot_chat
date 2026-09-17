@@ -30,12 +30,11 @@ abstract interface class WidgetRealtimeConnector {
 
 final class PusherWidgetRealtimeConnector implements WidgetRealtimeConnector {
   PusherWidgetRealtimeConnector({http.Client? httpClient})
-      : _httpClient = httpClient ?? http.Client(),
-        _ownsHttpClient = httpClient == null;
+      : _httpClient = httpClient ?? http.Client();
 
   final http.Client _httpClient;
-  final bool _ownsHttpClient;
-  final List<StreamSubscription<dynamic>> _subscriptions = <StreamSubscription<dynamic>>[];
+  final List<StreamSubscription<dynamic>> _subscriptions =
+      <StreamSubscription<dynamic>>[];
 
   PusherChannelsClient? _client;
   PrivateChannel? _channel;
@@ -53,7 +52,8 @@ final class PusherWidgetRealtimeConnector implements WidgetRealtimeConnector {
     WidgetRealtimePayloadCallback? onHandoffUpdated,
     WidgetRealtimeErrorCallback? onError,
   }) async {
-    final signature = '${config.key}|${config.cluster}|$widgetKey|$conversationId|$token';
+    final signature =
+        '${config.key}|${config.cluster}|$widgetKey|$conversationId|$token';
     if (_activeSignature == signature && _client != null) return;
 
     await stop();
@@ -127,7 +127,12 @@ final class PusherWidgetRealtimeConnector implements WidgetRealtimeConnector {
     _channel = channel;
     _activeSignature = signature;
 
-    await client.connect();
+    try {
+      await client.connect();
+    } on Object {
+      await stop();
+      rethrow;
+    }
   }
 
   @override
@@ -151,7 +156,7 @@ final class PusherWidgetRealtimeConnector implements WidgetRealtimeConnector {
       try {
         await client.disconnect();
       } on Object {
-        // Best-effort shutdown keeps the fallback poll path alive.
+        // Best-effort shutdown avoids blocking lifecycle transitions.
       }
       try {
         client.dispose();
@@ -159,14 +164,13 @@ final class PusherWidgetRealtimeConnector implements WidgetRealtimeConnector {
         // A disposed client cannot be reused, so ignore duplicate shutdowns.
       }
     }
-    if (_ownsHttpClient) {
-      _httpClient.close();
-    }
   }
 }
 
 final class _WidgetPrivateChannelAuthorizationDelegate
-    implements EndpointAuthorizableChannelAuthorizationDelegate<PrivateChannelAuthorizationData> {
+    implements
+        EndpointAuthorizableChannelAuthorizationDelegate<
+            PrivateChannelAuthorizationData> {
   const _WidgetPrivateChannelAuthorizationDelegate({
     required this.httpClient,
     required this.authorizationEndpoint,
@@ -206,7 +210,8 @@ final class _WidgetPrivateChannelAuthorizationDelegate
     }
     final decoded = jsonDecode(response.body);
     if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Widget realtime auth returned invalid JSON.');
+      throw const FormatException(
+          'Widget realtime auth returned invalid JSON.');
     }
     final auth = decoded['auth'];
     if (auth is! String || auth.isEmpty) {

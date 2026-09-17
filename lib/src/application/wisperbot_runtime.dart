@@ -19,7 +19,6 @@ import '../domain/errors/wisperbot_exception.dart';
 import '../domain/events/chat_event.dart';
 import '../domain/models/models.dart';
 import 'services/message_reconciler.dart';
-import 'services/polling_coordinator.dart';
 import 'services/pre_chat_validator.dart';
 import 'state/chat_state_machine.dart';
 

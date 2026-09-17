@@ -103,7 +103,7 @@ void main() {
     expect(emailScope, isNot(contains('customer@example.com')));
   });
 
-  test('configuration rejects unsafe identity and polling values', () {
+  test('configuration rejects unsafe identity values', () {
     expect(
       () => WisperBotClient(
         config: const WisperBotConfig(widgetKey: ''),
@@ -115,15 +115,6 @@ void main() {
         config: const WisperBotConfig(
           widgetKey: 'key',
           user: WisperBotUser(externalId: ' padded '),
-        ),
-      ),
-      throwsA(isA<WisperBotException>()),
-    );
-    expect(
-      () => WisperBotClient(
-        config: const WisperBotConfig(
-          widgetKey: 'key',
-          polling: WisperBotPollingConfig(visibleInterval: Duration.zero),
         ),
       ),
       throwsA(isA<WisperBotException>()),

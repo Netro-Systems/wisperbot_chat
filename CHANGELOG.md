@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.4
+
+### Changed
+
+- Replaced timer-based foreground polling with Pusher as the primary live conversation transport.
+- Removed `WisperBotPollingConfig` and `WisperBotConfig.polling`; retained bounded pull-to-refresh and initial history pagination without a periodic scheduler.
+- Realtime connections now follow listener and application lifecycle demand and retry failed initial socket connections.
+
 ## 0.1.3
 
 ### Added

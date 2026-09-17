@@ -1,28 +1,32 @@
 part of 'chat_controller_test.dart';
 
 void registerDeliveryEdgeCaseTests(WisperBotConfig config) {
-  test('catch-up polling consumes every full 100-message page', () async {
-    final initial = List<Map<String, Object?>>.generate(
+  test('initialization paginates a full first history page', () async {
+    final initialMessages = List<Map<String, Object?>>.generate(
       100,
       (index) => message(id: index + 1, body: 'Message ${index + 1}'),
     );
-    final pollAfter = <String?>[];
+    var refreshCalls = 0;
     final httpClient = MockClient((request) async {
       if (request.url.path.endsWith('/session')) {
         return http.Response(
-          jsonEncode(sessionResponse(messages: initial)),
+          jsonEncode(sessionResponse(messages: initialMessages)),
           200,
         );
       }
-      pollAfter.add(request.url.queryParameters['after']);
-      return http.Response(
-        jsonEncode(
-          pollResponse(messages: <Map<String, Object?>>[
-            message(id: 101, body: 'Last catch-up message'),
-          ]),
-        ),
-        200,
-      );
+      if (request.method == 'GET' && request.url.path.endsWith('/messages')) {
+        refreshCalls++;
+        expect(request.url.queryParameters['after'], '100');
+        return http.Response(
+          jsonEncode(
+            pollResponse(messages: <Map<String, Object?>>[
+              message(id: 101, body: 'Page two'),
+            ]),
+          ),
+          200,
+        );
+      }
+      throw StateError('Unexpected request: ${request.url}');
     });
     final client = WisperBotClient(
       config: config,
@@ -33,7 +37,7 @@ void registerDeliveryEdgeCaseTests(WisperBotConfig config) {
 
     await controller.initialize();
 
-    expect(pollAfter, <String?>['100']);
+    expect(refreshCalls, 1);
     expect(controller.state.messages, hasLength(101));
     expect(controller.state.messages.last.serverId, 101);
 
@@ -41,43 +45,45 @@ void registerDeliveryEdgeCaseTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('ambiguous send is not heuristically merged with an identical echo', () async {
-    var sent = false;
+  test(
+      'ambiguous send is not heuristically merged with an identical realtime echo',
+      () async {
+    final connector = _FakeWidgetRealtimeConnector();
     final httpClient = MockClient((request) async {
       if (request.url.path.endsWith('/session')) {
-        return http.Response(jsonEncode(sessionResponse()), 200);
+        return http.Response(
+          jsonEncode(sessionResponse(realtimeKey: 'pusher-key')),
+          200,
+        );
       }
       if (request.method == 'POST') {
-        sent = true;
         throw http.ClientException('connection dropped after write');
       }
-      expect(sent, isTrue);
-      return http.Response(
-        jsonEncode(
-          pollResponse(messages: <Map<String, Object?>>[
-            message(
-              id: 20,
-              role: 'visitor',
-              body: 'Same words',
-              sentBy: 'human',
-            ),
-          ]),
-        ),
-        200,
-      );
+      throw StateError('Unexpected request: ${request.url}');
     });
     final client = WisperBotClient(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
+      realtimeConnector: connector,
     );
     final controller = WisperBotChatController(client: client);
+    final statesSub = controller.states.listen((_) {});
     await controller.initialize();
 
     await expectLater(controller.sendText('Same words'), throwsException);
-    await controller.refresh();
+    connector.emitMessageCreated(<String, Object?>{
+      'message': message(
+        id: 20,
+        role: 'visitor',
+        body: 'Same words',
+        sentBy: 'human',
+      ),
+    });
 
-    final matches = controller.state.messages.where((item) => item.body == 'Same words').toList();
+    final matches = controller.state.messages
+        .where((item) => item.body == 'Same words')
+        .toList();
     expect(matches, hasLength(2));
     expect(
       matches.map((item) => item.status),
@@ -89,6 +95,7 @@ void registerDeliveryEdgeCaseTests(WisperBotConfig config) {
     expect(matches.where((item) => item.serverId == null), hasLength(1));
     expect(matches.where((item) => item.serverId == 20), hasLength(1));
 
+    await statesSub.cancel();
     await controller.dispose();
     await client.close();
   });
@@ -149,7 +156,8 @@ void registerDeliveryEdgeCaseTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('typing throttle expires locally and sends a single stop update', () async {
+  test('typing throttle expires locally and sends a single stop update',
+      () async {
     final typingValues = <bool>[];
     final httpClient = MockClient((request) async {
       if (request.url.path.endsWith('/session')) {
@@ -180,31 +188,44 @@ void registerDeliveryEdgeCaseTests(WisperBotConfig config) {
     await client.close();
   }, timeout: const Timeout(Duration(seconds: 10)));
 
-  test('agent typing expires when no later poll renews it', () async {
+  test('agent typing expires when no later realtime event renews it', () async {
+    final connector = _FakeWidgetRealtimeConnector();
     final httpClient = MockClient((request) async {
       if (request.url.path.endsWith('/session')) {
-        return http.Response(jsonEncode(sessionResponse()), 200);
+        return http.Response(
+          jsonEncode(sessionResponse(realtimeKey: 'pusher-key')),
+          200,
+        );
       }
-      return http.Response(jsonEncode(pollResponse(typing: true)), 200);
+      throw StateError('Unexpected request: ${request.url}');
     });
     final client = WisperBotClient(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
+      realtimeConnector: connector,
     );
     final controller = WisperBotChatController(client: client);
+    final statesSub = controller.states.listen((_) {});
     await controller.initialize();
-    await controller.refresh();
+    connector.emitTypingChanged(<String, Object?>{
+      'agent_typing': <String, Object?>{
+        'is_typing': true,
+        'name': 'Taylor',
+      },
+    });
     expect(controller.state.agentTyping?.name, 'Taylor');
 
     await Future<void>.delayed(const Duration(milliseconds: 6200));
     expect(controller.state.agentTyping, isNull);
 
+    await statesSub.cancel();
     await controller.dispose();
     await client.close();
   }, timeout: const Timeout(Duration(seconds: 10)));
 
-  test('reset deletes the active credential scope and returns to idle', () async {
+  test('reset deletes the active credential scope and returns to idle',
+      () async {
     final store = MemorySessionStore();
     final client = WisperBotClient(
       config: config,

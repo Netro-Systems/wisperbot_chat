@@ -39,19 +39,6 @@ final class MessageReconciler {
     return messages;
   }
 
-  int greatestServerId(
-    List<WisperBotMessage> messages, {
-    required int fallback,
-  }) =>
-      messages.fold<int>(
-        fallback,
-        (greatest, message) => message.serverId == null
-            ? greatest
-            : greatest > message.serverId!
-                ? greatest
-                : message.serverId!,
-      );
-
   int compare(WisperBotMessage a, WisperBotMessage b) {
     final aId = a.serverId;
     final bId = b.serverId;

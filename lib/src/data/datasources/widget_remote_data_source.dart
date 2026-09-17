@@ -20,7 +20,7 @@ abstract interface class WidgetRemoteDataSource {
     String? deviceId,
   });
 
-  Future<WidgetPollResult> poll({
+  Future<WidgetRefreshResult> refresh({
     required String widgetKey,
     required String token,
     required int after,
@@ -99,7 +99,7 @@ final class HttpWidgetRemoteDataSource implements WidgetRemoteDataSource {
   }
 
   @override
-  Future<WidgetPollResult> poll({
+  Future<WidgetRefreshResult> refresh({
     required String widgetKey,
     required String token,
     required int after,
@@ -113,9 +113,9 @@ final class HttpWidgetRemoteDataSource implements WidgetRemoteDataSource {
         'active': '1',
         'open': '1',
       },
-      operation: WidgetOperation.poll,
+      operation: WidgetOperation.refresh,
     );
-    return _decoder.poll(response);
+    return _decoder.refresh(response);
   }
 
   @override
@@ -184,7 +184,9 @@ final class HttpWidgetRemoteDataSource implements WidgetRemoteDataSource {
       attachment.url,
       token: token,
       operation: WidgetOperation.media,
-      accept: attachment.mimeType?.startsWith('audio/') == true ? 'audio/*,*/*' : '*/*',
+      accept: attachment.mimeType?.startsWith('audio/') == true
+          ? 'audio/*,*/*'
+          : '*/*',
     );
     return response.bodyBytes;
   }
