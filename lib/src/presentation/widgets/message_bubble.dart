@@ -10,7 +10,6 @@ class _MessageBubble extends StatelessWidget {
     required this.colors,
     required this.onRetry,
     required this.onRemove,
-    required this.onRefresh,
   });
 
   final WisperBotMessage message;
@@ -19,7 +18,6 @@ class _MessageBubble extends StatelessWidget {
   final WisperBotResolvedTheme colors;
   final VoidCallback? onRetry;
   final VoidCallback? onRemove;
-  final VoidCallback? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -66,7 +64,7 @@ class _MessageBubble extends StatelessWidget {
                 ],
               ],
             ),
-            if (onRetry != null || onRefresh != null || onRemove != null) ...<Widget>[
+            if (onRetry != null || onRemove != null) ...<Widget>[
               const SizedBox(height: 4),
               Wrap(
                 spacing: 4,
@@ -76,12 +74,6 @@ class _MessageBubble extends StatelessWidget {
                       style: _messageActionStyle(visitor, colors),
                       onPressed: onRetry,
                       child: const Text('Retry'),
-                    ),
-                  if (onRefresh != null)
-                    TextButton(
-                      style: _messageActionStyle(visitor, colors),
-                      onPressed: onRefresh,
-                      child: const Text('Refresh status'),
                     ),
                   if (onRemove != null)
                     TextButton(

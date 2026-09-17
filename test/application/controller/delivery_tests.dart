@@ -1,6 +1,60 @@
 part of 'chat_controller_test.dart';
 
 void registerDeliveryTests(WisperBotConfig config) {
+  test('manual refresh merges messages and availability once', () async {
+    var refreshCalls = 0;
+    final httpClient = MockClient((request) async {
+      if (request.url.path.endsWith('/session')) {
+        return http.Response(
+          jsonEncode(
+            sessionResponse(messages: <Map<String, Object?>>[
+              message(id: 10, body: 'Initial'),
+            ]),
+          ),
+          200,
+        );
+      }
+      if (request.method == 'GET' && request.url.path.endsWith('/messages')) {
+        refreshCalls++;
+        expect(request.url.queryParameters['after'], '10');
+        return http.Response(
+          jsonEncode(
+            pollResponse(
+              online: false,
+              messages: <Map<String, Object?>>[
+                message(id: 11, body: 'Refreshed'),
+              ],
+            ),
+          ),
+          200,
+        );
+      }
+      throw StateError('Unexpected request: ${request.url}');
+    });
+    final client = WisperBotClient(
+      config: config,
+      httpClient: httpClient,
+      sessionStore: MemorySessionStore(),
+    );
+    final controller = WisperBotChatController(client: client);
+    await controller.initialize();
+
+    await controller.refresh();
+
+    expect(refreshCalls, 1);
+    expect(
+      controller.state.messages.map((item) => item.serverId),
+      <int?>[10, 11],
+    );
+    expect(
+      controller.state.supportAvailability,
+      WisperBotSupportAvailability.unavailable,
+    );
+
+    await controller.dispose();
+    await client.close();
+  });
+
   test('restores only with the securely stored visitor id and token', () async {
     final store = MemorySessionStore();
     final namespace = sessionNamespace(config: config, user: null);
@@ -31,56 +85,19 @@ void registerDeliveryTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('performs one controlled restoration after an expired poll token', () async {
+  test('realtime messages are ordered and deduplicated by server id', () async {
     final store = MemorySessionStore();
-    var sessionCalls = 0;
-    var pollCalls = 0;
+    final connector = _FakeWidgetRealtimeConnector();
     final httpClient = MockClient((request) async {
       if (request.url.path.endsWith('/session')) {
-        sessionCalls++;
         return http.Response(
           jsonEncode(
             sessionResponse(
-              visitorId: 'visitor-$sessionCalls',
-              token: 'token-$sessionCalls',
+              realtimeKey: 'pusher-key',
+              messages: <Map<String, Object?>>[
+                message(id: 10, body: 'Initial'),
+              ],
             ),
-          ),
-          200,
-        );
-      }
-      pollCalls++;
-      expect(request.headers['X-Widget-Token'], 'token-1');
-      return http.Response('{}', 401);
-    });
-    final client = WisperBotClient(
-      config: config,
-      httpClient: httpClient,
-      sessionStore: store,
-    );
-    final controller = WisperBotChatController(client: client);
-
-    await controller.initialize();
-    await controller.refresh();
-
-    expect(pollCalls, 1);
-    expect(sessionCalls, 2);
-    expect(controller.state.phase, WisperBotChatPhase.ready);
-    expect(store.values.values.single.token, 'token-2');
-
-    await controller.dispose();
-    await client.close();
-  });
-
-  test('send echo does not advance poll cursor and poll deduplicates by id', () async {
-    final store = MemorySessionStore();
-    final pollAfter = <String?>[];
-    final httpClient = MockClient((request) async {
-      if (request.url.path.endsWith('/session')) {
-        return http.Response(
-          jsonEncode(
-            sessionResponse(messages: <Map<String, Object?>>[
-              message(id: 10, body: 'Initial'),
-            ]),
           ),
           200,
         );
@@ -103,34 +120,31 @@ void registerDeliveryTests(WisperBotConfig config) {
           200,
         );
       }
-      pollAfter.add(request.url.queryParameters['after']);
-      return http.Response(
-        jsonEncode(
-          pollResponse(messages: <Map<String, Object?>>[
-            message(id: 11, body: 'Reply between IDs'),
-            message(
-              id: 12,
-              role: 'visitor',
-              body: 'My message',
-              sentBy: 'human',
-            ),
-          ]),
-        ),
-        200,
-      );
+      throw StateError('Unexpected request: ${request.url}');
     });
     final client = WisperBotClient(
       config: config,
       httpClient: httpClient,
       sessionStore: store,
+      realtimeConnector: connector,
     );
     final controller = WisperBotChatController(client: client);
+    final statesSub = controller.states.listen((_) {});
 
     await controller.initialize();
     final sent = await controller.sendText('My message');
-    await controller.refresh();
+    connector.emitMessageCreated(<String, Object?>{
+      'message': message(id: 11, body: 'Reply between IDs'),
+    });
+    connector.emitMessageCreated(<String, Object?>{
+      'message': message(
+        id: 12,
+        role: 'visitor',
+        body: 'My message',
+        sentBy: 'human',
+      ),
+    });
 
-    expect(pollAfter, <String?>['10']);
     expect(
       controller.state.messages.map((item) => item.serverId),
       <int?>[10, 11, 12],
@@ -141,16 +155,22 @@ void registerDeliveryTests(WisperBotConfig config) {
       WisperBotSenderKind.visitor,
     );
 
+    await statesSub.cancel();
     await controller.dispose();
     await client.close();
   });
 
-  test('poll defers a visitor echo while its send is still in flight', () async {
+  test('realtime defers a visitor echo while its send is still in flight',
+      () async {
     final sendStarted = Completer<void>();
     final releaseSend = Completer<void>();
+    final connector = _FakeWidgetRealtimeConnector();
     final httpClient = MockClient((request) async {
       if (request.url.path.endsWith('/session')) {
-        return http.Response(jsonEncode(sessionResponse()), 200);
+        return http.Response(
+          jsonEncode(sessionResponse(realtimeKey: 'pusher-key')),
+          200,
+        );
       }
       if (request.url.path.endsWith('/typing')) {
         return http.Response('{"ok":true}', 200);
@@ -175,41 +195,36 @@ void registerDeliveryTests(WisperBotConfig config) {
           200,
         );
       }
-      return http.Response(
-        jsonEncode(
-          pollResponse(messages: <Map<String, Object?>>[
-            message(id: 11, body: 'Reply while sending'),
-            message(
-              id: 12,
-              role: 'visitor',
-              body: 'My message',
-              sentBy: 'human',
-            ),
-            message(
-              id: 13,
-              role: 'visitor',
-              body: 'Another device message',
-              sentBy: 'human',
-            ),
-          ]),
-        ),
-        200,
-      );
+      throw StateError('Unexpected request: ${request.url}');
     });
     final client = WisperBotClient(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
+      realtimeConnector: connector,
     );
     final controller = WisperBotChatController(client: client);
+    final statesSub = controller.states.listen((_) {});
 
     await controller.initialize();
     final send = controller.sendText('My message');
     await sendStarted.future;
-    await controller.refresh();
+    for (final eventMessage in <Map<String, Object?>>[
+      message(id: 11, body: 'Reply while sending'),
+      message(id: 12, role: 'visitor', body: 'My message', sentBy: 'human'),
+      message(
+        id: 13,
+        role: 'visitor',
+        body: 'Another device message',
+        sentBy: 'human',
+      ),
+    ]) {
+      connector.emitMessageCreated(<String, Object?>{'message': eventMessage});
+    }
     expect(controller.state.messages, hasLength(2));
     expect(
-      controller.state.messages.where((message) => message.body == 'My message'),
+      controller.state.messages
+          .where((message) => message.body == 'My message'),
       hasLength(1),
     );
     expect(
@@ -234,6 +249,7 @@ void registerDeliveryTests(WisperBotConfig config) {
     expect(controller.state.messages.last.body, 'Another device message');
     expect(controller.state.pendingCount, 0);
 
+    await statesSub.cancel();
     await controller.dispose();
     await client.close();
   });
@@ -333,7 +349,8 @@ void registerDeliveryTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('pending image upload keeps local preview bytes until confirmed', () async {
+  test('pending image upload keeps local preview bytes until confirmed',
+      () async {
     final sendStarted = Completer<void>();
     final sendResponse = Completer<http.Response>();
     final httpClient = MockClient((request) async {
@@ -401,7 +418,8 @@ void registerDeliveryTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('pending audio upload keeps local preview bytes until confirmed', () async {
+  test('pending audio upload keeps local preview bytes until confirmed',
+      () async {
     final sendStarted = Completer<void>();
     final sendResponse = Completer<http.Response>();
     final httpClient = MockClient((request) async {

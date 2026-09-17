@@ -77,7 +77,7 @@ class WisperBotChatView extends StatefulWidget {
     this.onClose,
   });
 
-  /// Widget, identity, transport, polling, and theme configuration.
+  /// Widget, identity, transport, realtime, and theme configuration.
   final WisperBotConfig config;
 
   /// Optional host-owned controller.
@@ -357,12 +357,6 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
                                       WisperBotMessageStatus.unconfirmed
                               ? () => unawaited(
                                     _controller.removeMessage(message.localId),
-                                  )
-                              : null,
-                      onRefresh:
-                          message.status == WisperBotMessageStatus.unconfirmed
-                              ? () => unawaited(
-                                    _controller.refresh().catchError((_) {}),
                                   )
                               : null,
                     ),

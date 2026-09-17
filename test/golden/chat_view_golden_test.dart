@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
+import 'package:wisperbot_chat/src/application/services/widget_realtime_connector.dart';
 
 import '../support/support.dart';
 
@@ -15,21 +16,18 @@ void main() {
   const config = WisperBotConfig(
     widgetKey: 'test-widget',
     apiBaseUrl: 'https://chat.example.com',
-    polling: WisperBotPollingConfig(
-      visibleInterval: Duration(minutes: 1),
-      idleInterval: Duration(minutes: 1),
-      failureMaxInterval: Duration(minutes: 1),
-    ),
   );
 
   setUp(() {
-    final view = TestWidgetsFlutterBinding.instance.platformDispatcher.views.single;
+    final view =
+        TestWidgetsFlutterBinding.instance.platformDispatcher.views.single;
     view.physicalSize = const Size(400, 800);
     view.devicePixelRatio = 1;
   });
 
   tearDown(() {
-    final view = TestWidgetsFlutterBinding.instance.platformDispatcher.views.single;
+    final view =
+        TestWidgetsFlutterBinding.instance.platformDispatcher.views.single;
     view.resetPhysicalSize();
     view.resetDevicePixelRatio();
   });
@@ -149,23 +147,22 @@ void main() {
   });
 
   testWidgets('reconnecting state remains pixel stable', (tester) async {
-    var calls = 0;
     final runtime = _Runtime(
       config,
-      MockClient((_) async {
-        calls++;
-        if (calls == 1) {
-          return http.Response(jsonEncode(sessionResponse()), 200);
-        }
-        return http.Response('{"message":"temporary"}', 503);
-      }),
+      MockClient(
+        (_) async => http.Response(
+          jsonEncode(sessionResponse(realtimeKey: 'pusher-key')),
+          200,
+        ),
+      ),
+      realtimeConnector: _FailingRealtimeConnector(),
     );
     await tester.pumpWidget(_goldenApp(
       WisperBotChatView(config: config, controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();
-    await runtime.controller.refresh().catchError((_) {});
+    await tester.pump();
     await tester.pump();
 
     await expectLater(
@@ -179,7 +176,8 @@ void main() {
   testWidgets('launcher remains pixel stable', (tester) async {
     final runtime = _Runtime(
       config,
-      MockClient((_) async => http.Response(jsonEncode(sessionResponse()), 200)),
+      MockClient(
+          (_) async => http.Response(jsonEncode(sessionResponse()), 200)),
     );
     await tester.pumpWidget(_goldenApp(
       WisperBotChatLauncher(config: config, controller: runtime.controller),
@@ -205,7 +203,6 @@ void main() {
     final mediaConfig = WisperBotConfig(
       widgetKey: config.widgetKey,
       apiBaseUrl: config.apiBaseUrl,
-      polling: config.polling,
       mediaAdapter: const _GoldenMediaAdapter(),
     );
     final runtime = _Runtime(
@@ -226,12 +223,15 @@ void main() {
     await runtime.dispose();
   });
 
-  testWidgets('small high-text-scale layout remains pixel stable', (tester) async {
-    final view = TestWidgetsFlutterBinding.instance.platformDispatcher.views.single;
+  testWidgets('small high-text-scale layout remains pixel stable',
+      (tester) async {
+    final view =
+        TestWidgetsFlutterBinding.instance.platformDispatcher.views.single;
     view.physicalSize = const Size(320, 568);
     final runtime = _Runtime(
       config,
-      MockClient((_) async => http.Response(jsonEncode(sessionResponse()), 200)),
+      MockClient(
+          (_) async => http.Response(jsonEncode(sessionResponse()), 200)),
     );
     await tester.pumpWidget(_goldenApp(
       WisperBotChatView(config: config, controller: runtime.controller),
@@ -285,11 +285,15 @@ final class _GoldenMediaAdapter implements WisperBotMediaAdapter {
 }
 
 final class _Runtime {
-  _Runtime(WisperBotConfig config, http.Client httpClient)
-      : client = WisperBotClient(
+  _Runtime(
+    WisperBotConfig config,
+    http.Client httpClient, {
+    WidgetRealtimeConnector? realtimeConnector,
+  }) : client = WisperBotClient(
           config: config,
           httpClient: httpClient,
           sessionStore: MemorySessionStore(),
+          realtimeConnector: realtimeConnector,
         ) {
     controller = WisperBotChatController(client: client);
   }
@@ -301,4 +305,24 @@ final class _Runtime {
     await controller.dispose();
     await client.close();
   }
+}
+
+final class _FailingRealtimeConnector implements WidgetRealtimeConnector {
+  @override
+  Future<void> start({
+    required WisperBotRealtimeConfig config,
+    required String widgetKey,
+    required String token,
+    required int conversationId,
+    void Function()? onConnected,
+    WidgetRealtimePayloadCallback? onMessageCreated,
+    WidgetRealtimePayloadCallback? onTypingChanged,
+    WidgetRealtimePayloadCallback? onHandoffUpdated,
+    WidgetRealtimeErrorCallback? onError,
+  }) async {
+    throw StateError('Pusher unavailable');
+  }
+
+  @override
+  Future<void> stop() async {}
 }

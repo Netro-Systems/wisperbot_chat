@@ -6,7 +6,7 @@
 ![last commit](https://img.shields.io/github/last-commit/Netro-Systems/wisperbot_chat)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-A customizable, battery-efficient Flutter SDK for embedding WisperBot customer support chat into mobile, web, and desktop apps. It provides identity-scoped visitor sessions, real-time messaging, foreground polling, prebuilt customizable UI, and push notifications.
+A customizable, battery-efficient Flutter SDK for embedding WisperBot customer support chat into mobile, web, and desktop apps. It provides identity-scoped visitor sessions, Pusher-powered real-time messaging, prebuilt customizable UI, and push notifications.
 
 ---
 
@@ -17,7 +17,7 @@ A customizable, battery-efficient Flutter SDK for embedding WisperBot customer s
 | **Anonymous & Signed-User Sessions** | ✅ Yes | ✅ Yes* | ✅ Yes |
 | **OneSignal Push Notifications** | ✅ Yes | ✅ Yes | ✅ Yes |
 | **Text, Image & Audio Messaging** | ✅ Yes | ✅ Yes | ✅ Yes |
-| **Foreground Polling & Sync** | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Pusher Realtime Sync** | ✅ Yes | ✅ Yes | ✅ Yes |
 | **Typing Indicators & Human Handoff** | ✅ Yes | ✅ Yes | ✅ Yes |
 | **Prebuilt UI (Screens, Sheets, Dialogs, Launchers)** | ✅ Yes | ✅ Yes | ✅ Yes |
 | **Required Pre-Chat Lead Forms** | ✅ Yes | ✅ Yes | ✅ Yes |
@@ -32,7 +32,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  wisperbot_chat: ^0.1.3
+  wisperbot_chat: ^0.1.4
 ```
 
 Or run:
@@ -215,7 +215,6 @@ Future<void> runHeadlessChat(WisperBotConfig config) async {
 | `presentation` | `WisperBotPresentation` | `WisperBotPresentation.fullScreen` | Default modal style (`fullScreen`, `bottomSheet`, or `dialog`) used by `WisperBotChat.open`. |
 | `enableTyping` | `bool` | `true` | Whether the controller publishes throttled visitor typing updates. |
 | `mediaAdapter` | `WisperBotMediaAdapter?` | `null` | Optional bridge for image selection and voice recording plugins. |
-| `polling` | `WisperBotPollingConfig` | `const WisperBotPollingConfig()` | Intervals for active (`3s`), idle (`8s`), and failure backoff (`30s`) foreground polling. |
 | `diagnostics` | `WisperBotDiagnosticsCallback?` | `null` | Callback receiving redacted operational metrics and lifecycle events. |
 | `oneSignalAppId` | `String?` | `null` | OneSignal App ID used for push notification registration. |
 | `enableOneSignal` | `bool` | `true` | Whether device push notification tokens are registered on session start. |
@@ -372,7 +371,7 @@ Future<void> submitLead(WisperBotChatController controller) async {
 * **Platform Security**: Visitor tokens are bearer credentials persisted via `WisperBotSessionStore` using platform-native secure storage (`flutter_secure_storage`).
 * **Authoritative Confirmation**: Messages transition from `pending` to `sent` only upon server receipt and ID issuance.
 * **Network Failures & Unconfirmed State**: If a request disconnects or times out before receiving a response, the message is marked `unconfirmed` rather than failed, avoiding duplicate message sends.
-* **Battery-Efficient Sync**: Foreground polling synchronizes replies and pauses automatically when the application is backgrounded or when chat is closed.
+* **Realtime Sync**: A private Pusher channel delivers messages, typing changes, and handoff updates while chat is active, and disconnects automatically in the background or when chat is closed. Pull-to-refresh remains available as a user-triggered consistency check, and full initial history is loaded through bounded pagination; neither path runs on a timer.
 * **Safe Diagnostics**: Diagnostic callbacks emit strictly redacted operational telemetry (durations, error codes, HTTP statuses) without logging PII, bearer tokens, or message content.
 
 ---

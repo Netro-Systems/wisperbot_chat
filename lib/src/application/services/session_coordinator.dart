@@ -111,7 +111,6 @@ final class _SessionCoordinator {
       presentation: config.presentation,
       enableTyping: config.enableTyping,
       mediaAdapter: config.mediaAdapter,
-      polling: config.polling,
       diagnostics: config.diagnostics,
     );
     validateWisperBotConfig(candidate);

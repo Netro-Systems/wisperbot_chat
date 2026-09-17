@@ -106,7 +106,7 @@ abstract final class WisperBotChat {
     _onForegroundNotification = callback;
   }
 
-  /// Opens the chatbox from a notification click and ensures the thread is refreshed.
+  /// Opens the chatbox from a notification click.
   static Future<WisperBotChatResult?> openChatboxFromNotification({
     BuildContext? context,
     WisperBotConfig? config,
@@ -127,12 +127,6 @@ abstract final class WisperBotChat {
         message: 'No BuildContext or navigatorKey available to open chat.',
         retryable: false,
       );
-    }
-
-    final scope = wisperBotPresentationScope(effectiveConfig);
-    final existingController = _ownedControllers[scope];
-    if (existingController != null) {
-      unawaited(existingController.refresh().catchError((_) {}));
     }
 
     return open(effectiveContext, config: effectiveConfig);
@@ -193,7 +187,6 @@ abstract final class WisperBotChat {
     final scope = wisperBotPresentationScope(config);
     final activeController = _ownedControllers[scope];
     if (activeController != null) {
-      unawaited(activeController.refresh().catchError((_) {}));
       return;
     }
 
@@ -281,10 +274,10 @@ abstract final class WisperBotChat {
         suppliedController: controller,
         presentation: presentation ?? config.presentation,
       ).then(completer.complete, onError: completer.completeError).whenComplete(
-            () {
-              _activePresentations.remove(scope);
-            },
-          ),
+        () {
+          _activePresentations.remove(scope);
+        },
+      ),
     );
     return completer.future;
   }

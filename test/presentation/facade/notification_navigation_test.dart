@@ -215,29 +215,12 @@ void main() {
     expect(find.text('Foreground payload test'), findsNothing);
   });
 
-  testWidgets('foreground notification refreshes message thread when chat is already open',
+  testWidgets('foreground notification does not issue a polling request when chat is open',
       (tester) async {
-    var pollCount = 0;
+    var messageGetCount = 0;
     final client = MockClient((request) async {
       if (request.method == 'GET' && request.url.path.contains('/messages')) {
-        pollCount++;
-        return http.Response(
-          jsonEncode(
-            pollResponse(
-              messages: [
-                {
-                  'id': 100 + pollCount,
-                  'role': 'agent',
-                  'type': 'text',
-                  'body': 'Incoming message from poll #$pollCount',
-                  'sent_by': 'agent',
-                  'created_at': '2026-08-03T10:00:00Z',
-                }
-              ],
-            ),
-          ),
-          200,
-        );
+        messageGetCount++;
       }
       return http.Response(jsonEncode(sessionResponse()), 200);
     });
@@ -264,21 +247,18 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(WisperBotChatScreen), findsOneWidget);
-      final initialPolls = pollCount;
 
       // Simulate foreground notification arriving while chat is open
       WidgetOneSignalService.instance.simulateForegroundNotification({
         'conversation_id': 12345,
         'title': 'Support Agent',
-        'body': 'Incoming message from poll',
+        'body': 'Incoming realtime message',
       });
 
       await tester.pump();
       await tester.pumpAndSettle();
 
-      // Verify chat thread refreshed and no SnackBar is shown
-      expect(pollCount, greaterThan(initialPolls));
-      expect(find.text('Incoming message from poll #${initialPolls + 1}'), findsOneWidget);
+      expect(messageGetCount, 0);
     }, () => client);
   });
 }

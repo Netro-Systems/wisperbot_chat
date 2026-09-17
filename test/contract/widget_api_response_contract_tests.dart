@@ -61,7 +61,8 @@ void _registerResponseContractTests() {
       );
     });
 
-    test('requires a positive numeric server id for send confirmation', () async {
+    test('requires a positive numeric server id for send confirmation',
+        () async {
       Future<WisperBotException> sendFailure(Object? id) async {
         final api = _remoteDataSource(
           baseUrl: Uri.parse('https://chat.example.com'),
@@ -95,7 +96,7 @@ void _registerResponseContractTests() {
       }
     });
 
-    test('rejects absent authoritative session and poll state', () async {
+    test('rejects absent authoritative session state', () async {
       final malformedSession = sessionResponse()..remove('handoff');
       final sessionApi = _remoteDataSource(
         baseUrl: Uri.parse('https://chat.example.com'),
@@ -117,71 +118,31 @@ void _registerResponseContractTests() {
           ),
         ),
       );
-
-      final malformedPoll = pollResponse()..remove('agent_typing');
-      final pollApi = _remoteDataSource(
-        baseUrl: Uri.parse('https://chat.example.com'),
-        httpClient: _RecordingClient(
-          (_) async => _jsonResponse(malformedPoll),
-        ),
-      );
-      await expectLater(
-        pollApi.poll(
-          widgetKey: 'test-widget',
-          token: 'token-1',
-          after: 0,
-        ),
-        throwsA(
-          isA<WisperBotException>().having(
-            (error) => error.code,
-            'code',
-            WisperBotErrorCode.server,
-          ),
-        ),
-      );
     });
 
-    test('keeps unknown message enums safe and parses poll state', () async {
+    test('keeps unknown message enums safe in session history', () async {
       final api = _remoteDataSource(
         baseUrl: Uri.parse('https://chat.example.com'),
         httpClient: _RecordingClient(
-          (_) async => _jsonResponse(<String, Object?>{
-            ...pollResponse(),
-            'online': false,
-            'agent_typing': <String, Object?>{
-              'is_typing': true,
-              'name': 'Taylor',
-            },
-            'handoff': <String, Object?>{
-              'enabled': true,
-              'eligible': false,
-              'status': 'future_status',
-            },
-            'messages': <Map<String, Object?>>[
+          (_) async => _jsonResponse(
+            sessionResponse(messages: <Map<String, Object?>>[
               message(
                 id: 9,
                 role: 'future_role',
                 type: 'future_type',
                 sentBy: 'future_sender',
               ),
-            ],
-            'future_field': 'ignored',
-          }),
+            ]),
+          ),
         ),
       );
 
-      final result = await api.poll(
+      final result = await api.startSession(
         widgetKey: 'test-widget',
-        token: 'token-1',
-        after: 0,
+        user: null,
+        storedSession: null,
       );
 
-      expect(
-        result.supportAvailability,
-        WisperBotSupportAvailability.unavailable,
-      );
-      expect(result.agentTyping, isNotNull);
-      expect(result.handoff.status, WisperBotHandoffStatus.unavailable);
       expect(result.messages.single.role, WisperBotMessageRole.unknown);
       expect(result.messages.single.type, WisperBotMessageType.unknown);
       expect(result.messages.single.sentBy, WisperBotSenderKind.unknown);
@@ -218,10 +179,12 @@ void _registerResponseContractTests() {
       expect(expired.code, WisperBotErrorCode.sessionExpired);
       expect(expired.retryable, isFalse);
 
+      var authenticatedCalls = 0;
       final authenticatedApi = _remoteDataSource(
         baseUrl: Uri.parse('https://chat.example.com'),
         httpClient: _RecordingClient((request) async {
-          if (request.url.queryParameters['after'] == '1') {
+          authenticatedCalls++;
+          if (authenticatedCalls == 2) {
             return http.StreamedResponse(
               Stream<List<int>>.value(utf8.encode('{}')),
               429,
@@ -236,10 +199,9 @@ void _registerResponseContractTests() {
       );
 
       await expectLater(
-        authenticatedApi.poll(
+        authenticatedApi.markRead(
           widgetKey: 'test-widget',
           token: 'token-1',
-          after: 0,
         ),
         throwsA(
           isA<WisperBotException>()
@@ -252,10 +214,9 @@ void _registerResponseContractTests() {
         ),
       );
       await expectLater(
-        authenticatedApi.poll(
+        authenticatedApi.markRead(
           widgetKey: 'test-widget',
           token: 'token-1',
-          after: 1,
         ),
         throwsA(
           isA<WisperBotException>()

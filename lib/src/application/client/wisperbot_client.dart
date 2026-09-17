@@ -26,10 +26,12 @@ class WisperBotClient {
     _sessions = _SessionCoordinator(
       config: config,
       remoteDataSource: _remoteDataSource,
-      sessionStore: sessionStore ?? config.sessionStore ?? FlutterSecureWisperBotSessionStore(),
+      sessionStore: sessionStore ??
+          config.sessionStore ??
+          FlutterSecureWisperBotSessionStore(),
     );
-    _realtimeConnector =
-        realtimeConnector ?? PusherWidgetRealtimeConnector(httpClient: _httpClient);
+    _realtimeConnector = realtimeConnector ??
+        PusherWidgetRealtimeConnector(httpClient: _httpClient);
   }
 
   /// Immutable configuration used for every operation.
@@ -54,9 +56,9 @@ class WisperBotClient {
     return _sessions.start(deviceId: deviceId);
   }
 
-  Future<WidgetPollResult> _poll(int after) {
+  Future<WidgetRefreshResult> _refresh(int after) {
     final session = _requireSession();
-    return _remoteDataSource.poll(
+    return _remoteDataSource.refresh(
       widgetKey: config.widgetKey,
       token: session.token,
       after: after,
