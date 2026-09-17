@@ -30,7 +30,8 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     await controller.updateUser(
       const WisperBotUser(
         externalId: 'customer-1',
-        signature: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        signature:
+            '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
       ),
     );
 
@@ -94,47 +95,6 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('an in-flight poll cannot restore messages after logout', () async {
-    final releasePoll = Completer<void>();
-    final pollStarted = Completer<void>();
-    final client = WisperBotClient(
-      config: config,
-      httpClient: MockClient((request) async {
-        if (request.url.path.endsWith('/session')) {
-          return http.Response(jsonEncode(sessionResponse()), 200);
-        }
-        if (request.url.path.endsWith('/typing')) {
-          return http.Response('{"ok":true}', 200);
-        }
-        pollStarted.complete();
-        await releasePoll.future;
-        return http.Response(
-          jsonEncode(
-            pollResponse(messages: <Map<String, Object?>>[
-              message(id: 9, body: 'Must stay hidden'),
-            ]),
-          ),
-          200,
-        );
-      }),
-      sessionStore: MemorySessionStore(),
-    );
-    final controller = WisperBotChatController(client: client);
-    await controller.initialize();
-
-    final poll = controller.refresh();
-    await pollStarted.future;
-    await controller.updateUser(null);
-    releasePoll.complete();
-    await poll;
-
-    expect(controller.state.phase, WisperBotChatPhase.idle);
-    expect(controller.state.messages, isEmpty);
-
-    await controller.dispose();
-    await client.close();
-  });
-
   test('unsigned profile-only sessions remain memory-only', () async {
     final store = MemorySessionStore();
     final client = WisperBotClient(
@@ -168,11 +128,6 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       apiBaseUrl: 'https://chat.example.com/base/',
       enableOneSignal: false,
       user: WisperBotUser(),
-      polling: WisperBotPollingConfig(
-        visibleInterval: Duration(minutes: 1),
-        idleInterval: Duration(minutes: 1),
-        failureMaxInterval: Duration(minutes: 1),
-      ),
     );
     final namespace = sessionNamespace(config: emptyUserConfig, user: null);
     final bodies = <Map<String, dynamic>>[];
@@ -214,7 +169,8 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     expect(store.reads, <String>[namespace, namespace]);
     expect(store.writes, <String>[namespace, namespace]);
     expect(headers, <String?>[null, 'token-1']);
-    expect(bodies.first, <String, dynamic>{'key': 'test-widget', 'active': true});
+    expect(
+        bodies.first, <String, dynamic>{'key': 'test-widget', 'active': true});
     expect(bodies.last, <String, dynamic>{
       'key': 'test-widget',
       'active': true,
@@ -235,11 +191,6 @@ void registerIdentitySyncTests(WisperBotConfig config) {
         externalId: 'customer-123',
         name: 'Jane Doe',
         email: 'jane@example.com',
-      ),
-      polling: WisperBotPollingConfig(
-        visibleInterval: Duration(minutes: 1),
-        idleInterval: Duration(minutes: 1),
-        failureMaxInterval: Duration(minutes: 1),
       ),
     );
     final namespace = sessionNamespace(
@@ -346,43 +297,6 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       controller.state.handoff.status,
       WisperBotHandoffStatus.connected,
     );
-
-    await controller.dispose();
-    await client.close();
-  });
-
-  test('concurrent refresh calls never overlap transport requests', () async {
-    final releasePoll = Completer<void>();
-    var activePolls = 0;
-    var maximumActivePolls = 0;
-    var pollCalls = 0;
-    final httpClient = MockClient((request) async {
-      if (request.url.path.endsWith('/session')) {
-        return http.Response(jsonEncode(sessionResponse()), 200);
-      }
-      pollCalls++;
-      activePolls++;
-      maximumActivePolls = activePolls > maximumActivePolls ? activePolls : maximumActivePolls;
-      await releasePoll.future;
-      activePolls--;
-      return http.Response(jsonEncode(pollResponse()), 200);
-    });
-    final client = WisperBotClient(
-      config: config,
-      httpClient: httpClient,
-      sessionStore: MemorySessionStore(),
-    );
-    final controller = WisperBotChatController(client: client);
-    await controller.initialize();
-
-    final first = controller.refresh();
-    final second = controller.refresh();
-    await Future<void>.delayed(Duration.zero);
-    expect(pollCalls, 1);
-    releasePoll.complete();
-    await Future.wait<void>(<Future<void>>[first, second]);
-
-    expect(maximumActivePolls, 1);
 
     await controller.dispose();
     await client.close();

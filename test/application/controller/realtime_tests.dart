@@ -1,7 +1,8 @@
 part of 'chat_controller_test.dart';
 
 void registerRealtimeTests(WisperBotConfig config) {
-  test('decodes session conversation id and optional realtime config', () async {
+  test('decodes session conversation id and optional realtime config',
+      () async {
     final decoder = const WidgetResponseDecoder();
     final result = decoder.session(
       http.Response(
@@ -78,6 +79,7 @@ void registerRealtimeTests(WisperBotConfig config) {
 
 final class _FakeWidgetRealtimeConnector implements WidgetRealtimeConnector {
   int startCalls = 0;
+  int stopCalls = 0;
   int? lastConversationId;
   WidgetRealtimePayloadCallback? _onMessageCreated;
   WidgetRealtimePayloadCallback? _onTypingChanged;
@@ -105,6 +107,7 @@ final class _FakeWidgetRealtimeConnector implements WidgetRealtimeConnector {
 
   @override
   Future<void> stop() async {
+    stopCalls++;
     _onMessageCreated = null;
     _onTypingChanged = null;
     _onHandoffUpdated = null;

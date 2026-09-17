@@ -85,7 +85,10 @@ void main() {
     const secret = 'private-message-body';
 
     expect(
-      () => decoder.poll(http.Response('{"secret":"$secret"}', 200)),
+      () => decoder.session(
+        http.Response('{"secret":"$secret"}', 200),
+        preChatCompleted: false,
+      ),
       throwsA(
         isA<WisperBotException>()
             .having((error) => error.code, 'code', WisperBotErrorCode.server)

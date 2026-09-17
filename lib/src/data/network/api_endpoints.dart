@@ -5,7 +5,7 @@ abstract final class ApiEndpoints {
   /// Creates or restores an identity-scoped visitor session.
   static const String session = '/widget/v1/session';
 
-  /// Sends visitor messages and polls for conversation updates.
+  /// Sends visitor messages and fetches bounded conversation refresh pages.
   static const String messages = '/widget/v1/messages';
 
   /// Publishes visitor typing state.

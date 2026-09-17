@@ -27,11 +27,6 @@ void main() {
     widgetKey: 'test-widget',
     apiBaseUrl: 'https://chat.example.com/base/',
     enableOneSignal: false,
-    polling: WisperBotPollingConfig(
-      visibleInterval: Duration(minutes: 1),
-      idleInterval: Duration(minutes: 1),
-      failureMaxInterval: Duration(minutes: 1),
-    ),
   );
 
   registerSessionTests(config);

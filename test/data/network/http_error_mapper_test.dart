@@ -13,11 +13,11 @@ void main() {
     );
     final expiredSession = mapWidgetHttpError(
       http.Response('', 404),
-      operation: WidgetOperation.poll,
+      operation: WidgetOperation.read,
     );
     final throttled = mapWidgetHttpError(
       http.Response('', 429, headers: <String, String>{'retry-after': '9'}),
-      operation: WidgetOperation.poll,
+      operation: WidgetOperation.read,
     );
 
     expect(missingWidget.code, WisperBotErrorCode.configuration);

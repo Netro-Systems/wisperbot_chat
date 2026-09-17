@@ -40,7 +40,8 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('pre-chat validates required fields and rejects unknown requirements', () async {
+  test('pre-chat validates required fields and rejects unknown requirements',
+      () async {
     var unknownField = false;
     final httpClient = MockClient((_) async {
       final response = sessionResponse(requirePreChat: true);
@@ -92,7 +93,8 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
     await unknownClient.close();
   });
 
-  test('pre-chat skips when user data or stored completion satisfies fields', () async {
+  test('pre-chat skips when user data or stored completion satisfies fields',
+      () async {
     final userStore = MemorySessionStore();
     final userConfig = WisperBotConfig(
       widgetKey: config.widgetKey,
@@ -102,7 +104,6 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
         name: 'Jane Doe',
         email: 'jane@example.com',
       ),
-      polling: config.polling,
     );
     final responseClient = MockClient(
       (_) async => http.Response(
@@ -141,48 +142,41 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
     await restoredClient.close();
   });
 
-  test('steady polling pauses in background and without listeners', () async {
-    const pollingConfig = WisperBotConfig(
-      widgetKey: 'test-widget',
-      apiBaseUrl: 'https://chat.example.com',
-      enableOneSignal: false,
-      polling: WisperBotPollingConfig(
-        visibleInterval: Duration(seconds: 3),
-        idleInterval: Duration(seconds: 3),
-        failureMaxInterval: Duration(seconds: 3),
-      ),
-    );
-    var pollCalls = 0;
+  test('realtime pauses in background and without listeners', () async {
+    final connector = _FakeWidgetRealtimeConnector();
     final httpClient = MockClient((request) async {
       if (request.url.path.endsWith('/session')) {
-        return http.Response(jsonEncode(sessionResponse()), 200);
+        return http.Response(
+          jsonEncode(sessionResponse(realtimeKey: 'pusher-key')),
+          200,
+        );
       }
-      pollCalls++;
-      return http.Response(jsonEncode(pollResponse()), 200);
+      throw StateError('Unexpected request: ${request.url}');
     });
     final client = WisperBotClient(
-      config: pollingConfig,
+      config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
+      realtimeConnector: connector,
     );
     final controller = WisperBotChatController(client: client);
     final subscription = controller.states.listen((_) {});
     try {
       await controller.initialize();
-      await Future<void>.delayed(const Duration(milliseconds: 3200));
-      expect(pollCalls, 1);
+      await Future<void>.delayed(Duration.zero);
+      expect(connector.startCalls, 1);
 
       controller.didChangeAppLifecycleState(AppLifecycleState.paused);
-      await Future<void>.delayed(const Duration(milliseconds: 3200));
-      expect(pollCalls, 1);
+      await Future<void>.delayed(Duration.zero);
+      expect(connector.stopCalls, 1);
 
       controller.didChangeAppLifecycleState(AppLifecycleState.resumed);
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      expect(pollCalls, 2);
+      await Future<void>.delayed(Duration.zero);
+      expect(connector.startCalls, 2);
 
       await subscription.cancel();
-      await Future<void>.delayed(const Duration(milliseconds: 3200));
-      expect(pollCalls, 2);
+      await Future<void>.delayed(Duration.zero);
+      expect(connector.stopCalls, 2);
     } finally {
       await subscription.cancel();
       await controller.dispose();

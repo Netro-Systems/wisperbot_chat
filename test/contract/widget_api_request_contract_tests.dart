@@ -2,12 +2,14 @@ part of 'widget_api_contract_test.dart';
 
 void _registerRequestContractTests() {
   group('backend request contract', () {
-    test('session sends only documented JSON fields and restoration header', () async {
+    test('session sends only documented JSON fields and restoration header',
+        () async {
       late http.BaseRequest recorded;
       late Map<String, dynamic> body;
       final client = _RecordingClient((request) async {
         recorded = request;
-        body = jsonDecode(await request.finalize().bytesToString()) as Map<String, dynamic>;
+        body = jsonDecode(await request.finalize().bytesToString())
+            as Map<String, dynamic>;
         return _jsonResponse(sessionResponse());
       });
       final api = _remoteDataSource(
@@ -49,7 +51,7 @@ void _registerRequestContractTests() {
       });
     });
 
-    test('text, poll, typing, and handoff match backend wire shapes', () async {
+    test('text, typing, and handoff match backend wire shapes', () async {
       final requests = <http.BaseRequest>[];
       final bodies = <Map<String, dynamic>>[];
       final client = _RecordingClient((request) async {
@@ -57,7 +59,8 @@ void _registerRequestContractTests() {
         if (request is http.Request && request.body.isNotEmpty) {
           bodies.add(jsonDecode(request.body) as Map<String, dynamic>);
         }
-        if (request.url.path.endsWith('/messages') && request.method == 'POST') {
+        if (request.url.path.endsWith('/messages') &&
+            request.method == 'POST') {
           return _jsonResponse(<String, Object?>{
             'message': message(id: 1, role: 'visitor', sentBy: 'human'),
             'handoff': <String, Object?>{
@@ -66,9 +69,6 @@ void _registerRequestContractTests() {
               'status': 'bot',
             },
           });
-        }
-        if (request.url.path.endsWith('/messages')) {
-          return _jsonResponse(pollResponse());
         }
         if (request.url.path.endsWith('/handoff')) {
           return _jsonResponse(<String, Object?>{
@@ -91,7 +91,6 @@ void _registerRequestContractTests() {
         token: 'token-1',
         text: 'Hello',
       );
-      await api.poll(widgetKey: 'test-widget', token: 'token-1', after: 42);
       await api.setTyping(
         widgetKey: 'test-widget',
         token: 'token-1',
@@ -103,14 +102,6 @@ void _registerRequestContractTests() {
         'key': 'test-widget',
         'message': 'Hello',
       });
-      expect(requests[1].method, 'GET');
-      expect(requests[1].url.queryParameters, <String, String>{
-        'key': 'test-widget',
-        'after': '42',
-        'active': '1',
-        'open': '1',
-      });
-      expect(requests[1].headers.containsKey('content-type'), isFalse);
       expect(bodies[1], <String, dynamic>{
         'key': 'test-widget',
         'is_typing': true,
@@ -120,6 +111,34 @@ void _registerRequestContractTests() {
         expect(request.headers['x-widget-token'], 'token-1');
         _expectNoInventedHeaders(request);
       }
+    });
+
+    test('refresh uses the authenticated bounded messages query', () async {
+      late http.BaseRequest recorded;
+      final api = _remoteDataSource(
+        baseUrl: Uri.parse('https://chat.example.com/base'),
+        httpClient: _RecordingClient((request) async {
+          recorded = request;
+          return _jsonResponse(pollResponse());
+        }),
+      );
+
+      await api.refresh(
+        widgetKey: 'test-widget',
+        token: 'token-1',
+        after: 42,
+      );
+
+      expect(recorded.method, 'GET');
+      expect(recorded.url.path, '/base/widget/v1/messages');
+      expect(recorded.url.queryParameters, <String, String>{
+        'key': 'test-widget',
+        'after': '42',
+        'active': '1',
+        'open': '1',
+      });
+      expect(recorded.headers['x-widget-token'], 'token-1');
+      _expectNoInventedHeaders(recorded);
     });
 
     test('media uses multipart fields and maps backend rejection', () async {

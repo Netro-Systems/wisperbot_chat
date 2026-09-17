@@ -1,10 +1,10 @@
 part of '../wisperbot_runtime.dart';
 
-/// Coordinates session state, delivery, polling, typing, and handoff.
+/// Coordinates session state, delivery, realtime updates, typing, and handoff.
 ///
-/// Listening to [states] or [events] acquires a synchronization lease. Polling
-/// stops when no lease is active or the application is backgrounded. Call
-/// [dispose] when finished.
+/// Listening to [states] or [events] acquires a realtime synchronization
+/// lease. The Pusher connection stops when no lease is active or the
+/// application is backgrounded. Call [dispose] when finished.
 class WisperBotChatController with WidgetsBindingObserver {
   /// Creates a controller backed by [client].
   WisperBotChatController({required WisperBotClient client})
@@ -23,7 +23,6 @@ class WisperBotChatController with WidgetsBindingObserver {
 
   final WisperBotClient _client;
   final MessageReconciler _messageReconciler = const MessageReconciler();
-  final PollingCoordinator _pollingCoordinator = PollingCoordinator();
   final PreChatValidator _preChatValidator = const PreChatValidator();
   late final StreamController<WisperBotChatState> _statesController;
   late final StreamController<WisperBotChatEvent> _eventsController;
@@ -32,19 +31,21 @@ class WisperBotChatController with WidgetsBindingObserver {
       WidgetOneSignalService.instance;
   Future<void>? _initializing;
   Future<void>? _configurationLoading;
-  Future<void>? _pollInFlight;
+  Future<void>? _refreshInFlight;
   Future<void> _sendQueue = Future<void>.value();
-  final Map<int, WisperBotMessage> _deferredVisitorPollMessages =
+  final Map<int, WisperBotMessage> _deferredVisitorIncomingMessages =
       <int, WisperBotMessage>{};
   Timer? _typingIdleTimer;
+  Timer? _agentTypingTimer;
+  Timer? _realtimeRetryTimer;
   DateTime? _lastTypingSentAt;
-  DateTime _lastActivity = DateTime.now();
-  int _pollCursor = 0;
+  int _refreshCursor = 0;
   int? _conversationId;
-  int _pollFailures = 0;
   int _sessionRevision = 0;
-  Duration? _pollRetryAfter;
   WisperBotRealtimeConfig? _realtimeConfig;
+  bool _stateLease = false;
+  bool _eventLease = false;
+  bool _foreground = true;
   bool _realtimeActive = false;
   bool _observingLifecycle = false;
   bool _disposed = false;
@@ -56,10 +57,10 @@ class WisperBotChatController with WidgetsBindingObserver {
 
   WisperBotChatState get _state => _stateMachine.state;
 
-  /// Broadcast state updates and a foreground polling lease.
+  /// Broadcast state updates and a foreground realtime lease.
   Stream<WisperBotChatState> get states => _statesController.stream;
 
-  /// Broadcast lifecycle and message events and a polling lease.
+  /// Broadcast lifecycle and message events and a realtime lease.
   Stream<WisperBotChatEvent> get events => _eventsController.stream;
 
   /// Configuration owned by the backing client.
@@ -208,27 +209,25 @@ class WisperBotChatController with WidgetsBindingObserver {
       result.messages,
       emitReceivedEvents: false,
     );
-    _pollCursor = _greatestServerId(result.messages, fallback: 0);
+    _refreshCursor = _greatestServerId(result.messages, fallback: 0);
     var latestBatchLength = result.messages.length;
     var catchUpPages = 0;
     while (latestBatchLength == 100 && catchUpPages < 50) {
-      final page = await _client._poll(_pollCursor);
+      final previousCursor = _refreshCursor;
+      final page = await _client._refresh(_refreshCursor);
       messages = _mergeMessages(
         messages,
         page.messages,
         emitReceivedEvents: false,
       );
-      _pollCursor = _greatestServerId(
+      _refreshCursor = _greatestServerId(
         page.messages,
-        fallback: _pollCursor,
+        fallback: _refreshCursor,
       );
       latestBatchLength = page.messages.length;
       catchUpPages++;
+      if (_refreshCursor == previousCursor) break;
     }
-
-    _pollFailures = 0;
-    _pollRetryAfter = null;
-    _lastActivity = DateTime.now();
     _conversationId = result.conversationId;
     _realtimeConfig = result.widget.realtime;
     _emit(
@@ -247,7 +246,6 @@ class WisperBotChatController with WidgetsBindingObserver {
     );
     _addEvent(const WisperBotSessionReady());
     unawaited(_syncRealtime().catchError((_) {}));
-    _schedulePoll();
   }
 
   /// Submits backend-required values using the token-bound session.
@@ -317,66 +315,55 @@ class WisperBotChatController with WidgetsBindingObserver {
     );
   }
 
-  /// Performs one non-overlapping reconciliation poll immediately.
+  /// Fetches one non-overlapping conversation update batch immediately.
   ///
-  /// Concurrent callers share the in-flight poll. A session-expired response
-  /// permits one controlled restoration; other failures are exposed as typed
-  /// [WisperBotException] values and reflected in [state].
+  /// This is used by pull-to-refresh. It does not start periodic polling;
+  /// concurrent callers share the same in-flight request.
   Future<void> refresh() {
     _ensureNotDisposed();
-    final active = _pollInFlight;
+    final active = _refreshInFlight;
     if (active != null) return active;
     if (_state.phase != WisperBotChatPhase.ready &&
         _state.phase != WisperBotChatPhase.reconnecting) {
       return initialize();
     }
     final future = _refreshInternal(_sessionRevision);
-    _pollInFlight = future;
+    _refreshInFlight = future;
     return future.whenComplete(() {
-      if (identical(_pollInFlight, future)) _pollInFlight = null;
+      if (identical(_refreshInFlight, future)) _refreshInFlight = null;
     });
   }
 
-  Future<void> _refreshInternal(int revision) async {
-    _cancelPoll();
+  Future<void> _refreshInternal(int revision, [int page = 0]) async {
     try {
-      final result = await _client._poll(_pollCursor);
+      final previousCursor = _refreshCursor;
+      final result = await _client._refresh(_refreshCursor);
       if (_disposed || revision != _sessionRevision) return;
-      final messages = _mergePollMessages(
+      final messages = _mergeIncomingMessages(
         _state.messages,
         result.messages,
         emitReceivedEvents: true,
       );
-      // Only authoritative session/poll batches advance the receive cursor.
-      // A send response can have a newer ID than an unseen incoming reply.
-      _pollCursor = _greatestServerId(
+      _refreshCursor = _greatestServerId(
         result.messages,
-        fallback: _pollCursor,
+        fallback: _refreshCursor,
       );
-      if (result.messages.isNotEmpty) _lastActivity = DateTime.now();
-      _pollFailures = 0;
-      _pollRetryAfter = null;
       _recoveryAttempted = false;
       _emit(
         _state.copyWith(
-          phase: WisperBotChatPhase.ready,
           messages: messages,
-          connection: WisperBotConnectionState.connected,
           handoff: result.handoff,
           supportAvailability: result.supportAvailability,
           agentTyping: result.agentTyping,
           pendingCount: _pendingCount(messages),
-          error: null,
         ),
       );
-      _pollingCoordinator.updateAgentTyping(
-        active: result.agentTyping != null,
-        onExpired: _expireAgentTyping,
-      );
-      _diagnostic(WisperBotDiagnosticKind.poll);
-      if (result.messages.length == 100) {
-        await _refreshInternal(revision);
-        return;
+      _renewAgentTyping(result.agentTyping);
+      _diagnostic(WisperBotDiagnosticKind.refresh);
+      if (result.messages.length == 100 &&
+          _refreshCursor != previousCursor &&
+          page < 49) {
+        await _refreshInternal(revision, page + 1);
       }
     } on WisperBotException catch (exception) {
       if (_disposed || revision != _sessionRevision) return;
@@ -395,23 +382,8 @@ class WisperBotChatController with WidgetsBindingObserver {
         await _initializeInternal();
         return;
       }
-      _pollFailures++;
-      _pollRetryAfter = exception.retryAfter;
-      _emit(
-        _state.copyWith(
-          phase: !exception.retryable
-              ? WisperBotChatPhase.failure
-              : WisperBotChatPhase.reconnecting,
-          connection: !exception.retryable
-              ? WisperBotConnectionState.disconnected
-              : WisperBotConnectionState.reconnecting,
-          error: exception,
-        ),
-      );
-      _diagnostic(WisperBotDiagnosticKind.poll, exception: exception);
+      _diagnostic(WisperBotDiagnosticKind.refresh, exception: exception);
       rethrow;
-    } finally {
-      if (revision == _sessionRevision) _schedulePoll();
     }
   }
 
@@ -552,7 +524,6 @@ class WisperBotChatController with WidgetsBindingObserver {
       );
       _replaceLocal(pending.localId, confirmed);
       _updateHandoff(result.handoff);
-      _lastActivity = DateTime.now();
       _addEvent(WisperBotMessageSent(message: confirmed));
       _diagnostic(
         WisperBotDiagnosticKind.send,
@@ -586,7 +557,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     } finally {
       if (_activeSendLocalId == pending.localId) {
         _activeSendLocalId = null;
-        _flushDeferredVisitorPollMessages();
+        _flushDeferredVisitorIncomingMessages();
       }
     }
   }
@@ -717,12 +688,11 @@ class WisperBotChatController with WidgetsBindingObserver {
   ///
   /// The previous identity's token is never reused for [user]. Throws a typed
   /// [WisperBotException] when validation, storage, or initialization fails.
-  /// Passing `null` is treated as host-application logout: polling and typing
+  /// Passing `null` is treated as host-application logout: realtime and typing
   /// stop, credentials and in-memory messages are cleared, and no anonymous
   /// session is created until [initialize] is called again.
   Future<void> updateUser(WisperBotUser? user) async {
     _ensureNotDisposed();
-    _cancelPoll();
     unawaited(_client._stopRealtime().catchError((_) {}));
     _realtimeActive = false;
     _sessionRevision++;
@@ -734,9 +704,9 @@ class WisperBotChatController with WidgetsBindingObserver {
     }
     final changed = await _client._switchUser(user);
     if (!changed) return;
-    _deferredVisitorPollMessages.clear();
+    _deferredVisitorIncomingMessages.clear();
     _conversationId = null;
-    _pollCursor = 0;
+    _refreshCursor = 0;
     _recoveryAttempted = false;
     _realtimeConfig = null;
     _emit(WisperBotChatState.initial());
@@ -754,7 +724,6 @@ class WisperBotChatController with WidgetsBindingObserver {
   /// a synchronization lease. Storage failures surface as [WisperBotException].
   Future<void> resetSession() async {
     _ensureNotDisposed();
-    _cancelPoll();
     _sessionRevision++;
     await _stopTypingBestEffort();
     if (config.enableOneSignal) {
@@ -763,9 +732,9 @@ class WisperBotChatController with WidgetsBindingObserver {
     await _client._stopRealtime();
     _realtimeActive = false;
     await _client._clearSession();
-    _deferredVisitorPollMessages.clear();
+    _deferredVisitorIncomingMessages.clear();
     _conversationId = null;
-    _pollCursor = 0;
+    _refreshCursor = 0;
     _recoveryAttempted = false;
     _realtimeConfig = null;
     _addEvent(
@@ -827,15 +796,15 @@ class WisperBotChatController with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _pollingCoordinator.updateLifecycle(state);
+    _foreground = state == AppLifecycleState.resumed;
     _diagnostic(WisperBotDiagnosticKind.lifecycle);
-    if (_pollingCoordinator.isForeground) {
+    if (_foreground) {
       if (_hasLease && _state.phase == WisperBotChatPhase.ready) {
         unawaited(_syncRealtime().catchError((_) {}));
-        unawaited(refresh().catchError((_) {}));
       }
     } else {
       _typingIdleTimer?.cancel();
+      _realtimeRetryTimer?.cancel();
       unawaited(_client._stopRealtime().catchError((_) {}));
       _realtimeActive = false;
     }
@@ -845,10 +814,11 @@ class WisperBotChatController with WidgetsBindingObserver {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
-    _pollingCoordinator.dispose();
     _typingIdleTimer?.cancel();
+    _agentTypingTimer?.cancel();
+    _realtimeRetryTimer?.cancel();
     await _client._stopRealtime();
-    _deferredVisitorPollMessages.clear();
+    _deferredVisitorIncomingMessages.clear();
     _realtimeActive = false;
     if (_observingLifecycle) {
       WidgetsBinding.instance.removeObserver(this);
@@ -868,41 +838,30 @@ class WisperBotChatController with WidgetsBindingObserver {
   }
 
   void _setStateLease(bool active) {
-    if (_pollingCoordinator.setStateLease(active)) _leaseChanged();
+    final hadLease = _hasLease;
+    _stateLease = active;
+    if (hadLease != _hasLease) _leaseChanged();
   }
 
   void _setEventLease(bool active) {
-    if (_pollingCoordinator.setEventLease(active)) _leaseChanged();
+    final hadLease = _hasLease;
+    _eventLease = active;
+    if (hadLease != _hasLease) _leaseChanged();
   }
 
-  bool get _hasLease => _pollingCoordinator.hasLease;
+  bool get _hasLease => _stateLease || _eventLease;
 
   void _leaseChanged() {
     if (_disposed) return;
-    // Poll only while someone consumes state/events. This keeps headless and
-    // hidden integrations from spending network and battery in the background.
+    // Keep the socket active only while someone consumes state or events.
     if (_hasLease) {
       unawaited(_syncRealtime().catchError((_) {}));
     } else {
+      _realtimeRetryTimer?.cancel();
       unawaited(_client._stopRealtime().catchError((_) {}));
       _realtimeActive = false;
     }
-    _schedulePoll();
   }
-
-  void _schedulePoll() {
-    _pollingCoordinator.schedule(
-      phase: _state.phase,
-      config: _client.config.polling,
-      failures: _pollFailures,
-      retryAfter: _pollRetryAfter,
-      lastActivity: _lastActivity,
-      now: DateTime.now(),
-      poll: () => refresh().catchError((_) {}),
-    );
-  }
-
-  void _cancelPoll() => _pollingCoordinator.cancelPoll();
 
   void _expireAgentTyping() {
     if (_disposed || _state.agentTyping == null) return;
@@ -912,7 +871,7 @@ class WisperBotChatController with WidgetsBindingObserver {
   Future<void> _syncRealtime() async {
     if (_disposed ||
         !_hasLease ||
-        !_pollingCoordinator.isForeground ||
+        !_foreground ||
         _state.phase != WisperBotChatPhase.ready ||
         _conversationId == null ||
         _realtimeConfig == null ||
@@ -924,25 +883,62 @@ class WisperBotChatController with WidgetsBindingObserver {
       return;
     }
 
-    await _client._startRealtime(
-      realtime: _realtimeConfig!,
-      conversationId: _conversationId!,
-      onConnected: () {
-        if (!_disposed && _state.phase == WisperBotChatPhase.ready) {
-          unawaited(refresh().catchError((_) {}));
-        }
-      },
-      onMessageCreated: _handleRealtimeMessageCreated,
-      onTypingChanged: _handleRealtimeTypingChanged,
-      onHandoffUpdated: _handleRealtimeHandoffUpdated,
-      onError: (error, _) {
-        _diagnostic(
-          WisperBotDiagnosticKind.connection,
-          exception: _asWisperBotException(error),
+    try {
+      await _client._startRealtime(
+        realtime: _realtimeConfig!,
+        conversationId: _conversationId!,
+        onConnected: () {
+          _realtimeRetryTimer?.cancel();
+          if (!_disposed && _state.phase == WisperBotChatPhase.ready) {
+            _emit(
+              _state.copyWith(
+                connection: WisperBotConnectionState.connected,
+                error: null,
+              ),
+            );
+          }
+        },
+        onMessageCreated: _handleRealtimeMessageCreated,
+        onTypingChanged: _handleRealtimeTypingChanged,
+        onHandoffUpdated: _handleRealtimeHandoffUpdated,
+        onError: (error, _) {
+          final exception = _asWisperBotException(error);
+          if (!_disposed && _state.phase == WisperBotChatPhase.ready) {
+            _emit(
+              _state.copyWith(
+                connection: WisperBotConnectionState.reconnecting,
+                error: exception,
+              ),
+            );
+          }
+          _diagnostic(
+            WisperBotDiagnosticKind.connection,
+            exception: exception,
+          );
+        },
+      );
+      _realtimeActive = true;
+    } on Object catch (error) {
+      _realtimeActive = false;
+      final exception = _asWisperBotException(error);
+      if (!_disposed && _state.phase == WisperBotChatPhase.ready) {
+        _emit(
+          _state.copyWith(
+            connection: WisperBotConnectionState.reconnecting,
+            error: exception,
+          ),
         );
-      },
-    );
-    _realtimeActive = true;
+        _realtimeRetryTimer?.cancel();
+        _realtimeRetryTimer = Timer(const Duration(seconds: 5), () {
+          unawaited(_syncRealtime().catchError((_) {}));
+        });
+      }
+      _diagnostic(
+        WisperBotDiagnosticKind.connection,
+        exception: exception,
+      );
+      rethrow;
+    }
   }
 
   void _handleRealtimeMessageCreated(Object? payload) {
@@ -951,7 +947,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     if (message.role == WisperBotMessageRole.agent) {
       unawaited(_client._markRead().catchError((_) {}));
     }
-    final messages = _mergePollMessages(
+    final messages = _mergeIncomingMessages(
       _state.messages,
       <WisperBotMessage>[message],
       emitReceivedEvents: true,
@@ -967,10 +963,7 @@ class WisperBotChatController with WidgetsBindingObserver {
   void _handleRealtimeTypingChanged(Object? payload) {
     final typing = const WidgetResponseDecoder().realtimeTyping(payload);
     _emit(_state.copyWith(agentTyping: typing));
-    _pollingCoordinator.updateAgentTyping(
-      active: typing != null,
-      onExpired: _expireAgentTyping,
-    );
+    _renewAgentTyping(typing);
   }
 
   void _handleRealtimeHandoffUpdated(Object? payload) {
@@ -1011,7 +1004,14 @@ class WisperBotChatController with WidgetsBindingObserver {
             : null,
       );
 
-  List<WisperBotMessage> _mergePollMessages(
+  void _renewAgentTyping(WisperBotAgentTyping? typing) {
+    _agentTypingTimer?.cancel();
+    _agentTypingTimer = typing == null
+        ? null
+        : Timer(const Duration(seconds: 6), _expireAgentTyping);
+  }
+
+  List<WisperBotMessage> _mergeIncomingMessages(
     List<WisperBotMessage> existing,
     List<WisperBotMessage> incoming, {
     required bool emitReceivedEvents,
@@ -1029,13 +1029,13 @@ class WisperBotChatController with WidgetsBindingObserver {
     final immediate = <WisperBotMessage>[];
     for (final message in incoming) {
       final serverId = message.serverId;
-      // A poll can observe the server echo before the matching send completes.
+      // Pusher can deliver the server echo before the matching send completes.
       // Delay only that visitor echo so request ownership—not body/time
       // similarity—reconciles the pending local message first.
       if (message.role == WisperBotMessageRole.visitor &&
           serverId != null &&
           !knownServerIds.contains(serverId)) {
-        _deferredVisitorPollMessages[serverId] = message;
+        _deferredVisitorIncomingMessages[serverId] = message;
       } else {
         immediate.add(message);
       }
@@ -1047,10 +1047,10 @@ class WisperBotChatController with WidgetsBindingObserver {
     );
   }
 
-  void _flushDeferredVisitorPollMessages() {
-    if (_deferredVisitorPollMessages.isEmpty) return;
-    final deferred = _deferredVisitorPollMessages.values.toList();
-    _deferredVisitorPollMessages.clear();
+  void _flushDeferredVisitorIncomingMessages() {
+    if (_deferredVisitorIncomingMessages.isEmpty) return;
+    final deferred = _deferredVisitorIncomingMessages.values.toList();
+    _deferredVisitorIncomingMessages.clear();
     final messages = _mergeMessages(
       _state.messages,
       deferred,
@@ -1068,7 +1068,14 @@ class WisperBotChatController with WidgetsBindingObserver {
     List<WisperBotMessage> messages, {
     required int fallback,
   }) =>
-      _messageReconciler.greatestServerId(messages, fallback: fallback);
+      messages.fold<int>(
+        fallback,
+        (greatest, message) => message.serverId == null
+            ? greatest
+            : greatest > message.serverId!
+                ? greatest
+                : message.serverId!,
+      );
 
   int _compareMessages(WisperBotMessage a, WisperBotMessage b) =>
       _messageReconciler.compare(a, b);
