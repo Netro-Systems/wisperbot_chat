@@ -1,6 +1,95 @@
 part of 'chat_widgets_test.dart';
 
 void registerComposerHandoffTests(WisperBotConfig config) {
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    for (final presentation in WisperBotPresentation.values) {
+      testWidgets(
+          'microphone denial shows Settings only on retry on $platform in $presentation',
+          (tester) async {
+        debugDefaultTargetPlatformOverride = platform;
+        addTearDown(() => debugDefaultTargetPlatformOverride = null);
+        final messenger = tester.binding.defaultBinaryMessenger;
+        const recorderChannel = MethodChannel('com.llfbandit.record/messages');
+        const settingsChannel =
+            MethodChannel('com.spencerccf.app_settings/methods');
+        final recorderCalls = <String>[];
+        final permissionRequests = <bool>[];
+        final settingsCalls = <MethodCall>[];
+        messenger.setMockMethodCallHandler(recorderChannel, (call) async {
+          recorderCalls.add(call.method);
+          if (call.method == 'create') {
+            final id = (call.arguments as Map)['recorderId'];
+            final events = MethodChannel('com.llfbandit.record/events/$id');
+            messenger.setMockMethodCallHandler(events, (_) async => null);
+            addTearDown(() => messenger.setMockMethodCallHandler(events, null));
+          }
+          if (call.method == 'hasPermission') {
+            permissionRequests.add((call.arguments as Map)['request'] as bool);
+            return false;
+          }
+          return null;
+        });
+        messenger.setMockMethodCallHandler(settingsChannel, (call) async {
+          settingsCalls.add(call);
+          return null;
+        });
+        addTearDown(() {
+          messenger.setMockMethodCallHandler(recorderChannel, null);
+          messenger.setMockMethodCallHandler(settingsChannel, null);
+        });
+        final runtime = _runtime(
+            config,
+            MockClient((request) async => http.Response(
+                jsonEncode(request.url.path.endsWith('/session')
+                    ? sessionResponse()
+                    : pollResponse()),
+                200)));
+        await tester.pumpWidget(_app(Builder(
+            builder: (context) => TextButton(
+                  onPressed: () => WisperBotChat.open(context,
+                      config: config,
+                      controller: runtime.controller,
+                      presentation: presentation),
+                  child: const Text('Open chat'),
+                ))));
+        await tester.tap(find.text('Open chat'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Record voice message'));
+        await tester.pumpAndSettle();
+        expect(find.byType(SnackBar), findsNothing);
+        expect(find.byTooltip('Cancel recording'), findsNothing);
+        expect(permissionRequests, [true]);
+        await tester.tap(find.byTooltip('Record voice message'));
+        await tester.pumpAndSettle();
+        expect(
+            find.text(
+                'Enable microphone access in Settings to record voice messages.'),
+            findsOneWidget);
+        expect(find.widgetWithText(SnackBarAction, 'Settings').hitTestable(),
+            findsOneWidget);
+        expect(recorderCalls, contains('hasPermission'));
+        expect(recorderCalls, isNot(contains('startStream')));
+        expect(find.byTooltip('Cancel recording'), findsNothing);
+        await tester.tap(find.text('Settings'));
+        await tester.pumpAndSettle();
+        expect(settingsCalls.single.method, 'openSettings');
+        expect((settingsCalls.single.arguments as Map)['type'], 'settings');
+        await tester.tap(find.byTooltip('Record voice message'));
+        await tester.pumpAndSettle();
+        expect(recorderCalls.where((call) => call == 'hasPermission'),
+            hasLength(3));
+        expect(permissionRequests, [true, false, false]);
+        expect(tester.takeException(), isNull);
+        Navigator.of(tester.element(find.byType(WisperBotChatView))).pop();
+        await tester.pumpAndSettle();
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+        await runtime.dispose();
+        debugDefaultTargetPlatformOverride = null;
+      });
+    }
+  }
+
   testWidgets('default composer picks images and records voice through adapter', (tester) async {
     final mediaAdapter = _FakeMediaAdapter();
     final mediaConfig = WisperBotConfig(

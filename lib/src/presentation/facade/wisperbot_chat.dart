@@ -352,11 +352,14 @@ abstract final class WisperBotChat {
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(20),
                   ),
-                  child: Material(
-                    child: WisperBotChatView(
-                      config: config,
-                      controller: controller,
-                      onClose: () => Navigator.of(sheetContext).pop(),
+                  child: ScaffoldMessenger(
+                    child: Scaffold(
+                      resizeToAvoidBottomInset: false,
+                      body: WisperBotChatView(
+                        config: config,
+                        controller: controller,
+                        onClose: () => Navigator.of(sheetContext).pop(),
+                      ),
                     ),
                   ),
                 ),
@@ -381,10 +384,15 @@ abstract final class WisperBotChat {
                 child: SizedBox(
                   width: 420,
                   height: MediaQuery.sizeOf(dialogContext).height * 0.82,
-                  child: WisperBotChatView(
-                    config: config,
-                    controller: controller,
-                    onClose: () => Navigator.of(dialogContext).pop(),
+                  child: ScaffoldMessenger(
+                    child: Scaffold(
+                      resizeToAvoidBottomInset: false,
+                      body: WisperBotChatView(
+                        config: config,
+                        controller: controller,
+                        onClose: () => Navigator.of(dialogContext).pop(),
+                      ),
+                    ),
                   ),
                 ),
               ),
