@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../application/services/widget_onesignal_service.dart';
 import '../../application/wisperbot_runtime.dart';
@@ -296,7 +298,17 @@ abstract final class WisperBotChat {
       if (error.code != WisperBotErrorCode.notificationPermission) rethrow;
       if (context.mounted) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          SnackBar(content: Text(error.message)),
+          SnackBar(
+            content: Text(error.message),
+            action: !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
+                ? SnackBarAction(
+                    label: 'Settings',
+                    onPressed: () async {
+                      await launchUrl(Uri.parse('app-settings:'));
+                    },
+                  )
+                : null,
+          ),
         );
       }
       return null;

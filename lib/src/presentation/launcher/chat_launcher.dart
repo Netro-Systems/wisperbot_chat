@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../application/wisperbot_runtime.dart';
 import '../../configuration/wisperbot_config.dart';
@@ -76,7 +77,17 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
     }
     _state = _controller.state;
     _subscription = _controller.states.listen((state) {
-      if (mounted) setState(() => _state = state);
+      if (!mounted) return;
+      _state = state;
+      if (SchedulerBinding.instance.schedulerPhase ==
+          SchedulerPhase.persistentCallbacks) {
+        // A shared chat view can initialize while its route is building.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() {});
+        });
+      } else {
+        setState(() {});
+      }
     });
     if (widget.config.requireNotificationPermission) {
       _configurationPending = _state.widget == null;

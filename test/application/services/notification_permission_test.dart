@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -106,6 +107,46 @@ void main() {
         .ensureChatPermission(const WisperBotConfig(widgetKey: 'test'));
     expect(requests, 0);
   });
+
+  testWidgets('iOS denial offers Settings and opens app settings',
+      (tester) async {
+    const urlChannel = MethodChannel('plugins.flutter.io/url_launcher');
+    final launchedUrls = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(urlChannel, (call) async {
+      if (call.method == 'launch') {
+        launchedUrls.add((call.arguments as Map)['url'] as String);
+        return true;
+      }
+      return null;
+    });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(urlChannel, null);
+    });
+    canRequest = false;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => WisperBotChat.open(context, config: config),
+            child: const Text('Open support'),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open support'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(SnackBarAction, 'Settings'), findsOneWidget);
+    expect(find.byType(WisperBotChatScreen), findsNothing);
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(launchedUrls, ['app-settings:']);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
   testWidgets('launcher reports missing app ID without an unhandled exception',
       (tester) async {

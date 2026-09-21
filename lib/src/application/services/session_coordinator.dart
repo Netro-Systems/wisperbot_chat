@@ -170,7 +170,14 @@ final class _SessionCoordinator {
       await _sessionStore.write(_namespace, session);
     } on WisperBotException {
       rethrow;
-    } on Object {
+    } on Object catch (error) {
+      if (kDebugMode) {
+        final code = error is PlatformException ? error.code : error.runtimeType;
+        final status = error is PlatformException && error.details is int
+            ? ' (OSStatus: ${error.details})'
+            : '';
+        debugPrint('[WisperBot] Secure session write failed: $code$status');
+      }
       throw const WisperBotException(
         code: WisperBotErrorCode.configuration,
         message: 'Could not save the chat session securely.',
