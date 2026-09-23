@@ -1,6 +1,45 @@
 part of 'chat_widgets_test.dart';
 
 void registerLauncherTests(WisperBotConfig config) {
+  testWidgets('launcher handles shared chat initialization during build',
+      (tester) async {
+    final runtime = _runtime(
+      config,
+      MockClient(
+        (_) async => http.Response(jsonEncode(sessionResponse()), 200),
+      ),
+    );
+    const launcherConfig = WisperBotConfig(
+      widgetKey: 'test-widget',
+      apiBaseUrl: 'https://chat.example.com',
+      enableOneSignal: false,
+      requireNotificationPermission: true,
+    );
+    final launcher = WisperBotChatLauncher(
+      config: launcherConfig,
+      controller: runtime.controller,
+      builder: (_, state, __) => Text('Launcher: ${state.phase.name}'),
+    );
+
+    await tester.pumpWidget(_app(launcher));
+    await tester.pumpAndSettle();
+    expect(find.text('Launcher: idle'), findsOneWidget);
+
+    unawaited(Navigator.of(tester.element(find.byType(WisperBotChatLauncher)))
+        .push<void>(MaterialPageRoute(
+      builder: (_) => Scaffold(
+        body: WisperBotChatView(config: config, controller: runtime.controller),
+      ),
+    )));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Launcher: ready', skipOffstage: false), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
   testWidgets('permission-gated launcher applies API color before chat opens',
       (tester) async {
     const gatedConfig = WisperBotConfig(

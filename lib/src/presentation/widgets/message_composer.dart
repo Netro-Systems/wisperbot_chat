@@ -343,7 +343,9 @@ class _ComposerState extends State<_Composer> {
           _isRecording = false;
           _stopRecordingTimer();
         });
-        _showMediaError(error, 'The voice message could not be recorded.');
+        if (error is! _MicrophonePermissionException || error.showSettings) {
+          _showMediaError(error, 'The voice message could not be recorded.');
+        }
       }
     } finally {
       if (mounted) setState(() => _mediaBusy = false);
@@ -397,7 +399,29 @@ class _ComposerState extends State<_Composer> {
   void _showMediaError(Object error, String fallback) {
     final message = error is WisperBotException ? error.message : fallback;
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(
+        content: Text(message),
+        action: error is _MicrophonePermissionException &&
+                !kIsWeb &&
+                (defaultTargetPlatform == TargetPlatform.iOS ||
+                    defaultTargetPlatform == TargetPlatform.android)
+            ? SnackBarAction(
+                label: 'Settings',
+                onPressed: () async {
+                  try {
+                    await AppSettings.openAppSettings();
+                  } on Object {
+                    if (mounted) {
+                      _showMediaError(
+                        StateError('Could not open settings'),
+                        'Could not open Settings. Please open app settings manually.',
+                      );
+                    }
+                  }
+                },
+              )
+            : null,
+      ),
     );
   }
 

@@ -217,6 +217,7 @@ final class WidgetResponseDecoder {
 
     return WisperBotMessage(
       localId: 'server-$id',
+      isActivity: json['kind'] == 'activity',
       serverId: id,
       role: role,
       type: type,

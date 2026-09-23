@@ -11,6 +11,7 @@ class _DefaultMediaAdapter implements WisperBotMediaAdapter {
   Completer<void>? _recordingDone;
   BytesBuilder? _recordingBytes;
   Object? _recordingError;
+  bool _microphonePermissionDenied = false;
 
   static const int _recordingSampleRate = 16000;
   static const int _recordingChannels = 1;
@@ -131,13 +132,12 @@ class _DefaultMediaAdapter implements WisperBotMediaAdapter {
     if (_recordingSubscription != null) {
       throw StateError('An audio recording is already active.');
     }
-    if (!await _recorder.hasPermission()) {
-      throw const WisperBotException(
-        code: WisperBotErrorCode.forbidden,
-        message: 'Microphone access was not granted.',
-        retryable: false,
-      );
+    final previouslyDenied = _microphonePermissionDenied;
+    if (!await _recorder.hasPermission(request: !previouslyDenied)) {
+      _microphonePermissionDenied = true;
+      throw _MicrophonePermissionException(showSettings: previouslyDenied);
     }
+    _microphonePermissionDenied = false;
 
     _recordingBytes = BytesBuilder(copy: false);
     _recordingDone = Completer<void>();
@@ -168,13 +168,20 @@ class _DefaultMediaAdapter implements WisperBotMediaAdapter {
   @override
   Future<WisperBotUpload?> stopAudioRecording() async {
     if (_recordingSubscription == null) return null;
-    await _recorder.stop();
-    await _recordingDone?.future.timeout(const Duration(seconds: 2));
-    await _recordingSubscription?.cancel();
-
-    final error = _recordingError;
-    final pcmBytes = _recordingBytes?.takeBytes() ?? Uint8List(0);
-    _clearRecordingState();
+    late final Uint8List pcmBytes;
+    Object? error;
+    try {
+      await _recorder.stop();
+      await _recordingDone?.future.timeout(const Duration(seconds: 2));
+      error = _recordingError;
+      pcmBytes = _recordingBytes?.takeBytes() ?? Uint8List(0);
+    } finally {
+      try {
+        await _recordingSubscription?.cancel();
+      } finally {
+        _clearRecordingState();
+      }
+    }
     if (error != null) throw error;
     if (pcmBytes.isEmpty) {
       throw const WisperBotException(
@@ -326,4 +333,16 @@ Uint8List _encodePcm16AsWav(
   data.setUint32(40, pcmBytes.length, Endian.little);
   wav.setRange(headerLength, wav.length, pcmBytes);
   return wav;
+}
+
+class _MicrophonePermissionException extends WisperBotException {
+  const _MicrophonePermissionException({required this.showSettings})
+      : super(
+          code: WisperBotErrorCode.forbidden,
+          message:
+              'Enable microphone access in Settings to record voice messages.',
+          retryable: false,
+        );
+
+  final bool showSettings;
 }
