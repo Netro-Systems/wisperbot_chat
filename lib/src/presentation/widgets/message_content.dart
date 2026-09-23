@@ -386,10 +386,13 @@ class _AudioAttachmentPlayer extends StatefulWidget {
 }
 
 class _AudioAttachmentPlayerState extends State<_AudioAttachmentPlayer> {
-  static final Map<Uri, Future<Uint8List>> _downloadCache = <Uri, Future<Uint8List>>{};
+  static final Map<Uri, Future<Uint8List>> _downloadCache =
+      <Uri, Future<Uint8List>>{};
 
   late final AudioPlayer _player;
   late final StreamSubscription<PlayerState> _playerStateSubscription;
+  final _sources = <PreparedAudioSource>[];
+  int _loadVersion = 0;
   bool _ready = false;
   bool _failed = false;
 
@@ -417,6 +420,7 @@ class _AudioAttachmentPlayerState extends State<_AudioAttachmentPlayer> {
   }
 
   Future<void> _loadAudio() async {
+    final version = ++_loadVersion;
     setState(() {
       _ready = false;
       _failed = false;
@@ -424,10 +428,12 @@ class _AudioAttachmentPlayerState extends State<_AudioAttachmentPlayer> {
 
     try {
       final source = await _audioSource();
-      await _setAudioSourceWithFallbacks(source.bytes, source.contentTypes);
-      if (mounted) setState(() => _ready = true);
+      if (!mounted || version != _loadVersion) return;
+      await _setAudioSourceWithFallbacks(
+          source.bytes, source.contentTypes, version);
+      if (mounted && version == _loadVersion) setState(() => _ready = true);
     } on Object {
-      if (mounted) setState(() => _failed = true);
+      if (mounted && version == _loadVersion) setState(() => _failed = true);
     }
   }
 
@@ -465,15 +471,20 @@ class _AudioAttachmentPlayerState extends State<_AudioAttachmentPlayer> {
   Future<void> _setAudioSourceWithFallbacks(
     Uint8List bytes,
     List<String> contentTypes,
+    int version,
   ) async {
     Object? lastError;
     for (final contentType in contentTypes) {
       try {
-        await _player.setAudioSource(
-          AudioSource.uri(
-            Uri.dataFromBytes(bytes, mimeType: contentType),
-          ),
-        );
+        if (!mounted || version != _loadVersion) return;
+        final prepared =
+            await PreparedAudioSource.create(bytes, contentType: contentType);
+        if (!mounted || version != _loadVersion) {
+          await prepared.dispose();
+          return;
+        }
+        _sources.add(prepared);
+        await _player.setAudioSource(prepared.source);
         return;
       } on Object catch (error) {
         lastError = error;
@@ -498,8 +509,15 @@ class _AudioAttachmentPlayerState extends State<_AudioAttachmentPlayer> {
   void dispose() {
     _AudioPlaybackCoordinator.clear(_player);
     _playerStateSubscription.cancel();
-    _player.dispose();
+    unawaited(_disposePlayer());
     super.dispose();
+  }
+
+  Future<void> _disposePlayer() async {
+    await _player.dispose();
+    for (final source in _sources) {
+      await source.dispose();
+    }
   }
 
   @override

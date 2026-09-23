@@ -25,7 +25,7 @@ final class MessageReconciler {
       if (existingIndex == null) {
         indexes[id] = messages.length;
         messages.add(message);
-        if (message.role == WisperBotMessageRole.agent) {
+        if (message.role == WisperBotMessageRole.agent && !message.isActivity) {
           onNewAgentMessage?.call(message);
         }
       } else {

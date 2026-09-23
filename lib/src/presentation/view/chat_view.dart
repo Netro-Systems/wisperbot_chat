@@ -18,6 +18,7 @@ import '../../diagnostics/debug_upload_logger.dart';
 import '../../domain/contracts/media_adapter.dart';
 import '../../domain/errors/wisperbot_exception.dart';
 import '../../domain/models/models.dart';
+import '../media/audio_source.dart';
 import '../media/remote_image.dart';
 import '../theme/resolved_theme.dart';
 import '../widgets/brand_logo.dart';

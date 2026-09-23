@@ -36,6 +36,7 @@ class WisperBotMessage {
     this.attachment,
     this.localUpload,
     this.senderName,
+    this.isActivity = false,
     this.sentBy,
     this.error,
   });
@@ -67,6 +68,9 @@ class WisperBotMessage {
   /// Optional in-memory upload used for local pending media previews.
   final WisperBotUpload? localUpload;
 
+  /// Whether this entry is a public conversation activity.
+  final bool isActivity;
+
   /// Optional backend-supplied sender name.
   final String? senderName;
 
@@ -97,6 +101,7 @@ class WisperBotMessage {
     WisperBotAttachment? attachment,
     WisperBotUpload? localUpload,
     String? senderName,
+    bool? isActivity,
     WisperBotSenderKind? sentBy,
     WisperBotException? error,
     bool clearError = false,
@@ -112,6 +117,7 @@ class WisperBotMessage {
         attachment: attachment ?? this.attachment,
         localUpload: localUpload ?? this.localUpload,
         senderName: senderName ?? this.senderName,
+        isActivity: isActivity ?? this.isActivity,
         sentBy: sentBy ?? this.sentBy,
         error: clearError ? null : error ?? this.error,
       );

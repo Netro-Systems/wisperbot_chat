@@ -168,13 +168,20 @@ class _DefaultMediaAdapter implements WisperBotMediaAdapter {
   @override
   Future<WisperBotUpload?> stopAudioRecording() async {
     if (_recordingSubscription == null) return null;
-    await _recorder.stop();
-    await _recordingDone?.future.timeout(const Duration(seconds: 2));
-    await _recordingSubscription?.cancel();
-
-    final error = _recordingError;
-    final pcmBytes = _recordingBytes?.takeBytes() ?? Uint8List(0);
-    _clearRecordingState();
+    late final Uint8List pcmBytes;
+    Object? error;
+    try {
+      await _recorder.stop();
+      await _recordingDone?.future.timeout(const Duration(seconds: 2));
+      error = _recordingError;
+      pcmBytes = _recordingBytes?.takeBytes() ?? Uint8List(0);
+    } finally {
+      try {
+        await _recordingSubscription?.cancel();
+      } finally {
+        _clearRecordingState();
+      }
+    }
     if (error != null) throw error;
     if (pcmBytes.isEmpty) {
       throw const WisperBotException(

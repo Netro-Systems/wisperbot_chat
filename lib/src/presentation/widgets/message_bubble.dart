@@ -21,71 +21,103 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (message.isActivity) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: Text(
+            '${message.body} · ${_time(message.createdAt)}',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceMuted,
+                ),
+          ),
+        ),
+      );
+    }
+    final senderName = message.senderName?.trim();
     final visitor = message.role == WisperBotMessageRole.visitor;
     final deliveryLabel = visitor ? ', ${_deliveryLabel(message.status)}' : '';
     return Semantics(
-      label: '${visitor ? 'Your' : 'Support'} message. ${message.body}$deliveryLabel',
-      child: _BubbleLayout(
-        visitor: visitor,
-        widgetConfig: widgetConfig,
-        colors: colors,
-        isImage: message.type == WisperBotMessageType.image,
-        bubbleKey: ValueKey<String>(
-          'wisperbot-message-bubble-${message.localId}',
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            _MessageContent(
-              message: message,
-              colors: colors,
-              controller: controller,
+      label:
+          '${visitor ? 'Your' : (senderName?.isNotEmpty == true ? senderName : 'Support')} message. ${message.body}$deliveryLabel',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          if (!visitor && senderName != null && senderName.isNotEmpty)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(start: 36, bottom: 4),
+              child: Text(
+                senderName,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colors.onSurfaceMuted,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
             ),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.end,
+          _BubbleLayout(
+            visitor: visitor,
+            widgetConfig: widgetConfig,
+            colors: colors,
+            isImage: message.type == WisperBotMessageType.image,
+            bubbleKey: ValueKey<String>(
+              'wisperbot-message-bubble-${message.localId}',
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
-                  _time(message.createdAt),
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: visitor
-                            ? colors.onVisitorBubble.withValues(alpha: 0.72)
-                            : colors.onAgentBubble.withValues(alpha: 0.72),
-                      ),
+                _MessageContent(
+                  message: message,
+                  colors: colors,
+                  controller: controller,
                 ),
-                if (visitor) ...<Widget>[
-                  const SizedBox(width: 4),
-                  Icon(
-                    _deliveryIcon(message.status),
-                    size: 14,
-                    color: _deliveryColor(colors, message.status),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: <Widget>[
+                    Text(
+                      _time(message.createdAt),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: visitor
+                                ? colors.onVisitorBubble.withValues(alpha: 0.72)
+                                : colors.onAgentBubble.withValues(alpha: 0.72),
+                          ),
+                    ),
+                    if (visitor) ...<Widget>[
+                      const SizedBox(width: 4),
+                      Icon(
+                        _deliveryIcon(message.status),
+                        size: 14,
+                        color: _deliveryColor(colors, message.status),
+                      ),
+                    ],
+                  ],
+                ),
+                if (onRetry != null || onRemove != null) ...<Widget>[
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 4,
+                    children: <Widget>[
+                      if (onRetry != null)
+                        TextButton(
+                          style: _messageActionStyle(visitor, colors),
+                          onPressed: onRetry,
+                          child: const Text('Retry'),
+                        ),
+                      if (onRemove != null)
+                        TextButton(
+                          style: _messageActionStyle(visitor, colors),
+                          onPressed: onRemove,
+                          child: const Text('Remove'),
+                        ),
+                    ],
                   ),
                 ],
               ],
             ),
-            if (onRetry != null || onRemove != null) ...<Widget>[
-              const SizedBox(height: 4),
-              Wrap(
-                spacing: 4,
-                children: <Widget>[
-                  if (onRetry != null)
-                    TextButton(
-                      style: _messageActionStyle(visitor, colors),
-                      onPressed: onRetry,
-                      child: const Text('Retry'),
-                    ),
-                  if (onRemove != null)
-                    TextButton(
-                      style: _messageActionStyle(visitor, colors),
-                      onPressed: onRemove,
-                      child: const Text('Remove'),
-                    ),
-                ],
-              ),
-            ],
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -95,7 +127,8 @@ class _MessageBubble extends StatelessWidget {
     WisperBotResolvedTheme colors,
   ) =>
       TextButton.styleFrom(
-        foregroundColor: visitor ? colors.onVisitorBubble : colors.onAgentBubble,
+        foregroundColor:
+            visitor ? colors.onVisitorBubble : colors.onAgentBubble,
       );
 
   static String _time(DateTime value) {
@@ -104,7 +137,8 @@ class _MessageBubble extends StatelessWidget {
     return '$hour:$minute ${value.hour >= 12 ? 'PM' : 'AM'}';
   }
 
-  static String _deliveryLabel(WisperBotMessageStatus status) => switch (status) {
+  static String _deliveryLabel(WisperBotMessageStatus status) =>
+      switch (status) {
         WisperBotMessageStatus.pending => 'sending',
         WisperBotMessageStatus.sent => 'sent',
         WisperBotMessageStatus.delivered => 'delivered',
@@ -113,10 +147,13 @@ class _MessageBubble extends StatelessWidget {
         WisperBotMessageStatus.unconfirmed => 'delivery unconfirmed',
       };
 
-  static IconData _deliveryIcon(WisperBotMessageStatus status) => switch (status) {
+  static IconData _deliveryIcon(WisperBotMessageStatus status) =>
+      switch (status) {
         WisperBotMessageStatus.pending => Icons.schedule,
         WisperBotMessageStatus.sent => Icons.check,
-        WisperBotMessageStatus.delivered || WisperBotMessageStatus.read => Icons.done_all,
+        WisperBotMessageStatus.delivered ||
+        WisperBotMessageStatus.read =>
+          Icons.done_all,
         WisperBotMessageStatus.failed => Icons.error_outline,
         WisperBotMessageStatus.unconfirmed => Icons.help_outline,
       };
@@ -126,7 +163,8 @@ class _MessageBubble extends StatelessWidget {
     WisperBotMessageStatus status,
   ) =>
       switch (status) {
-        WisperBotMessageStatus.pending => colors.onVisitorBubble.withValues(alpha: 0.60),
+        WisperBotMessageStatus.pending =>
+          colors.onVisitorBubble.withValues(alpha: 0.60),
         WisperBotMessageStatus.sent ||
         WisperBotMessageStatus.delivered ||
         WisperBotMessageStatus.unconfirmed =>

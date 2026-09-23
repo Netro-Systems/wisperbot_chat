@@ -10,6 +10,37 @@ import '../../support/support.dart';
 void main() {
   const decoder = WidgetResponseDecoder();
 
+  test('public activities decode consistently in history and realtime', () {
+    final activity =
+        message(id: 5, type: 'event', body: 'Rahim joined the chat')
+          ..addAll(
+              {'kind': 'activity', 'agent_name': 'Rahim', 'sent_by': 'system'});
+    final history = decoder
+        .session(
+          http.Response(jsonEncode(sessionResponse(messages: [activity])), 200),
+          preChatCompleted: false,
+        )
+        .messages
+        .single;
+    final realtime = decoder.realtimeMessage({'message': activity})!;
+    final refresh = decoder
+        .refresh(
+          http.Response(jsonEncode(pollResponse(messages: [activity])), 200),
+        )
+        .messages
+        .single;
+    for (final entry in [history, realtime, refresh]) {
+      expect(entry.isActivity, isTrue);
+      expect(entry.senderName, 'Rahim');
+      expect(entry.body, 'Rahim joined the chat');
+      expect(entry.createdAt,
+          DateTime.parse(activity['created_at']! as String).toLocal());
+      expect(entry.copyWith(localId: 'retained').isActivity, isTrue);
+    }
+    expect(decoder.realtimeMessage({'message': message(id: 6)})!.isActivity,
+        isFalse);
+  });
+
   test('session decoder ignores unknown fields and maps known values', () {
     final result = decoder.session(
       http.Response(
@@ -28,7 +59,9 @@ void main() {
     expect(result.widget.title, 'Test support');
   });
 
-  test('parses delivery and seen status correctly matching whisperbot-app logic', () {
+  test(
+      'parses delivery and seen status correctly matching whisperbot-app logic',
+      () {
     final statusCases = <Map<String, Object?>, WisperBotMessageStatus>{
       {'delivery_status': 'read'}: WisperBotMessageStatus.read,
       {'status': 'seen'}: WisperBotMessageStatus.read,
@@ -39,7 +72,8 @@ void main() {
       {'state': 'viewed'}: WisperBotMessageStatus.read,
       {'message_status': 'opened'}: WisperBotMessageStatus.read,
       {'delivery_status': 'delivered'}: WisperBotMessageStatus.delivered,
-      {'delivered_at': '2026-08-30T10:00:00Z'}: WisperBotMessageStatus.delivered,
+      {'delivered_at': '2026-08-30T10:00:00Z'}:
+          WisperBotMessageStatus.delivered,
       {'is_delivered': true}: WisperBotMessageStatus.delivered,
       {'delivered': true}: WisperBotMessageStatus.delivered,
       {'status': 'received'}: WisperBotMessageStatus.delivered,
@@ -58,7 +92,8 @@ void main() {
 
       final result = decoder.session(
         http.Response(
-          jsonEncode(sessionResponse(messages: <Map<String, Object?>>[msgJson])),
+          jsonEncode(
+              sessionResponse(messages: <Map<String, Object?>>[msgJson])),
           200,
         ),
         preChatCompleted: false,
