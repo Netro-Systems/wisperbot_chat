@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.5
+
+### Added
+
+- Added reusable, accessible starter-question buttons from session configuration below the welcome message.
+- Added immediate post-send message refresh so deterministic replies appear without waiting for realtime delivery.
+
+### Changed
+
+- Documented that new integrations must use the widget's Mobile SDK key.
+
+### Fixed
+
+- Applied realtime message delivery/read status updates immediately and prevented out-of-order status downgrades.
+- Kept realtime bot answers behind their in-flight visitor message so replies no longer flash above the question before send confirmation.
+
 ## 0.1.4
 
 ### Changed

@@ -108,6 +108,9 @@ void registerDeliveryEdgeCaseTests(WisperBotConfig config) {
       if (request.url.path.endsWith('/session')) {
         return http.Response(jsonEncode(sessionResponse()), 200);
       }
+      if (request.method == 'GET' && request.url.path.endsWith('/messages')) {
+        return http.Response(jsonEncode(pollResponse()), 200);
+      }
       sendCalls++;
       if (sendCalls == 1) {
         firstStarted.complete();

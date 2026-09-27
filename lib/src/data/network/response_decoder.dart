@@ -87,6 +87,43 @@ final class WidgetResponseDecoder {
     return _parseMessage(messageJson);
   }
 
+  /// Decodes a delivery-state change for an existing server message.
+  WidgetMessageStatusUpdate? realtimeMessageStatus(Object? value) {
+    if (value is! Map<String, dynamic>) return null;
+    final rawId = value['id'];
+    final id = rawId is int
+        ? rawId
+        : rawId is String
+            ? int.tryParse(rawId)
+            : null;
+    if (id == null || id <= 0) return null;
+    final status = _stringOrNull(value['status'])?.trim().toLowerCase();
+    if (!const {
+      'read',
+      'seen',
+      'viewed',
+      'opened',
+      'delivered',
+      'received',
+      'reached',
+      'failed',
+      'error',
+      'undelivered',
+      'rejected',
+      'sending',
+      'pending',
+      'queued',
+      'unconfirmed',
+      'sent',
+    }.contains(status)) {
+      return null;
+    }
+    return WidgetMessageStatusUpdate(
+      messageId: id,
+      status: _parseDeliveryStatus({'status': status}),
+    );
+  }
+
   /// Decodes the widget-safe realtime payload for agent typing changes.
   WisperBotAgentTyping? realtimeTyping(Object? value) {
     if (value is! Map<String, dynamic>) return null;
@@ -397,13 +434,19 @@ final class WidgetResponseDecoder {
     final enabled = _requiredBool(value, 'enabled');
     final eligible = _requiredBool(value, 'eligible');
     if (value['status'] is! String) throw _invalidResponse();
+    if (value['status'] == 'connected') {
+      return WisperBotHandoffState(
+        status: WisperBotHandoffStatus.connected,
+        agentName: _stringOrNull(_objectOrNull(value['agent'])?['name']),
+      );
+    }
+    if (value['status'] == 'waiting') {
+      return const WisperBotHandoffState(
+        status: WisperBotHandoffStatus.waiting,
+      );
+    }
     if (!enabled) {
       return const WisperBotHandoffState.unavailable();
-    }
-    if (value['status'] == 'connected') {
-      return const WisperBotHandoffState(
-        status: WisperBotHandoffStatus.connected,
-      );
     }
     if (eligible) {
       return const WisperBotHandoffState(

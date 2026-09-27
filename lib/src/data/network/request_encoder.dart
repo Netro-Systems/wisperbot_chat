@@ -29,7 +29,8 @@ final class WidgetRequestEncoder {
         if (user?.avatarUrl != null) 'avatar': user!.avatarUrl!.toString(),
         if (user?.externalId != null) 'external_id': user!.externalId!,
         if (user?.signature != null) 'user_hash': user!.signature!,
-        if (user?.resolvedCustomFields case final fields? when fields.isNotEmpty)
+        if (user?.resolvedCustomFields case final fields?
+            when fields.isNotEmpty)
           'custom_fields': fields,
         if (deviceId != null && deviceId.trim().isNotEmpty) ...<String, Object>{
           'device_id': deviceId.trim(),
@@ -45,7 +46,11 @@ final class WidgetRequestEncoder {
     required String widgetKey,
     required String text,
   }) =>
-      <String, Object>{'key': widgetKey, 'message': text};
+      <String, Object>{
+        'key': widgetKey,
+        'message': text,
+        'type': 'text',
+      };
 
   /// Encodes a visitor-typing body.
   Map<String, Object> typingBody({
@@ -55,10 +60,12 @@ final class WidgetRequestEncoder {
       <String, Object>{'key': widgetKey, 'is_typing': isTyping};
 
   /// Encodes a human-handoff body.
-  Map<String, Object> handoffBody(String widgetKey) => <String, Object>{'key': widgetKey};
+  Map<String, Object> handoffBody(String widgetKey) =>
+      <String, Object>{'key': widgetKey};
 
   /// Encodes a mark-read body.
-  Map<String, Object> readBody(String widgetKey) => <String, Object>{'key': widgetKey};
+  Map<String, Object> readBody(String widgetKey) =>
+      <String, Object>{'key': widgetKey};
 
   /// Encodes a JSON request body without exposing maps outside data.
   String jsonBody(Map<String, Object> body) => jsonEncode(body);
@@ -196,7 +203,8 @@ final class WidgetRequestEncoder {
     final matchingEntry = supported.entries.where(
       (entry) => filename.endsWith(entry.key),
     );
-    if (matchingEntry.isEmpty || !matchingEntry.first.value.contains(mimeType)) {
+    if (matchingEntry.isEmpty ||
+        !matchingEntry.first.value.contains(mimeType)) {
       throw const WisperBotException(
         code: WisperBotErrorCode.attachmentRejected,
         message: 'The attachment filename and MIME type are not supported.',

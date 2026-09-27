@@ -1,6 +1,39 @@
 part of 'chat_widgets_test.dart';
 
 void registerViewStateTests(WisperBotConfig config) {
+  testWidgets('shows resolved activity in the message list', (tester) async {
+    final resolved = message(id: 1, type: 'event', body: 'Resolved by Rahim')
+      ..addAll({
+        'kind': 'activity',
+        'status': 'delivered',
+        'sent_by': 'system',
+        'agent_name': 'Rahim',
+        'activity': {
+          'type': 'conversation.resolved',
+          'actor_name': 'Rahim',
+        },
+      });
+    final runtime = _runtime(
+      config,
+      MockClient((request) async => http.Response(
+            jsonEncode(request.url.path.endsWith('/session')
+                ? sessionResponse(messages: [resolved])
+                : pollResponse()),
+            200,
+          )),
+    );
+    await tester.pumpWidget(_app(
+      WisperBotChatView(config: config, controller: runtime.controller),
+    ));
+    await tester.pumpAndSettle();
+    final activity = find.textContaining('Resolved by Rahim · ');
+    expect(activity, findsOneWidget);
+    expect(tester.widget<Text>(activity).textAlign, TextAlign.center);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
   testWidgets('shows join and assignment times with names above replies',
       (tester) async {
     final joined = message(id: 1, type: 'event', body: 'Rahim joined the chat')
@@ -188,6 +221,9 @@ void registerViewStateTests(WisperBotConfig config) {
         }
         if (request.url.path.endsWith('/typing')) {
           return http.Response('{"ok":true}', 200);
+        }
+        if (request.method == 'GET' && request.url.path.endsWith('/messages')) {
+          return http.Response(jsonEncode(pollResponse()), 200);
         }
         sendCalls++;
         return http.Response(

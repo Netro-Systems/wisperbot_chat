@@ -31,6 +31,7 @@ part '../widgets/loading_shimmer.dart';
 part '../widgets/chat_header.dart';
 part '../widgets/chat_timeline.dart';
 part '../widgets/welcome_bubble.dart';
+part '../widgets/starter_questions.dart';
 part '../widgets/pre_chat_form.dart';
 part '../widgets/message_bubble.dart';
 part '../widgets/message_content.dart';
@@ -256,6 +257,14 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
                       colors: colors,
                       onClose: widget.onClose,
                     ),
+                  if (_canCompose(_state) && widget.composerBuilder == null)
+                    _HandoffAction(
+                      state: _state,
+                      colors: colors,
+                      onPressed: () => unawaited(
+                        _controller.requestHumanAgent().catchError((_) {}),
+                      ),
+                    ),
                   if (_state.phase == WisperBotChatPhase.reconnecting)
                     ChatConnectionBanner(colors: colors),
                   if (_state.supportAvailability ==
@@ -314,6 +323,9 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
     final welcome = configuredWelcome?.isNotEmpty == true
         ? configuredWelcome!
         : 'Hi there! How can we help?';
+    final starterQuestions =
+        _state.widget?.starterQuestions ?? const <WisperBotStarterQuestion>[];
+    final starterCount = starterQuestions.isEmpty ? 0 : 1;
     const welcomeCount = 1;
     final typingCount = _state.agentTyping == null ? 0 : 1;
     return RefreshIndicator(
@@ -326,7 +338,10 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
             reverse: true,
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-            itemCount: welcomeCount + _state.messages.length + typingCount,
+            itemCount: welcomeCount +
+                starterCount +
+                _state.messages.length +
+                typingCount,
             itemBuilder: (context, index) {
               if (typingCount == 1 && index == 0) {
                 return _TypingIndicator(
@@ -337,6 +352,17 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
               final messageIndex =
                   _state.messages.length - 1 - (index - typingCount);
               if (messageIndex < 0) {
+                if (starterCount == 1 && messageIndex == -1) {
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: colors.messageSpacing),
+                    child: _StarterQuestions(
+                      questions: starterQuestions,
+                      enabled: _starterQuestionsEnabled(_state),
+                      colors: colors,
+                      onSelected: _sendStarterQuestion,
+                    ),
+                  );
+                }
                 return Padding(
                   padding: EdgeInsets.only(bottom: colors.messageSpacing),
                   child: _WelcomeBubble(
@@ -394,6 +420,27 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
     );
   }
 
+  bool _starterQuestionsEnabled(WisperBotChatState state) =>
+      (state.phase == WisperBotChatPhase.ready ||
+          state.phase == WisperBotChatPhase.reconnecting) &&
+      state.pendingCount == 0 &&
+      state.handoff.status != WisperBotHandoffStatus.requesting &&
+      state.handoff.status != WisperBotHandoffStatus.connected;
+
+  void _sendStarterQuestion(WisperBotStarterQuestion question) =>
+      unawaited(_sendStarterQuestionInternal(question));
+
+  Future<void> _sendStarterQuestionInternal(
+    WisperBotStarterQuestion question,
+  ) async {
+    try {
+      await _controller.sendText(question.label);
+    } on Object {
+      // The failed local message and controller state provide the normal
+      // retry/remove treatment used by typed messages.
+    }
+  }
+
   Widget _buildComposer(WisperBotResolvedTheme colors) {
     final custom = widget.composerBuilder;
     if (custom != null) return custom(context, _controller, _state);
@@ -404,13 +451,6 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            _HandoffAction(
-              state: _state,
-              colors: colors,
-              onPressed: () => unawaited(
-                _controller.requestHumanAgent().catchError((_) {}),
-              ),
-            ),
             _Composer(
               controller: _controller,
               colors: colors,

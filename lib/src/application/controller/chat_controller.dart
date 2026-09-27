@@ -33,8 +33,10 @@ class WisperBotChatController with WidgetsBindingObserver {
   Future<void>? _configurationLoading;
   Future<void>? _refreshInFlight;
   Future<void> _sendQueue = Future<void>.value();
-  final Map<int, WisperBotMessage> _deferredVisitorIncomingMessages =
+  final Map<int, WisperBotMessage> _deferredIncomingMessages =
       <int, WisperBotMessage>{};
+  final Map<int, WisperBotMessageStatus> _deferredMessageStatuses =
+      <int, WisperBotMessageStatus>{};
   Timer? _typingIdleTimer;
   Timer? _agentTypingTimer;
   Timer? _realtimeRetryTimer;
@@ -523,12 +525,23 @@ class WisperBotChatController with WidgetsBindingObserver {
         clearError: true,
       );
       _replaceLocal(pending.localId, confirmed);
+      _refreshCursor = _greatestServerId(
+        <WisperBotMessage>[confirmed],
+        fallback: _refreshCursor,
+      );
       _updateHandoff(result.handoff);
       _addEvent(WisperBotMessageSent(message: confirmed));
       _diagnostic(
         WisperBotDiagnosticKind.send,
         duration: DateTime.now().difference(started),
       );
+      if (pending.type == WisperBotMessageType.text) {
+        // A deterministic starter-question answer is created during the send.
+        // Poll immediately so it does not wait for the normal realtime/polling
+        // cadence. The normal reconciler deduplicates a simultaneous realtime
+        // delivery by the server message ID.
+        unawaited(_refreshAfterSend(confirmed));
+      }
       return confirmed;
     } on Object catch (error) {
       final exception = _asWisperBotException(error);
@@ -557,8 +570,31 @@ class WisperBotChatController with WidgetsBindingObserver {
     } finally {
       if (_activeSendLocalId == pending.localId) {
         _activeSendLocalId = null;
-        _flushDeferredVisitorIncomingMessages();
+        _flushDeferredIncomingMessages();
       }
+    }
+  }
+
+  Future<void> _refreshAfterSend(WisperBotMessage confirmed) async {
+    final active = _refreshInFlight;
+    if (active != null) {
+      try {
+        await active;
+      } on Object {
+        // A new post-send poll is still useful after a failed older refresh.
+      }
+    }
+    if (_disposed ||
+        (_state.phase != WisperBotChatPhase.ready &&
+            _state.phase != WisperBotChatPhase.reconnecting)) {
+      return;
+    }
+    try {
+      await refresh();
+      _acknowledgeVisitorMessageWhenAnswered(confirmed);
+    } on Object {
+      // Delivery already succeeded; a transient catch-up failure must not
+      // convert the confirmed visitor message into a failed send.
     }
   }
 
@@ -704,7 +740,8 @@ class WisperBotChatController with WidgetsBindingObserver {
     }
     final changed = await _client._switchUser(user);
     if (!changed) return;
-    _deferredVisitorIncomingMessages.clear();
+    _deferredIncomingMessages.clear();
+    _deferredMessageStatuses.clear();
     _conversationId = null;
     _refreshCursor = 0;
     _recoveryAttempted = false;
@@ -732,7 +769,8 @@ class WisperBotChatController with WidgetsBindingObserver {
     await _client._stopRealtime();
     _realtimeActive = false;
     await _client._clearSession();
-    _deferredVisitorIncomingMessages.clear();
+    _deferredIncomingMessages.clear();
+    _deferredMessageStatuses.clear();
     _conversationId = null;
     _refreshCursor = 0;
     _recoveryAttempted = false;
@@ -819,7 +857,8 @@ class WisperBotChatController with WidgetsBindingObserver {
     _agentTypingTimer?.cancel();
     _realtimeRetryTimer?.cancel();
     await _client._stopRealtime();
-    _deferredVisitorIncomingMessages.clear();
+    _deferredIncomingMessages.clear();
+    _deferredMessageStatuses.clear();
     _realtimeActive = false;
     if (_observingLifecycle) {
       WidgetsBinding.instance.removeObserver(this);
@@ -900,6 +939,7 @@ class WisperBotChatController with WidgetsBindingObserver {
           }
         },
         onMessageCreated: _handleRealtimeMessageCreated,
+        onMessageStatusUpdated: _handleRealtimeMessageStatusUpdated,
         onTypingChanged: _handleRealtimeTypingChanged,
         onHandoffUpdated: _handleRealtimeHandoffUpdated,
         onError: (error, _) {
@@ -959,6 +999,87 @@ class WisperBotChatController with WidgetsBindingObserver {
         pendingCount: _pendingCount(messages),
       ),
     );
+    if (message.role == WisperBotMessageRole.agent && !message.isActivity) {
+      final messageId = message.serverId;
+      WisperBotMessage? answeredVisitor;
+      if (messageId != null) {
+        for (final item in _state.messages.reversed) {
+          if (item.role == WisperBotMessageRole.visitor &&
+              item.serverId != null &&
+              item.serverId! < messageId) {
+            answeredVisitor = item;
+            break;
+          }
+        }
+      }
+      if (answeredVisitor != null) {
+        _acknowledgeVisitorMessageWhenAnswered(answeredVisitor);
+      }
+    }
+  }
+
+  void _handleRealtimeMessageStatusUpdated(Object? payload) {
+    final update = const WidgetResponseDecoder().realtimeMessageStatus(payload);
+    if (update == null) return;
+    if (_activeSendLocalId != null &&
+        !_state.messages
+            .any((message) => message.serverId == update.messageId)) {
+      _deferredMessageStatuses[update.messageId] = update.status;
+      return;
+    }
+    _applyMessageStatus(update.messageId, update.status);
+  }
+
+  void _acknowledgeVisitorMessageWhenAnswered(WisperBotMessage visitor) {
+    final serverId = visitor.serverId;
+    if (serverId == null) return;
+    final hasLaterAnswer = _state.messages.any(
+      (message) =>
+          message.role == WisperBotMessageRole.agent &&
+          !message.isActivity &&
+          message.serverId != null &&
+          message.serverId! > serverId,
+    );
+    if (hasLaterAnswer) {
+      _applyMessageStatus(serverId, WisperBotMessageStatus.read);
+    }
+  }
+
+  void _applyMessageStatus(int messageId, WisperBotMessageStatus status) {
+    final index =
+        _state.messages.indexWhere((message) => message.serverId == messageId);
+    if (index < 0) return;
+    final current = _state.messages[index];
+    if (!_isStatusAdvance(current.status, status)) return;
+    final messages = <WisperBotMessage>[..._state.messages];
+    messages[index] = current.copyWith(status: status, clearError: true);
+    _emit(
+      _state.copyWith(
+        messages: messages,
+        pendingCount: _pendingCount(messages),
+      ),
+    );
+  }
+
+  bool _isStatusAdvance(
+    WisperBotMessageStatus current,
+    WisperBotMessageStatus next,
+  ) {
+    if (current == next) return false;
+    if (next == WisperBotMessageStatus.failed) {
+      return current != WisperBotMessageStatus.delivered &&
+          current != WisperBotMessageStatus.read;
+    }
+    if (current == WisperBotMessageStatus.failed) return false;
+    const rank = <WisperBotMessageStatus, int>{
+      WisperBotMessageStatus.pending: 0,
+      WisperBotMessageStatus.unconfirmed: 0,
+      WisperBotMessageStatus.sent: 1,
+      WisperBotMessageStatus.delivered: 2,
+      WisperBotMessageStatus.read: 3,
+      WisperBotMessageStatus.failed: -1,
+    };
+    return rank[next]! > rank[current]!;
   }
 
   void _handleRealtimeTypingChanged(Object? payload) {
@@ -1030,13 +1151,12 @@ class WisperBotChatController with WidgetsBindingObserver {
     final immediate = <WisperBotMessage>[];
     for (final message in incoming) {
       final serverId = message.serverId;
-      // Pusher can deliver the server echo before the matching send completes.
-      // Delay only that visitor echo so request ownership—not body/time
-      // similarity—reconciles the pending local message first.
-      if (message.role == WisperBotMessageRole.visitor &&
-          serverId != null &&
-          !knownServerIds.contains(serverId)) {
-        _deferredVisitorIncomingMessages[serverId] = message;
+      // Pusher can deliver both the server echo and its bot answer before the
+      // send response assigns an ID to the local pending row. Keep all new
+      // messages behind that response so the answer never flashes above the
+      // visitor question.
+      if (serverId != null && !knownServerIds.contains(serverId)) {
+        _deferredIncomingMessages[serverId] = message;
       } else {
         immediate.add(message);
       }
@@ -1048,21 +1168,46 @@ class WisperBotChatController with WidgetsBindingObserver {
     );
   }
 
-  void _flushDeferredVisitorIncomingMessages() {
-    if (_deferredVisitorIncomingMessages.isEmpty) return;
-    final deferred = _deferredVisitorIncomingMessages.values.toList();
-    _deferredVisitorIncomingMessages.clear();
-    final messages = _mergeMessages(
-      _state.messages,
-      deferred,
-      emitReceivedEvents: false,
-    );
-    _emit(
-      _state.copyWith(
-        messages: messages,
-        pendingCount: _pendingCount(messages),
-      ),
-    );
+  void _flushDeferredIncomingMessages() {
+    if (_deferredIncomingMessages.isNotEmpty) {
+      final deferred = _deferredIncomingMessages.values.toList();
+      _deferredIncomingMessages.clear();
+      final messages = _mergeMessages(
+        _state.messages,
+        deferred,
+        emitReceivedEvents: true,
+      );
+      _emit(
+        _state.copyWith(
+          messages: messages,
+          pendingCount: _pendingCount(messages),
+        ),
+      );
+      for (final message in deferred) {
+        if (message.role == WisperBotMessageRole.agent && !message.isActivity) {
+          WisperBotMessage? visitor;
+          for (final item in _state.messages.reversed) {
+            if (item.role == WisperBotMessageRole.visitor &&
+                item.serverId != null &&
+                message.serverId != null &&
+                item.serverId! < message.serverId!) {
+              visitor = item;
+              break;
+            }
+          }
+          if (visitor != null) _acknowledgeVisitorMessageWhenAnswered(visitor);
+        }
+      }
+    }
+    if (_deferredMessageStatuses.isNotEmpty) {
+      final statuses = Map<int, WisperBotMessageStatus>.of(
+        _deferredMessageStatuses,
+      );
+      _deferredMessageStatuses.clear();
+      for (final entry in statuses.entries) {
+        _applyMessageStatus(entry.key, entry.value);
+      }
+    }
   }
 
   int _greatestServerId(
@@ -1144,6 +1289,7 @@ class WisperBotChatController with WidgetsBindingObserver {
 
   void _updateHandoff(WisperBotHandoffState handoff) {
     if (_state.handoff.status == handoff.status &&
+        _state.handoff.agentName == handoff.agentName &&
         _state.handoff.error == handoff.error) {
       return;
     }

@@ -16,6 +16,7 @@ part 'view_state_tests.dart';
 part 'composer_handoff_tests.dart';
 part 'launcher_tests.dart';
 part 'presentation_layout_tests.dart';
+part 'starter_questions_tests.dart';
 
 void main() {
   const config = WisperBotConfig(
@@ -28,6 +29,7 @@ void main() {
   registerComposerHandoffTests(config);
   registerLauncherTests(config);
   registerPresentationLayoutTests(config);
+  registerStarterQuestionsTests(config);
 }
 
 Widget _app(Widget child) => MaterialApp(home: Scaffold(body: child));
