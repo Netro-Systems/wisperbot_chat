@@ -176,6 +176,25 @@ void main() {
   });
 
   test('decodes realtime message status updates defensively', () {
+    for (final payload in <Object?>[
+      null,
+      'invalid',
+      {'id': 42},
+      {'id': 42, 'status': 1},
+      {'id': 'invalid', 'status': 'read'},
+      {'id': -1, 'status': 'read'},
+      {'id': 1.5, 'status': 'read'},
+    ]) {
+      expect(decoder.realtimeMessageStatus(payload), isNull);
+    }
+    for (final status in WisperBotMessageStatus.values) {
+      final update = decoder.realtimeMessageStatus({
+        'id': 42,
+        'status': ' ${status.name.toUpperCase()} ',
+      });
+      expect(update?.messageId, 42);
+      expect(update?.status, status);
+    }
     final update = decoder.realtimeMessageStatus(<String, Object?>{
       'id': '42',
       'status': 'seen',

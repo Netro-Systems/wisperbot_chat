@@ -87,18 +87,41 @@ final class WidgetResponseDecoder {
     return _parseMessage(messageJson);
   }
 
-  /// Decodes a delivery-state update for an existing message.
+  /// Decodes a delivery-state change for an existing server message.
   WidgetMessageStatusUpdate? realtimeMessageStatus(Object? value) {
     if (value is! Map<String, dynamic>) return null;
     final rawId = value['id'];
-    final messageId = switch (rawId) {
-      int id when id > 0 => id,
-      String id => int.tryParse(id),
-      _ => null,
-    };
-    final status = _parseDeliveryStatusValue(value['status']);
-    if (messageId == null || messageId <= 0 || status == null) return null;
-    return WidgetMessageStatusUpdate(messageId: messageId, status: status);
+    final id = rawId is int
+        ? rawId
+        : rawId is String
+            ? int.tryParse(rawId)
+            : null;
+    if (id == null || id <= 0) return null;
+    final status = _stringOrNull(value['status'])?.trim().toLowerCase();
+    if (!const {
+      'read',
+      'seen',
+      'viewed',
+      'opened',
+      'delivered',
+      'received',
+      'reached',
+      'failed',
+      'error',
+      'undelivered',
+      'rejected',
+      'sending',
+      'pending',
+      'queued',
+      'unconfirmed',
+      'sent',
+    }.contains(status)) {
+      return null;
+    }
+    return WidgetMessageStatusUpdate(
+      messageId: id,
+      status: _parseDeliveryStatus({'status': status}),
+    );
   }
 
   /// Decodes the widget-safe realtime payload for agent typing changes.
@@ -320,11 +343,6 @@ final class WidgetResponseDecoder {
         .trim()
         .toLowerCase();
 
-    return _parseDeliveryStatusValue(raw) ?? WisperBotMessageStatus.sent;
-  }
-
-  WisperBotMessageStatus? _parseDeliveryStatusValue(Object? value) {
-    final raw = value?.toString().trim().toLowerCase();
     return switch (raw) {
       'read' || 'seen' || 'viewed' || 'opened' => WisperBotMessageStatus.read,
       'delivered' ||
@@ -338,8 +356,7 @@ final class WidgetResponseDecoder {
         WisperBotMessageStatus.failed,
       'sending' || 'pending' || 'queued' => WisperBotMessageStatus.pending,
       'unconfirmed' => WisperBotMessageStatus.unconfirmed,
-      'sent' => WisperBotMessageStatus.sent,
-      _ => null,
+      _ => WisperBotMessageStatus.sent,
     };
   }
 
@@ -396,40 +413,9 @@ final class WidgetResponseDecoder {
       aiEnabled: _requiredBool(json, 'ai_enabled'),
       requiresPreChat: _requiredBool(json, 'require_prechat'),
       preChatFields: preChatFields,
-      starterQuestions: _parseStarterQuestions(json['starter_questions']),
       realtime: _parseRealtimeConfig(json['realtime']),
       offlineMessage: _stringOrNull(json['offline_message']),
     );
-  }
-
-  List<WisperBotStarterQuestion> _parseStarterQuestions(Object? value) {
-    if (value is! List<dynamic>) return const <WisperBotStarterQuestion>[];
-    final questions = <WisperBotStarterQuestion>[];
-    for (final item in value) {
-      if (questions.length == 5) break;
-      if (item is! Map<String, dynamic>) continue;
-      final id = _safeStarterQuestionId(item['id']);
-      final rawLabel = item['label'];
-      if (id == null || rawLabel is! String) continue;
-      final label = rawLabel.trim();
-      if (label.isEmpty ||
-          label.length > 80 ||
-          RegExp(r'[<>\x00-\x1F\x7F]').hasMatch(label)) {
-        continue;
-      }
-      questions.add(WisperBotStarterQuestion(id: id, label: label));
-    }
-    return questions;
-  }
-
-  String? _safeStarterQuestionId(Object? value) {
-    final text = switch (value) {
-      String() => value.trim(),
-      int() => value.toString(),
-      double() when value.isFinite => value.toString(),
-      _ => null,
-    };
-    return text?.isNotEmpty == true ? text : null;
   }
 
   WisperBotRealtimeConfig? _parseRealtimeConfig(Object? value) {
@@ -448,18 +434,19 @@ final class WidgetResponseDecoder {
     final enabled = _requiredBool(value, 'enabled');
     final eligible = _requiredBool(value, 'eligible');
     if (value['status'] is! String) throw _invalidResponse();
-    if (!enabled) {
-      return const WisperBotHandoffState.unavailable();
-    }
     if (value['status'] == 'connected') {
-      return const WisperBotHandoffState(
+      return WisperBotHandoffState(
         status: WisperBotHandoffStatus.connected,
+        agentName: _stringOrNull(_objectOrNull(value['agent'])?['name']),
       );
     }
     if (value['status'] == 'waiting') {
       return const WisperBotHandoffState(
-        status: WisperBotHandoffStatus.requesting,
+        status: WisperBotHandoffStatus.waiting,
       );
+    }
+    if (!enabled) {
+      return const WisperBotHandoffState.unavailable();
     }
     if (eligible) {
       return const WisperBotHandoffState(
