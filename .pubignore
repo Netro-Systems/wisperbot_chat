@@ -2,12 +2,17 @@
 /android/
 /ios/
 /build/
+**/build/
+.dart_tool/
+.idea/
+*.iml
 **/GeneratedPluginRegistrant.*
 **/local.properties
 **/Flutter/ephemeral/
 **/Flutter/flutter_export_environment.sh
 **/Flutter/Generated.xcconfig
 test/golden/failures/
+/coverage/
 .DS_Store
 *.log
 

@@ -19,6 +19,7 @@ A customizable, battery-efficient Flutter SDK for embedding WisperBot customer s
 | **Text, Image & Audio Messaging** | ✅ Yes | ✅ Yes | ✅ Yes |
 | **Pusher Realtime Sync** | ✅ Yes | ✅ Yes | ✅ Yes |
 | **Typing Indicators & Human Handoff** | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Reusable Starter Questions** | ✅ Yes | ✅ Yes | ✅ Yes |
 | **Prebuilt UI (Screens, Sheets, Dialogs, Launchers)** | ✅ Yes | ✅ Yes | ✅ Yes |
 | **Required Pre-Chat Lead Forms** | ✅ Yes | ✅ Yes | ✅ Yes |
 
@@ -32,7 +33,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  wisperbot_chat: ^0.1.4
+  wisperbot_chat: ^0.1.5
 ```
 
 Or run:
@@ -366,12 +367,43 @@ Future<void> submitLead(WisperBotChatController controller) async {
 
 ---
 
+### 💬 Starter Questions
+
+Configure up to five starter questions in **Widget Setup → Starter questions**.
+The built-in chat UI displays them below the welcome message and keeps them
+available throughout the bot conversation. No labels or answers need to be
+hardcoded in the host application.
+
+When a visitor selects one, the SDK sends its label as a normal text message.
+WisperBot returns the saved answer through the existing realtime or polling
+flow, including when Smart Bot/AI is disabled. Questions are automatically
+disabled while a message is sending, before required pre-chat fields are
+completed, and during a waiting or connected human handoff.
+
+Headless integrations can read the server-configured list from controller
+state and send the selected label through the normal API:
+
+```dart
+final questions = controller.state.widget?.starterQuestions ??
+    const <WisperBotStarterQuestion>[];
+if (questions.isNotEmpty) {
+  await controller.sendText(questions.first.label);
+}
+```
+
+The `WisperBotStarterQuestion.id` value is a stable UI key only; do not send it
+as a message or command. Saved answers remain server-side.
+
+---
+
 ## Delivery & Reliability Behavior
 
 * **Platform Security**: Visitor tokens are bearer credentials persisted via `WisperBotSessionStore` using platform-native secure storage (`flutter_secure_storage`).
 * **Authoritative Confirmation**: Messages transition from `pending` to `sent` only upon server receipt and ID issuance.
 * **Network Failures & Unconfirmed State**: If a request disconnects or times out before receiving a response, the message is marked `unconfirmed` rather than failed, avoiding duplicate message sends.
-* **Realtime Sync**: A private Pusher channel delivers messages, typing changes, and handoff updates while chat is active, and disconnects automatically in the background or when chat is closed. Pull-to-refresh remains available as a user-triggered consistency check, and full initial history is loaded through bounded pagination; neither path runs on a timer.
+* **Realtime Sync**: A private Pusher channel delivers messages, delivery/read status changes, typing changes, and handoff updates while chat is active, and disconnects automatically in the background or when chat is closed. Pull-to-refresh remains available as a user-triggered consistency check, and full initial history is loaded through bounded pagination; neither path runs on a timer.
+* **Immediate Deterministic Replies**: Successful text sends trigger one immediate catch-up request so saved starter-question answers appear without waiting for another refresh interval. Realtime and pull results are deduplicated by server message ID.
+* **Stable Message Ordering**: Realtime replies received while a visitor send is still awaiting confirmation are reconciled after the visitor message receives its server ID, preventing replies from briefly appearing above their question.
 * **Safe Diagnostics**: Diagnostic callbacks emit strictly redacted operational telemetry (durations, error codes, HTTP statuses) without logging PII, bearer tokens, or message content.
 
 ---
