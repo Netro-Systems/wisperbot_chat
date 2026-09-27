@@ -20,6 +20,7 @@ abstract interface class WidgetRealtimeConnector {
     required int conversationId,
     void Function()? onConnected,
     WidgetRealtimePayloadCallback? onMessageCreated,
+    WidgetRealtimePayloadCallback? onMessageStatusUpdated,
     WidgetRealtimePayloadCallback? onTypingChanged,
     WidgetRealtimePayloadCallback? onHandoffUpdated,
     WidgetRealtimeErrorCallback? onError,
@@ -48,6 +49,7 @@ final class PusherWidgetRealtimeConnector implements WidgetRealtimeConnector {
     required int conversationId,
     void Function()? onConnected,
     WidgetRealtimePayloadCallback? onMessageCreated,
+    WidgetRealtimePayloadCallback? onMessageStatusUpdated,
     WidgetRealtimePayloadCallback? onTypingChanged,
     WidgetRealtimePayloadCallback? onHandoffUpdated,
     WidgetRealtimeErrorCallback? onError,
@@ -94,6 +96,11 @@ final class PusherWidgetRealtimeConnector implements WidgetRealtimeConnector {
     _subscriptions.add(
       channel.bind('WidgetMessageCreated').listen((event) {
         onMessageCreated?.call(event.tryGetDataAsMap());
+      }),
+    );
+    _subscriptions.add(
+      channel.bind('MessageStatusUpdated').listen((event) {
+        onMessageStatusUpdated?.call(event.tryGetDataAsMap());
       }),
     );
     _subscriptions.add(

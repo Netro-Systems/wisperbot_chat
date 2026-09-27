@@ -57,6 +57,65 @@ void main() {
     expect(result.session.visitorId, 'visitor-1');
     expect(result.messages.single.serverId, 4);
     expect(result.widget.title, 'Test support');
+    expect(result.widget.starterQuestions, isEmpty);
+  });
+
+  test(
+      'session decoder parses, sanitizes, orders, and limits starter questions',
+      () {
+    final oversized = List<String>.filled(81, 'x').join();
+    final result = decoder.session(
+      http.Response(
+        jsonEncode(
+          sessionResponse(
+            aiEnabled: false,
+            starterQuestions: <Map<String, Object?>>[
+              <String, Object?>{
+                'id': 'sq_first',
+                'label': '  First question?  '
+              },
+              <String, Object?>{'id': 2, 'label': 'Second question?'},
+              <String, Object?>{'id': 'bad-empty', 'label': '   '},
+              <String, Object?>{'id': 'bad-html', 'label': '<b>Unsafe</b>'},
+              <String, Object?>{'id': 'bad-control', 'label': 'Bad\u0007label'},
+              <String, Object?>{'id': 'bad-long', 'label': oversized},
+              <String, Object?>{'id': 'sq_third', 'label': 'Third question?'},
+              <String, Object?>{'id': 'sq_fourth', 'label': 'Fourth question?'},
+              <String, Object?>{'id': 'sq_fifth', 'label': 'Fifth question?'},
+              <String, Object?>{'id': 'sq_sixth', 'label': 'Sixth question?'},
+            ],
+          ),
+        ),
+        200,
+      ),
+      preChatCompleted: false,
+    );
+
+    expect(result.widget.aiEnabled, isFalse);
+    expect(
+      result.widget.starterQuestions.map((question) => question.id),
+      <String>['sq_first', '2', 'sq_third', 'sq_fourth', 'sq_fifth'],
+    );
+    expect(result.widget.starterQuestions.first.label, 'First question?');
+    expect(
+      () => result.widget.starterQuestions.add(
+        const WisperBotStarterQuestion(id: 'extra', label: 'Extra'),
+      ),
+      throwsUnsupportedError,
+    );
+  });
+
+  test('null, invalid, and empty starter-question data decode as empty', () {
+    for (final value in <Object?>[null, 'invalid', <Object?>[]]) {
+      final response = sessionResponse();
+      (response['config']! as Map<String, Object?>)['starter_questions'] =
+          value;
+      final result = decoder.session(
+        http.Response(jsonEncode(response), 200),
+        preChatCompleted: false,
+      );
+      expect(result.widget.starterQuestions, isEmpty);
+    }
   });
 
   test(
@@ -114,6 +173,31 @@ void main() {
         expect(parsed.isDelivered, isTrue);
       }
     }
+  });
+
+  test('decodes realtime message status updates defensively', () {
+    final update = decoder.realtimeMessageStatus(<String, Object?>{
+      'id': '42',
+      'status': 'seen',
+      'conversation_id': 7,
+    });
+
+    expect(update?.messageId, 42);
+    expect(update?.status, WisperBotMessageStatus.read);
+    expect(
+      decoder.realtimeMessageStatus(<String, Object?>{
+        'id': 42,
+        'status': 'unknown',
+      }),
+      isNull,
+    );
+    expect(
+      decoder.realtimeMessageStatus(<String, Object?>{
+        'id': 0,
+        'status': 'read',
+      }),
+      isNull,
+    );
   });
 
   test('malformed responses become typed errors without leaking content', () {

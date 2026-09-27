@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -162,7 +161,8 @@ void main() {
     await tester.tap(find.byTooltip('Open chat'));
     await tester.pumpAndSettle();
     expect(
-        find.text('Support is unavailable because notification setup is incomplete.'),
+        find.text(
+            'Support is unavailable because notification setup is incomplete.'),
         findsOneWidget);
     expect(tester.takeException(), isNull);
     expect(find.byType(WisperBotChatScreen), findsNothing);

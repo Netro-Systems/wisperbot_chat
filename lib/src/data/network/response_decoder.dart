@@ -87,6 +87,20 @@ final class WidgetResponseDecoder {
     return _parseMessage(messageJson);
   }
 
+  /// Decodes a delivery-state update for an existing message.
+  WidgetMessageStatusUpdate? realtimeMessageStatus(Object? value) {
+    if (value is! Map<String, dynamic>) return null;
+    final rawId = value['id'];
+    final messageId = switch (rawId) {
+      int id when id > 0 => id,
+      String id => int.tryParse(id),
+      _ => null,
+    };
+    final status = _parseDeliveryStatusValue(value['status']);
+    if (messageId == null || messageId <= 0 || status == null) return null;
+    return WidgetMessageStatusUpdate(messageId: messageId, status: status);
+  }
+
   /// Decodes the widget-safe realtime payload for agent typing changes.
   WisperBotAgentTyping? realtimeTyping(Object? value) {
     if (value is! Map<String, dynamic>) return null;
@@ -306,6 +320,11 @@ final class WidgetResponseDecoder {
         .trim()
         .toLowerCase();
 
+    return _parseDeliveryStatusValue(raw) ?? WisperBotMessageStatus.sent;
+  }
+
+  WisperBotMessageStatus? _parseDeliveryStatusValue(Object? value) {
+    final raw = value?.toString().trim().toLowerCase();
     return switch (raw) {
       'read' || 'seen' || 'viewed' || 'opened' => WisperBotMessageStatus.read,
       'delivered' ||
@@ -319,7 +338,8 @@ final class WidgetResponseDecoder {
         WisperBotMessageStatus.failed,
       'sending' || 'pending' || 'queued' => WisperBotMessageStatus.pending,
       'unconfirmed' => WisperBotMessageStatus.unconfirmed,
-      _ => WisperBotMessageStatus.sent,
+      'sent' => WisperBotMessageStatus.sent,
+      _ => null,
     };
   }
 
@@ -376,9 +396,40 @@ final class WidgetResponseDecoder {
       aiEnabled: _requiredBool(json, 'ai_enabled'),
       requiresPreChat: _requiredBool(json, 'require_prechat'),
       preChatFields: preChatFields,
+      starterQuestions: _parseStarterQuestions(json['starter_questions']),
       realtime: _parseRealtimeConfig(json['realtime']),
       offlineMessage: _stringOrNull(json['offline_message']),
     );
+  }
+
+  List<WisperBotStarterQuestion> _parseStarterQuestions(Object? value) {
+    if (value is! List<dynamic>) return const <WisperBotStarterQuestion>[];
+    final questions = <WisperBotStarterQuestion>[];
+    for (final item in value) {
+      if (questions.length == 5) break;
+      if (item is! Map<String, dynamic>) continue;
+      final id = _safeStarterQuestionId(item['id']);
+      final rawLabel = item['label'];
+      if (id == null || rawLabel is! String) continue;
+      final label = rawLabel.trim();
+      if (label.isEmpty ||
+          label.length > 80 ||
+          RegExp(r'[<>\x00-\x1F\x7F]').hasMatch(label)) {
+        continue;
+      }
+      questions.add(WisperBotStarterQuestion(id: id, label: label));
+    }
+    return questions;
+  }
+
+  String? _safeStarterQuestionId(Object? value) {
+    final text = switch (value) {
+      String() => value.trim(),
+      int() => value.toString(),
+      double() when value.isFinite => value.toString(),
+      _ => null,
+    };
+    return text?.isNotEmpty == true ? text : null;
   }
 
   WisperBotRealtimeConfig? _parseRealtimeConfig(Object? value) {
@@ -403,6 +454,11 @@ final class WidgetResponseDecoder {
     if (value['status'] == 'connected') {
       return const WisperBotHandoffState(
         status: WisperBotHandoffStatus.connected,
+      );
+    }
+    if (value['status'] == 'waiting') {
+      return const WisperBotHandoffState(
+        status: WisperBotHandoffStatus.requesting,
       );
     }
     if (eligible) {
