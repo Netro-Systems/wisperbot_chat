@@ -781,6 +781,7 @@ class WisperBotChatController with WidgetsBindingObserver {
         _state.messages.any(
           (m) =>
               m.role == WisperBotMessageRole.agent &&
+              !m.isActivity &&
               m.status != WisperBotMessageStatus.read,
         )) {
       unawaited(_client._markRead().catchError((_) {}));
@@ -944,7 +945,7 @@ class WisperBotChatController with WidgetsBindingObserver {
   void _handleRealtimeMessageCreated(Object? payload) {
     final message = const WidgetResponseDecoder().realtimeMessage(payload);
     if (message == null) return;
-    if (message.role == WisperBotMessageRole.agent) {
+    if (message.role == WisperBotMessageRole.agent && !message.isActivity) {
       unawaited(_client._markRead().catchError((_) {}));
     }
     final messages = _mergeIncomingMessages(

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../domain/contracts/session_store.dart';
@@ -59,7 +60,7 @@ class FlutterSecureWisperBotSessionStore implements WisperBotSessionStore {
     String namespace,
     WisperBotStoredSession session,
   ) async {
-    await _storage.write(
+    await _writeValue(
       key: namespace,
       value: jsonEncode(<String, Object>{
         'visitor_id': session.visitorId,
@@ -142,7 +143,7 @@ class FlutterSecureWisperBotSessionStore implements WisperBotSessionStore {
   }
 
   Future<void> _writeIndex(List<_SessionIndexEntry> entries) {
-    return _storage.write(
+    return _writeValue(
       key: _indexKey,
       value: jsonEncode(
         entries
@@ -155,6 +156,21 @@ class FlutterSecureWisperBotSessionStore implements WisperBotSessionStore {
             .toList(growable: false),
       ),
     );
+  }
+
+  Future<void> _writeValue({required String key, required String value}) async {
+    try {
+      await _storage.write(key: key, value: value);
+    } on PlatformException catch (error) {
+      // A stale Apple Keychain item can be missed by the plugin's lookup
+      // but still conflict with insertion (errSecDuplicateItem).
+      if (error.code != 'Unexpected security result code' ||
+          error.details != -25299) {
+        rethrow;
+      }
+      await _storage.delete(key: key);
+      await _storage.write(key: key, value: value);
+    }
   }
 }
 

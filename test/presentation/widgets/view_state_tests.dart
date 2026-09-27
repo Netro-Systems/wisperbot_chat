@@ -1,6 +1,52 @@
 part of 'chat_widgets_test.dart';
 
 void registerViewStateTests(WisperBotConfig config) {
+  testWidgets('shows join and assignment times with names above replies',
+      (tester) async {
+    final joined = message(id: 1, type: 'event', body: 'Rahim joined the chat')
+      ..addAll({'kind': 'activity', 'agent_name': 'Rahim'});
+    final reply = message(id: 2, body: 'How can I help?')
+      ..['agent_name'] = 'Rahim';
+    final secondReply = message(id: 3, body: 'Please share your order ID')
+      ..['agent_name'] = 'Karim';
+    final assigned =
+        message(id: 4, type: 'event', body: 'Rahim assigned the chat to Karim')
+          ..addAll({'kind': 'activity', 'agent_name': 'Rahim'});
+    final runtime = _runtime(
+        config,
+        MockClient((request) async => http.Response(
+              jsonEncode(request.url.path.endsWith('/session')
+                  ? sessionResponse(
+                      messages: [joined, reply, secondReply, assigned])
+                  : pollResponse()),
+              200,
+            )));
+    await tester.pumpWidget(_app(
+        WisperBotChatView(config: config, controller: runtime.controller)));
+    await tester.pumpAndSettle();
+    final time = DateTime.parse(joined['created_at']! as String).toLocal();
+    final hour = time.hour % 12 == 0 ? 12 : time.hour % 12;
+    final label =
+        '$hour:${time.minute.toString().padLeft(2, '0')} ${time.hour >= 12 ? 'PM' : 'AM'}';
+    final activity = find.text('Rahim joined the chat · $label');
+    expect(activity, findsOneWidget);
+    expect(tester.widget<Text>(activity).textAlign, TextAlign.center);
+    expect(find.byKey(const ValueKey('wisperbot-message-bubble-server-1')),
+        findsNothing);
+    final assignment = find.text('Rahim assigned the chat to Karim · $label');
+    expect(assignment, findsOneWidget);
+    expect(tester.widget<Text>(assignment).textAlign, TextAlign.center);
+    expect(find.byKey(const ValueKey('wisperbot-message-bubble-server-4')),
+        findsNothing);
+    expect(find.text('Rahim'), findsOneWidget);
+    expect(find.text('Karim'), findsOneWidget);
+    expect(tester.getTopLeft(find.text('Rahim')).dy,
+        lessThan(tester.getTopLeft(find.text('How can I help?')).dy));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
   testWidgets('embedded view shows only an accessible neutral shimmer',
       (tester) async {
     final response = Completer<http.Response>();

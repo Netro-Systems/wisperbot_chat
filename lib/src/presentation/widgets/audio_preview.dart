@@ -21,6 +21,8 @@ class _AudioPreview extends StatefulWidget {
 class _AudioPreviewState extends State<_AudioPreview> {
   late final AudioPlayer _player;
   late final StreamSubscription<PlayerState> _playerStateSubscription;
+  final _sources = <PreparedAudioSource>[];
+  int _loadVersion = 0;
   bool _ready = false;
   bool _failed = false;
 
@@ -47,23 +49,26 @@ class _AudioPreviewState extends State<_AudioPreview> {
   }
 
   Future<void> _loadPreview() async {
+    final version = ++_loadVersion;
     setState(() {
       _ready = false;
       _failed = false;
     });
 
     try {
-      await _player.setAudioSource(
-        AudioSource.uri(
-          Uri.dataFromBytes(
-            widget.upload.bytes,
-            mimeType: widget.upload.mimeType,
-          ),
-        ),
+      final prepared = await PreparedAudioSource.create(
+        widget.upload.bytes,
+        contentType: widget.upload.mimeType,
       );
-      if (mounted) setState(() => _ready = true);
+      if (!mounted || version != _loadVersion) {
+        await prepared.dispose();
+        return;
+      }
+      _sources.add(prepared);
+      await _player.setAudioSource(prepared.source);
+      if (mounted && version == _loadVersion) setState(() => _ready = true);
     } on Object {
-      if (mounted) setState(() => _failed = true);
+      if (mounted && version == _loadVersion) setState(() => _failed = true);
     }
   }
 
@@ -83,8 +88,15 @@ class _AudioPreviewState extends State<_AudioPreview> {
   void dispose() {
     _AudioPlaybackCoordinator.clear(_player);
     _playerStateSubscription.cancel();
-    _player.dispose();
+    unawaited(_disposePlayer());
     super.dispose();
+  }
+
+  Future<void> _disposePlayer() async {
+    await _player.dispose();
+    for (final source in _sources) {
+      await source.dispose();
+    }
   }
 
   @override

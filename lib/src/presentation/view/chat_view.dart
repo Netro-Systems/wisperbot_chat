@@ -3,7 +3,9 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:app_settings/app_settings.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:just_audio/just_audio.dart';
@@ -16,6 +18,7 @@ import '../../diagnostics/debug_upload_logger.dart';
 import '../../domain/contracts/media_adapter.dart';
 import '../../domain/errors/wisperbot_exception.dart';
 import '../../domain/models/models.dart';
+import '../media/audio_source.dart';
 import '../media/remote_image.dart';
 import '../theme/resolved_theme.dart';
 import '../widgets/brand_logo.dart';
@@ -173,7 +176,17 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          SnackBar(content: Text(next.error!.message)),
+          SnackBar(
+            content: Text(next.error!.message),
+            action: !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
+                ? SnackBarAction(
+                    label: 'Settings',
+                    onPressed: () async {
+                      await launchUrl(Uri.parse('app-settings:'));
+                    },
+                  )
+                : null,
+          ),
         );
       });
     }

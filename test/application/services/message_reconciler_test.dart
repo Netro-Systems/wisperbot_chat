@@ -7,6 +7,21 @@ import 'package:wisperbot_chat/src/application/services/message_reconciler.dart'
 void main() {
   const reconciler = MessageReconciler();
 
+  test('deduplicates activities without emitting agent reply notifications',
+      () {
+    final activity =
+        _message(localId: 'join', serverId: 1).copyWith(isActivity: true);
+    final reply = _message(localId: 'reply', serverId: 2);
+    final received = <WisperBotMessage>[];
+    final merged = reconciler
+        .merge([], [activity, reply], onNewAgentMessage: received.add);
+    final refreshed =
+        reconciler.merge(merged, [activity], onNewAgentMessage: received.add);
+    expect(refreshed, hasLength(2));
+    expect(refreshed.first.isActivity, isTrue);
+    expect(received, [reply]);
+  });
+
   test('deduplicates by server ID and preserves the existing local ID', () {
     final upload = WisperBotUpload(
       bytes: Uint8List.fromList(<int>[1, 2, 3, 4]),
@@ -25,7 +40,8 @@ void main() {
       body: 'authoritative',
     );
 
-    final result = reconciler.merge(<WisperBotMessage>[existing], <WisperBotMessage>[replacement]);
+    final result = reconciler
+        .merge(<WisperBotMessage>[existing], <WisperBotMessage>[replacement]);
 
     expect(result, hasLength(1));
     expect(result.single.localId, 'pending-1');
@@ -42,7 +58,8 @@ void main() {
       ],
     );
 
-    expect(result.map((message) => message.localId), <String>['one', 'two', 'pending']);
+    expect(result.map((message) => message.localId),
+        <String>['one', 'two', 'pending']);
   });
 }
 
