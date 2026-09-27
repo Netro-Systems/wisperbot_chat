@@ -71,6 +71,27 @@ void registerRealtimeTests(WisperBotConfig config) {
 
     expect(controller.state.agentTyping?.name, 'Taylor');
 
+    // Resolving clears the handoff before broadcasting the activity.
+    connector.emitHandoffUpdated({
+      'handoff': {'enabled': true, 'eligible': true, 'status': 'bot'},
+    });
+    connector.emitMessageCreated({
+      'message': message(id: 10, type: 'event', body: 'Resolved by Taylor')
+        ..addAll({
+          'kind': 'activity',
+          'status': 'delivered',
+          'sent_by': 'system',
+          'agent_name': 'Taylor',
+          'activity': {
+            'type': 'conversation.resolved',
+            'actor_name': 'Taylor',
+          },
+        }),
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.state.messages.last.body, 'Resolved by Taylor');
+    expect(controller.state.messages.last.isActivity, isTrue);
+
     await statesSub.cancel();
     await controller.dispose();
     await client.close();
