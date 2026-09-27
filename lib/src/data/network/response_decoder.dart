@@ -87,6 +87,43 @@ final class WidgetResponseDecoder {
     return _parseMessage(messageJson);
   }
 
+  /// Decodes a delivery-state change for an existing server message.
+  WidgetMessageStatusUpdate? realtimeMessageStatus(Object? value) {
+    if (value is! Map<String, dynamic>) return null;
+    final rawId = value['id'];
+    final id = rawId is int
+        ? rawId
+        : rawId is String
+            ? int.tryParse(rawId)
+            : null;
+    if (id == null || id <= 0) return null;
+    final status = _stringOrNull(value['status'])?.trim().toLowerCase();
+    if (!const {
+      'read',
+      'seen',
+      'viewed',
+      'opened',
+      'delivered',
+      'received',
+      'reached',
+      'failed',
+      'error',
+      'undelivered',
+      'rejected',
+      'sending',
+      'pending',
+      'queued',
+      'unconfirmed',
+      'sent',
+    }.contains(status)) {
+      return null;
+    }
+    return WidgetMessageStatusUpdate(
+      messageId: id,
+      status: _parseDeliveryStatus({'status': status}),
+    );
+  }
+
   /// Decodes the widget-safe realtime payload for agent typing changes.
   WisperBotAgentTyping? realtimeTyping(Object? value) {
     if (value is! Map<String, dynamic>) return null;
