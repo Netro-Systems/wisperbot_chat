@@ -101,6 +101,7 @@ void _registerRequestContractTests() {
       expect(bodies[0], <String, dynamic>{
         'key': 'test-widget',
         'message': 'Hello',
+        'type': 'text',
       });
       expect(bodies[1], <String, dynamic>{
         'key': 'test-widget',

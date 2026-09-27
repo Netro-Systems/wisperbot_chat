@@ -69,7 +69,7 @@ void openSupportChat(BuildContext context) async {
 ```
 
 > [!NOTE]
-> The `widgetKey` is a public routing identifier, not a secret. Never bundle WisperBot management credentials or widget secret keys in client applications.
+> Use the **Mobile SDK key** from Widget Integrations for `widgetKey` (not the website embed key). It is a public routing identifier, not a secret. Never bundle WisperBot management credentials or widget secret keys in client applications.
 
 ---
 
@@ -206,7 +206,7 @@ Future<void> runHeadlessChat(WisperBotConfig config) async {
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `widgetKey` | `String` | *(required)* | Public routing identifier issued by the WisperBot dashboard. |
+| `widgetKey` | `String` | *(required)* | Public Mobile SDK key issued in Widget Integrations. |
 | `apiBaseUrl` | `String` | `'https://wisperbot.com'` | Base origin endpoint for widget API requests (`/widget/v1/*`). |
 | `user` | `WisperBotUser?` | `null` | Visitor identity, profile data, and HMAC signature for verified users. |
 | `theme` | `WisperBotThemeData?` | `null` | Presentation overrides for colors, bubble radius, spacing, and brightness. |

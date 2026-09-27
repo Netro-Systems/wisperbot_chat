@@ -8,6 +8,11 @@ Map<String, Object?> sessionResponse({
   String? avatarUrl,
   String? launcherLogoUrl,
   String? realtimeKey,
+  List<Map<String, Object?>>? starterQuestions,
+  bool aiEnabled = true,
+  bool handoffEnabled = true,
+  bool handoffEligible = false,
+  String handoffStatus = 'bot',
 }) =>
     <String, Object?>{
       'visitor_id': visitorId,
@@ -25,23 +30,25 @@ Map<String, Object?> sessionResponse({
         'footer_company_name': 'WisperBot',
         if (launcherLogoUrl != null) 'launcher_logo_url': launcherLogoUrl,
         'team_members': <Object?>[],
-        'ai_enabled': true,
+        'ai_enabled': aiEnabled,
         'require_prechat': requirePreChat,
         'prechat_fields': <String>['name', 'email'],
+        if (starterQuestions != null) 'starter_questions': starterQuestions,
         if (realtimeKey != null)
           'realtime': <String, Object?>{
             'key': realtimeKey,
             'cluster': 'mt1',
-            'auth_endpoint': 'https://chat.example.com/base/widget/v1/broadcasting/auth',
+            'auth_endpoint':
+                'https://chat.example.com/base/widget/v1/broadcasting/auth',
           },
         'unknown_config_field': 'ignored',
       },
       'online': online,
       'messages': messages,
       'handoff': <String, Object?>{
-        'enabled': true,
-        'eligible': false,
-        'status': 'bot',
+        'enabled': handoffEnabled,
+        'eligible': handoffEligible,
+        'status': handoffStatus,
       },
       'unknown_root_field': <String, Object?>{'safe': true},
     };

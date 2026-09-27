@@ -1,6 +1,164 @@
 part of 'chat_controller_test.dart';
 
 void registerDeliveryTests(WisperBotConfig config) {
+  test('realtime answer never appears before its pending visitor question',
+      () async {
+    final connector = _FakeWidgetRealtimeConnector();
+    final postStarted = Completer<void>();
+    final releasePost = Completer<http.Response>();
+    final httpClient = MockClient((request) async {
+      if (request.url.path.endsWith('/session')) {
+        return http.Response(
+          jsonEncode(sessionResponse(realtimeKey: 'pusher-key')),
+          200,
+        );
+      }
+      if (request.url.path.endsWith('/typing')) {
+        return http.Response('{"ok":true}', 200);
+      }
+      if (request.method == 'POST' && request.url.path.endsWith('/messages')) {
+        postStarted.complete();
+        return releasePost.future;
+      }
+      if (request.method == 'GET' && request.url.path.endsWith('/messages')) {
+        return http.Response(jsonEncode(pollResponse()), 200);
+      }
+      if (request.url.path.endsWith('/read')) {
+        return http.Response('{"ok":true}', 200);
+      }
+      throw StateError('Unexpected request: ${request.url}');
+    });
+    final client = WisperBotClient(
+      config: config,
+      httpClient: httpClient,
+      sessionStore: MemorySessionStore(),
+      realtimeConnector: connector,
+    );
+    final controller = WisperBotChatController(client: client);
+    final statesSub = controller.states.listen((_) {});
+
+    await controller.initialize();
+    final send = controller.sendText('How can I get eSIM?');
+    await postStarted.future;
+    connector.emitMessageCreated(<String, Object?>{
+      'message': message(id: 2, body: 'Choose a package.'),
+    });
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.state.messages, hasLength(1));
+    expect(controller.state.messages.single.role, WisperBotMessageRole.visitor);
+    expect(
+      controller.state.messages.single.status,
+      WisperBotMessageStatus.pending,
+    );
+
+    releasePost.complete(
+      http.Response(
+        jsonEncode(<String, Object?>{
+          'message': message(
+            id: 1,
+            role: 'visitor',
+            body: 'How can I get eSIM?',
+            sentBy: 'human',
+          ),
+          'handoff': <String, Object?>{
+            'enabled': true,
+            'eligible': false,
+            'status': 'bot',
+          },
+        }),
+        200,
+      ),
+    );
+    await send;
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      controller.state.messages.map((item) => item.serverId),
+      orderedEquals(<int?>[1, 2]),
+    );
+    expect(controller.state.messages.first.status, WisperBotMessageStatus.read);
+
+    await statesSub.cancel();
+    await controller.dispose();
+    await client.close();
+  });
+
+  test('successful text send polls immediately and deduplicates realtime reply',
+      () async {
+    final connector = _FakeWidgetRealtimeConnector();
+    final pollStarted = Completer<void>();
+    final releasePoll = Completer<http.Response>();
+    var pollCalls = 0;
+    final httpClient = MockClient((request) async {
+      if (request.url.path.endsWith('/session')) {
+        return http.Response(
+          jsonEncode(sessionResponse(realtimeKey: 'pusher-key')),
+          200,
+        );
+      }
+      if (request.url.path.endsWith('/typing')) {
+        return http.Response('{"ok":true}', 200);
+      }
+      if (request.method == 'POST' && request.url.path.endsWith('/messages')) {
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'message': message(
+              id: 1,
+              role: 'visitor',
+              body: 'What are your opening hours?',
+              sentBy: 'human',
+            ),
+            'handoff': <String, Object?>{
+              'enabled': true,
+              'eligible': false,
+              'status': 'bot',
+            },
+          }),
+          200,
+        );
+      }
+      if (request.method == 'GET' && request.url.path.endsWith('/messages')) {
+        pollCalls++;
+        expect(request.url.queryParameters['after'], '1');
+        pollStarted.complete();
+        return releasePoll.future;
+      }
+      if (request.url.path.endsWith('/read')) {
+        return http.Response('{"ok":true}', 200);
+      }
+      throw StateError('Unexpected request: ${request.url}');
+    });
+    final client = WisperBotClient(
+      config: config,
+      httpClient: httpClient,
+      sessionStore: MemorySessionStore(),
+      realtimeConnector: connector,
+    );
+    final controller = WisperBotChatController(client: client);
+    final statesSub = controller.states.listen((_) {});
+
+    await controller.initialize();
+    await controller.sendText('What are your opening hours?');
+    await pollStarted.future;
+    final reply = message(id: 2, body: 'Monday through Friday.');
+    connector.emitMessageCreated(<String, Object?>{'message': reply});
+    releasePoll.complete(
+      http.Response(jsonEncode(pollResponse(messages: [reply])), 200),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(pollCalls, 1);
+    expect(
+      controller.state.messages.where((item) => item.serverId == 2),
+      hasLength(1),
+    );
+
+    await statesSub.cancel();
+    await controller.dispose();
+    await client.close();
+  });
+
   test('manual refresh merges messages and availability once', () async {
     var refreshCalls = 0;
     final httpClient = MockClient((request) async {
@@ -160,7 +318,7 @@ void registerDeliveryTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('realtime defers a visitor echo while its send is still in flight',
+  test('realtime defers new messages while a send is still in flight',
       () async {
     final sendStarted = Completer<void>();
     final releaseSend = Completer<void>();
@@ -221,7 +379,7 @@ void registerDeliveryTests(WisperBotConfig config) {
     ]) {
       connector.emitMessageCreated(<String, Object?>{'message': eventMessage});
     }
-    expect(controller.state.messages, hasLength(2));
+    expect(controller.state.messages, hasLength(1));
     expect(
       controller.state.messages
           .where((message) => message.body == 'My message'),
@@ -231,10 +389,7 @@ void registerDeliveryTests(WisperBotConfig config) {
       controller.state.messages.last.status,
       WisperBotMessageStatus.pending,
     );
-    expect(
-      controller.state.messages.first.body,
-      'Reply while sending',
-    );
+    expect(controller.state.messages.single.body, 'My message');
 
     releaseSend.complete();
     final sent = await send;
