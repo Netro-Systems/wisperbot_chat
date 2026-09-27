@@ -40,6 +40,21 @@ class WisperBotTeamMember {
   final Uri? avatarUrl;
 }
 
+/// A server-configured question shown below the widget welcome message.
+///
+/// Selecting a question sends [label] as an ordinary visitor text message.
+/// [id] is only a stable presentation key and is never sent as a command.
+class WisperBotStarterQuestion {
+  /// Creates an immutable starter question.
+  const WisperBotStarterQuestion({required this.id, required this.label});
+
+  /// Stable server-provided presentation identifier.
+  final String id;
+
+  /// Plain-text message shown and sent when selected.
+  final String label;
+}
+
 /// Immutable public widget configuration returned by the session API.
 ///
 /// Collection fields are defensively copied and cannot be mutated by callers.
@@ -57,13 +72,16 @@ class WisperBotWidgetConfig {
     required this.aiEnabled,
     required this.requiresPreChat,
     required List<WisperBotPreChatField> preChatFields,
+    List<WisperBotStarterQuestion> starterQuestions = const [],
     this.realtime,
     this.avatarUrl,
     this.launcherText,
     this.launcherLogoUrl,
     this.offlineMessage,
   })  : teamMembers = List<WisperBotTeamMember>.unmodifiable(teamMembers),
-        preChatFields = List<WisperBotPreChatField>.unmodifiable(preChatFields);
+        preChatFields = List<WisperBotPreChatField>.unmodifiable(preChatFields),
+        starterQuestions =
+            List<WisperBotStarterQuestion>.unmodifiable(starterQuestions);
 
   /// Header title.
   final String title;
@@ -106,6 +124,11 @@ class WisperBotWidgetConfig {
 
   /// Required pre-chat fields.
   final List<WisperBotPreChatField> preChatFields;
+
+  /// Reusable, server-configured questions displayed below the welcome text.
+  ///
+  /// Older or malformed session responses produce an empty list.
+  final List<WisperBotStarterQuestion> starterQuestions;
 
   /// Optional realtime configuration for Pusher-backed conversation updates.
   final WisperBotRealtimeConfig? realtime;

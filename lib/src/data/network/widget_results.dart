@@ -61,3 +61,14 @@ final class WidgetSendResult {
   /// Handoff state returned alongside the send.
   final WisperBotHandoffState handoff;
 }
+
+/// A delivery-state change broadcast for an existing server message.
+final class WidgetMessageStatusUpdate {
+  const WidgetMessageStatusUpdate({
+    required this.messageId,
+    required this.status,
+  });
+
+  final int messageId;
+  final WisperBotMessageStatus status;
+}

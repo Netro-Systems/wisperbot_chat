@@ -14,6 +14,12 @@ void main() {
     expect(config.oneSignalAppId, isNull);
     expect(config.enableOneSignal, isTrue);
     expect(WidgetOneSignalService.instance, isNotNull);
+    const starter = WisperBotStarterQuestion(
+      id: 'sq_public',
+      label: 'What are your opening hours?',
+    );
+    expect(starter.id, 'sq_public');
+    expect(starter.label, 'What are your opening hours?');
 
     const customConfig = WisperBotConfig(
       widgetKey: 'public-widget-key',

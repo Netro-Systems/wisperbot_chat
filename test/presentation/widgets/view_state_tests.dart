@@ -189,6 +189,9 @@ void registerViewStateTests(WisperBotConfig config) {
         if (request.url.path.endsWith('/typing')) {
           return http.Response('{"ok":true}', 200);
         }
+        if (request.method == 'GET' && request.url.path.endsWith('/messages')) {
+          return http.Response(jsonEncode(pollResponse()), 200);
+        }
         sendCalls++;
         return http.Response(
           jsonEncode(<String, Object?>{

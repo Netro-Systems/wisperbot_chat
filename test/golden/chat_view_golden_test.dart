@@ -316,6 +316,7 @@ final class _FailingRealtimeConnector implements WidgetRealtimeConnector {
     required int conversationId,
     void Function()? onConnected,
     WidgetRealtimePayloadCallback? onMessageCreated,
+    WidgetRealtimePayloadCallback? onMessageStatusUpdated,
     WidgetRealtimePayloadCallback? onTypingChanged,
     WidgetRealtimePayloadCallback? onHandoffUpdated,
     WidgetRealtimeErrorCallback? onError,
