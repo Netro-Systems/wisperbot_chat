@@ -19,23 +19,31 @@ class _HandoffAction extends StatelessWidget {
     }
     final isActionable =
         status == WisperBotHandoffStatus.eligible || status == WisperBotHandoffStatus.failed;
+    final agentName = state.handoff.agentName?.trim();
     final prompt = switch (status) {
-      WisperBotHandoffStatus.eligible => 'Prefer a person?',
-      WisperBotHandoffStatus.requesting => 'Connecting to a human agent…',
-      WisperBotHandoffStatus.connected => 'Connected to a human agent',
+      WisperBotHandoffStatus.eligible => 'Need a person?',
+      WisperBotHandoffStatus.requesting => 'Requesting human support…',
+      WisperBotHandoffStatus.waiting => 'Waiting for an agent to join…',
+      WisperBotHandoffStatus.connected => agentName?.isNotEmpty == true
+          ? '$agentName joined this chat'
+          : 'An agent joined this chat',
       WisperBotHandoffStatus.failed => 'Could not connect.',
       WisperBotHandoffStatus.unavailable => '',
     };
-    final actionLabel = status == WisperBotHandoffStatus.failed ? 'Try again' : 'Human Agent';
+    final actionLabel = status == WisperBotHandoffStatus.failed ? 'Try again' : 'Talk to an agent';
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      constraints: const BoxConstraints(minHeight: 48),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border(top: BorderSide(color: colors.outline)),
+        color: Color.alphaBlend(
+          colors.primary.withValues(alpha: 0.08),
+          colors.surface,
+        ),
+        border: Border(bottom: BorderSide(color: colors.primary.withValues(alpha: 0.16))),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           if (status == WisperBotHandoffStatus.requesting) ...<Widget>[
@@ -47,8 +55,11 @@ class _HandoffAction extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
+          ] else ...<Widget>[
+            Icon(Icons.headset_mic_outlined, size: 16, color: colors.onSurfaceMuted),
+            const SizedBox(width: 8),
           ],
-          Flexible(
+          Expanded(
             child: Text(
               prompt,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -63,11 +74,10 @@ class _HandoffAction extends StatelessWidget {
               label: status == WisperBotHandoffStatus.failed
                   ? 'Try human agent again'
                   : 'Request a human agent',
-              child: OutlinedButton(
+              child: TextButton(
                 onPressed: onPressed,
-                style: OutlinedButton.styleFrom(
+                style: TextButton.styleFrom(
                   foregroundColor: colors.primary,
-                  side: BorderSide(color: colors.primary),
                   minimumSize: const Size(48, 36),
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   visualDensity: VisualDensity.compact,

@@ -229,51 +229,86 @@ void registerComposerHandoffTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('eligible handoff uses the human-agent prompt and connects', (tester) async {
-    var handoffCalls = 0;
-    final runtime = _runtime(
-      config,
-      MockClient((request) async {
-        if (request.url.path.endsWith('/session')) {
-          final response = sessionResponse();
-          response['handoff'] = <String, Object?>{
-            'enabled': true,
-            'eligible': true,
-            'status': 'bot',
-          };
-          return http.Response(jsonEncode(response), 200);
-        }
-        if (request.url.path.endsWith('/handoff')) {
-          handoffCalls++;
-          return http.Response(
-            jsonEncode(<String, Object?>{
-              'handoff': <String, Object?>{
-                'enabled': true,
-                'eligible': false,
-                'status': 'connected',
-              },
-            }),
-            200,
-          );
-        }
-        return http.Response(jsonEncode(pollResponse()), 200);
-      }),
-    );
+  for (final status in ['waiting', 'connected']) {
+    testWidgets('handoff keeps its bar and size when $status', (tester) async {
+      var handoffCalls = 0;
+      final handoffResponse = Completer<http.Response>();
+      final runtime = _runtime(
+        config,
+        MockClient((request) async {
+          if (request.url.path.endsWith('/session')) {
+            final response = sessionResponse();
+            response['handoff'] = <String, Object?>{
+              'enabled': true,
+              'eligible': true,
+              'status': 'bot',
+            };
+            return http.Response(jsonEncode(response), 200);
+          }
+          if (request.url.path.endsWith('/handoff')) {
+            handoffCalls++;
+            return handoffResponse.future;
+          }
+          return http.Response(jsonEncode(pollResponse()), 200);
+        }),
+      );
 
+      await tester.pumpWidget(_app(
+        WisperBotChatView(config: config, controller: runtime.controller),
+      ));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Need a person?'), findsOneWidget);
+      expect(find.text('Talk to an agent'), findsOneWidget);
+      expect(
+        tester.getBottomLeft(find.text('Talk to an agent')).dy,
+        lessThan(tester.getTopLeft(find.byType(RefreshIndicator)).dy),
+      );
+      final timelineTop = tester.getTopLeft(find.byType(RefreshIndicator));
+      await tester.tap(find.text('Talk to an agent'));
+      await tester.pump();
+      expect(find.text('Requesting human support…'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(tester.getTopLeft(find.byType(RefreshIndicator)), timelineTop);
+      handoffResponse.complete(http.Response(jsonEncode({
+        'handoff': {'enabled': status == 'waiting', 'eligible': false, 'status': status},
+      }), 200));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text(status == 'waiting'
+          ? 'Waiting for an agent to join…'
+          : 'An agent joined this chat'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(tester.getTopLeft(find.byType(RefreshIndicator)), timelineTop);
+
+
+      expect(handoffCalls, 1);
+
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await runtime.dispose();
+    });
+
+  }
+
+  testWidgets('joined agent name appears without a loader', (tester) async {
+    final response = sessionResponse();
+    response['handoff'] = {
+      'enabled': true,
+      'eligible': false,
+      'status': 'connected',
+      'agent': {'name': 'Rahim'},
+    };
+    final runtime = _runtime(config, MockClient((_) async =>
+        http.Response(jsonEncode(response), 200)));
     await tester.pumpWidget(_app(
       WisperBotChatView(config: config, controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();
-
-    expect(find.text('Prefer a person?'), findsOneWidget);
-    expect(find.text('Human Agent'), findsOneWidget);
-    await tester.tap(find.text('Human Agent'));
-    await tester.pumpAndSettle();
-
-    expect(handoffCalls, 1);
-    expect(find.text('Connected to a human agent'), findsOneWidget);
-
+    expect(find.text('Rahim joined this chat'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();
   });

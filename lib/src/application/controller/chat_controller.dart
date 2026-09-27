@@ -1144,6 +1144,7 @@ class WisperBotChatController with WidgetsBindingObserver {
 
   void _updateHandoff(WisperBotHandoffState handoff) {
     if (_state.handoff.status == handoff.status &&
+        _state.handoff.agentName == handoff.agentName &&
         _state.handoff.error == handoff.error) {
       return;
     }

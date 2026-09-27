@@ -397,13 +397,19 @@ final class WidgetResponseDecoder {
     final enabled = _requiredBool(value, 'enabled');
     final eligible = _requiredBool(value, 'eligible');
     if (value['status'] is! String) throw _invalidResponse();
+    if (value['status'] == 'connected') {
+      return WisperBotHandoffState(
+        status: WisperBotHandoffStatus.connected,
+        agentName: _stringOrNull(_objectOrNull(value['agent'])?['name']),
+      );
+    }
+    if (value['status'] == 'waiting') {
+      return const WisperBotHandoffState(
+        status: WisperBotHandoffStatus.waiting,
+      );
+    }
     if (!enabled) {
       return const WisperBotHandoffState.unavailable();
-    }
-    if (value['status'] == 'connected') {
-      return const WisperBotHandoffState(
-        status: WisperBotHandoffStatus.connected,
-      );
     }
     if (eligible) {
       return const WisperBotHandoffState(
