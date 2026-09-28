@@ -1,11 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.1.5 - 2026-09-28
 
 ### Added
 
 - Added reusable, accessible starter-question buttons from session configuration below the welcome message.
 - Added immediate post-send message refresh so deterministic replies appear without waiting for realtime delivery.
+- Added persistent human-handoff waiting and connected states, including the agent name when available.
 
 ### Changed
 
@@ -15,6 +16,10 @@
 
 - Applied realtime message delivery/read status updates immediately and prevented out-of-order status downgrades.
 - Kept realtime bot answers behind their in-flight visitor message so replies no longer flash above the question before send confirmation.
+- Ignored malformed realtime delivery-status payloads through defensive decoding.
+- Improved native audio playback compatibility and cleaned up temporary audio resources and stale preview loads.
+- Improved chat initialization and secure-session storage recovery.
+- Added Settings guidance when microphone permission remains denied on a later recording attempt.
 
 ## 0.1.4
 
