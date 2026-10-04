@@ -225,6 +225,16 @@ Future<void> runHeadlessChat(WisperBotConfig config) async {
 
 ## Key Features
 
+### 🔗 Message Links
+
+The prebuilt chat UI keeps message text selectable and makes `http://`,
+`https://`, and `www.` links tappable. Links are underlined and opened through
+the platform's external URL handler; `www.` addresses use HTTPS. Trailing
+punctuation is excluded from the link target. If opening fails, the chat shows
+"Could not open link."
+
+---
+
 ### 👤 Verified & Authenticated Users
 To associate chat sessions with registered users in your application, provide a `WisperBotUser` along with an HMAC signature computed on your backend:
 
@@ -327,6 +337,12 @@ Future<void> main() async {
 }
 ```
 When a notification is tapped, the SDK automatically opens the chatbox.
+
+Foreground notifications do not display SDK SnackBars. To handle them in your
+app, pass `onForegroundNotification` to
+`WisperBotChat.initializeNotificationHandlers`. The
+`showInAppForegroundNotification` argument remains accepted for source
+compatibility but is ignored, even when set to `true`.
 
 ---
 
