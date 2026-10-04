@@ -24,12 +24,14 @@ abstract final class WisperBotChat {
       _foregroundNotificationSubscription;
   static void Function(Map<String, dynamic> payload)? _onNotificationTapped;
   static void Function(Map<String, dynamic> payload)? _onForegroundNotification;
-  static bool _showInAppForegroundNotification = true;
   static Map<String, dynamic>? _pendingNotificationPayload;
   static WisperBotConfig? _lastConfig;
   static GlobalKey<NavigatorState>? _navigatorKey;
 
   /// Initializes OneSignal push notification handlers for visitor chat.
+  ///
+  /// Foreground messages do not display SDK SnackBars.
+  /// [showInAppForegroundNotification] is retained for compatibility and ignored.
   ///
   /// Call this in your host app's `main()` or splash screen:
   /// ```dart
@@ -52,7 +54,6 @@ abstract final class WisperBotChat {
       _onNotificationTapped = onNotificationTapped;
     }
     _onForegroundNotification = onForegroundNotification;
-    _showInAppForegroundNotification = showInAppForegroundNotification;
 
     final appId = oneSignalAppId ?? config?.oneSignalAppId;
     if (appId != null &&
@@ -178,65 +179,7 @@ abstract final class WisperBotChat {
   }
 
   static void _handleForegroundNotification(Map<String, dynamic> payload) {
-    if (_onForegroundNotification != null) {
-      _onForegroundNotification!(payload);
-      return;
-    }
-
-    final config = _lastConfig;
-    if (config == null) return;
-
-    final scope = wisperBotPresentationScope(config);
-    final activeController = _ownedControllers[scope];
-    if (activeController != null) {
-      return;
-    }
-
-    if (!_showInAppForegroundNotification) return;
-
-    final context = _navigatorKey?.currentContext;
-    if (context == null) return;
-
-    final title = payload['title']?.toString();
-    final body = payload['body']?.toString();
-    if ((title == null || title.isEmpty) && (body == null || body.isEmpty)) {
-      return;
-    }
-
-    final messageText = body?.trim().isNotEmpty == true
-        ? body!.trim()
-        : (title ?? 'New message received');
-
-    try {
-      final messenger = ScaffoldMessenger.maybeOf(context);
-      if (messenger == null) return;
-
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            messageText,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w500),
-          ),
-          duration: const Duration(seconds: 5),
-          action: SnackBarAction(
-            label: 'Open',
-            textColor: const Color(0xFFFF762E),
-            onPressed: () {
-              messenger.hideCurrentSnackBar();
-              unawaited(
-                openChatboxFromNotification(
-                  context: context,
-                  config: config,
-                  payload: payload,
-                ).catchError((_) => null),
-              );
-            },
-          ),
-        ),
-      );
-    } catch (_) {}
+    _onForegroundNotification?.call(payload);
   }
 
   /// Opens at most one chat presentation for the configuration scope.
@@ -443,6 +386,5 @@ abstract final class WisperBotChat {
     _pendingNotificationPayload = null;
     _lastConfig = null;
     _navigatorKey = null;
-    _showInAppForegroundNotification = true;
   }
 }

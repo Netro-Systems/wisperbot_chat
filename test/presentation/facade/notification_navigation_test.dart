@@ -105,51 +105,26 @@ void main() {
     }, () => client);
   });
 
-  testWidgets(
-      'foreground notification displays an in-app banner with Open action to navigate to thread',
+  testWidgets('foreground messages never display an SDK SnackBar',
       (tester) async {
-    final client = MockClient(
-      (_) async => http.Response(jsonEncode(sessionResponse()), 200),
+    await tester.pumpWidget(MaterialApp(
+      navigatorKey: navigatorKey,
+      home: const Scaffold(body: Text('Home Screen')),
+    ));
+    WisperBotChat.initializeNotificationHandlers(
+      config: testConfig,
+      navigatorKey: navigatorKey,
+      showInAppForegroundNotification: true,
     );
-
-    await http.runWithClient(() async {
-      await tester.pumpWidget(
-        MaterialApp(
-          navigatorKey: navigatorKey,
-          home: const Scaffold(
-            body: Center(child: Text('Home Screen')),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      WisperBotChat.initializeNotificationHandlers(
-        config: testConfig,
-        navigatorKey: navigatorKey,
-      );
-
-      // Simulate notification arriving while in foreground
+    for (var index = 0; index < 2; index++) {
       WidgetOneSignalService.instance.simulateForegroundNotification({
-        'conversation_id': 12345,
         'title': 'Support Agent',
         'body': 'We replied to your message.',
       });
-
-      await tester.pump();
       await tester.pumpAndSettle();
-
-      // Verify in-app SnackBar banner is shown
-      expect(find.text('We replied to your message.'), findsOneWidget);
-      expect(find.text('Open'), findsOneWidget);
-
-      // Tap "Open" button on the banner
-      await tester.tap(find.text('Open'));
-      await tester.pump();
-      await tester.pumpAndSettle();
-
-      // Verify it navigates to the chat thread
-      expect(find.byType(WisperBotChatScreen), findsOneWidget);
-    }, () => client);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(find.text('We replied to your message.'), findsNothing);
+    }
   });
 
   testWidgets('custom onNotificationTapped callback intercepts click event', (tester) async {
@@ -259,6 +234,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(messageGetCount, 0);
+      expect(find.byType(SnackBar), findsNothing);
     }, () => client);
   });
 }

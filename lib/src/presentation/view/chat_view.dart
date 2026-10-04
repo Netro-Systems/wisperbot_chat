@@ -26,6 +26,7 @@ import '../widgets/brand_footer.dart';
 import '../widgets/availability_banner.dart';
 import '../widgets/chat_error_state.dart';
 import '../widgets/connection_banner.dart';
+import '../widgets/message_link_text.dart';
 
 part '../widgets/loading_shimmer.dart';
 part '../widgets/chat_header.dart';

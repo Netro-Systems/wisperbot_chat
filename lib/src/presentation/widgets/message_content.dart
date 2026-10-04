@@ -72,8 +72,8 @@ class _MessageContent extends StatelessWidget {
             ),
           ),
         if (_visibleMessageBody(message).isNotEmpty)
-          SelectableText(
-            _visibleMessageBody(message),
+          MessageLinkText(
+            text: _visibleMessageBody(message),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: textColor, height: 1.4),
           ),
       ],
