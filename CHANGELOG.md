@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.7 - 2026-10-04
+
+### Added
+
+- Made `http://`, `https://`, and `www.` links in message text tappable while preserving text selection and copying.
+- Added feedback when a message link cannot be opened.
+
+### Changed
+
+- Foreground push notifications no longer display SDK SnackBars. Use `onForegroundNotification` for custom foreground handling.
+- Retained `showInAppForegroundNotification` for source compatibility; its value is now ignored.
+
 ## 0.1.6 - 2026-09-28
 
 ### Added
