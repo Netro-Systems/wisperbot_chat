@@ -13,15 +13,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
   final widgetKey = dotenv.get('WISPERBOT_WIDGET_KEY').trim();
-  final configuredApiBaseUrl =
-      dotenv.maybeGet('WISPERBOT_API_BASE_URL')?.trim();
+  final configuredApiBaseUrl = dotenv.maybeGet('WISPERBOT_API_BASE_URL')?.trim();
   final oneSignalAppId = dotenv.maybeGet('ONESIGNAL_APP_ID')?.trim();
   final notificationsConfigured = oneSignalAppId?.isNotEmpty == true;
   await WisperBotChat.initialize(
     widgetKey: widgetKey,
-    apiBaseUrl: configuredApiBaseUrl?.isNotEmpty == true
-        ? configuredApiBaseUrl!
-        : 'https://wisperbot.com',
+    apiBaseUrl: configuredApiBaseUrl?.isNotEmpty == true ? configuredApiBaseUrl! : 'https://wisperbot.com',
     navigatorKey: navigatorKey,
     requireNotificationPermission: notificationsConfigured,
     registerVisitorOnAppLaunch: true,
@@ -49,8 +46,7 @@ class ExampleApp extends StatelessWidget {
 class ExampleHome extends StatelessWidget {
   const ExampleHome({super.key});
 
-  Future<void> _openChat(BuildContext context,
-      {WisperBotPresentation? presentation}) async {
+  Future<void> _openChat(BuildContext context, {WisperBotPresentation? presentation}) async {
     try {
       await WisperBotChat.open(
         context,
@@ -144,7 +140,12 @@ class ExampleHome extends StatelessWidget {
             ),
           ),
         ),
-        floatingActionButton: WisperBotChat.launcher(showBadge: false),
+        floatingActionButton: WisperBotChat.launcher(
+            showBadge: true,
+            badgeShowCount: true,
+            badgeBackgroundColor: Color(0xFFFF0000),
+            badgeLargeSize: 18,
+            badgeOffset: Offset(4, -4)),
       );
 }
 

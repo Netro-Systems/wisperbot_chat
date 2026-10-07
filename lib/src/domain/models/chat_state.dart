@@ -81,7 +81,9 @@ class WisperBotChatState {
 
   /// Number of unread, non-activity messages sent by an agent.
   ///
-  /// This can be used by host applications to render their own launcher badge.
+  /// Messages remain unread until chat is viewed or a headless integration
+  /// calls `WisperBotChatController.markRead`. This can be used by host
+  /// applications to render their own launcher badge.
   int get unreadCount => messages
       .where(
         (message) =>

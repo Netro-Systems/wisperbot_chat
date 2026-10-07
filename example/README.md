@@ -6,6 +6,15 @@ handles media with its built-in adapter; the app does not create a custom adapte
 One `WisperBotChat.initialize` call owns notifications, visitor registration,
 navigation, and the controller shared by every chat integration.
 
+The SDK-provided floating launcher displays an unread dot automatically. For
+an application-owned button or design, wrap its visible child with
+`WisperBotChat.badge(child: ...)`; set `showCount: true` for a numeric badge.
+Opening chat through `WisperBotChat.open(context)` marks visible agent messages
+read and clears the badge. Badge updates use the existing realtime connection
+and require no separate backend integration. See the package's
+[unread badge guide](../docs/unread-badges.md) for customization and the complete
+option reference.
+
 1. Copy `.env.example` to `.env`.
 2. Put your public widget key in `WISPERBOT_WIDGET_KEY`. Change `WISPERBOT_API_BASE_URL` only for staging or a self-hosted API.
    Set `ONESIGNAL_APP_ID` for Android/iOS notification permission gating. The

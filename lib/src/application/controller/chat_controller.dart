@@ -821,6 +821,10 @@ class WisperBotChatController with WidgetsBindingObserver {
   }
 
   /// Manually marks unread agent messages as seen/read.
+  ///
+  /// This updates [state] optimistically and then calls the existing widget
+  /// read endpoint. Prebuilt chat surfaces call this when chat becomes visible;
+  /// headless integrations should call it when their own chat UI is shown.
   Future<void> markRead() async {
     _ensureNotDisposed();
     if (_state.phase != WisperBotChatPhase.ready &&

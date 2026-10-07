@@ -20,7 +20,7 @@ typedef WisperBotLauncherBuilder = Widget Function(
   VoidCallback openChat,
 );
 
-/// Builds custom content for an unread badge.
+/// Builds custom content for an unread badge from the current unread count.
 typedef WisperBotBadgeLabelBuilder = Widget Function(
   BuildContext context,
   int unreadCount,
@@ -31,6 +31,7 @@ class WisperBotChatLauncher extends StatefulWidget {
   /// Creates a launcher.
   ///
   /// When [controller] is omitted, the initialized shared runtime is used.
+  /// The default launcher displays an unread dot until chat is viewed.
   const WisperBotChatLauncher({
     super.key,
     this.controller,
@@ -67,16 +68,19 @@ class WisperBotChatLauncher extends StatefulWidget {
   /// Optional custom launcher renderer.
   final WisperBotLauncherBuilder? builder;
 
-  /// Whether the default launcher displays unread state.
+  /// Whether the default launcher displays unread state. Defaults to true.
   final bool showBadge;
 
   /// Whether the badge displays its unread count instead of a dot.
+  ///
+  /// One- and two-digit counts are circular. Overflow and custom labels use a
+  /// pill shape.
   final bool badgeShowCount;
 
   /// Largest count displayed before the badge uses a plus suffix.
   final int badgeMaxCount;
 
-  /// Optional custom unread badge label.
+  /// Optional custom unread badge label, built from the current count.
   final WisperBotBadgeLabelBuilder? badgeLabelBuilder;
 
   /// Optional unread badge fill color.
@@ -89,18 +93,24 @@ class WisperBotChatLauncher extends StatefulWidget {
   final double? badgeSmallSize;
 
   /// Height of a badge with label content.
+  ///
+  /// This is also the diameter of normal one- and two-digit count badges.
   final double? badgeLargeSize;
 
   /// Optional unread badge label style.
   final TextStyle? badgeTextStyle;
 
-  /// Padding around unread badge label content.
+  /// Padding around overflow or custom unread badge label content.
   final EdgeInsetsGeometry? badgePadding;
 
   /// Alignment of the badge relative to the launcher.
+  ///
+  /// Defaults to the logical top end.
   final AlignmentGeometry? badgeAlignment;
 
-  /// Fine positioning adjustment for the badge.
+  /// Fine positioning adjustment after alignment.
+  ///
+  /// Positive x moves right and positive y moves down.
   final Offset? badgeOffset;
 
   @override

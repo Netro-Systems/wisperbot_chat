@@ -177,10 +177,12 @@ abstract final class WisperBotChat {
     await requireDefaultController().updateUser(null, startSession: false);
   }
 
-  /// Unread agent-message count for host-owned launcher buttons.
+  /// Unread agent-message count exposed for fully custom host UI.
   ///
-  /// Listen with [ValueListenableBuilder] and show a badge when the value is
-  /// greater than zero. Opening the shared chat marks those messages as read.
+  /// Prefer [badge] when only a standard dot or count badge is needed. For a
+  /// custom indicator, listen with [ValueListenableBuilder]. The value updates
+  /// when agent messages arrive and returns to zero when the shared chat marks
+  /// all visible agent messages as read.
   static ValueListenable<int> get unreadCount => _unreadCount;
 
   static void _publishUnreadCount(int count) {
@@ -200,8 +202,21 @@ abstract final class WisperBotChat {
 
   /// Adds an unread indicator to any host-owned widget.
   ///
-  /// By default this renders a dot. Set [showCount] to display the unread
-  /// count, or provide [labelBuilder] for a fully custom label.
+  /// [child] can be any widget and retains its original layout and gestures.
+  /// By default the wrapper renders a dot only while [unreadCount] is greater
+  /// than zero. Set [showCount] to display the count, limited by [maxCount], or
+  /// provide [labelBuilder] for custom badge content.
+  ///
+  /// [smallSize] is the dot diameter. [largeSize] is the count badge height
+  /// and the diameter for normal one- and two-digit counts. Overflow text such
+  /// as `99+` and custom labels use a pill that can expand horizontally with
+  /// [padding]. [backgroundColor], [textColor], and [textStyle] control its
+  /// appearance.
+  ///
+  /// [alignment] anchors the indicator to [child] and defaults to the logical
+  /// top end. [offset] translates it from that anchor; positive x moves right
+  /// and positive y moves down. The indicator can paint outside [child]
+  /// without changing the child's layout size.
   static Widget badge({
     Key? key,
     required Widget child,
@@ -234,13 +249,18 @@ abstract final class WisperBotChat {
       );
 
   /// Creates a floating launcher backed by the shared runtime.
+  ///
+  /// The launcher displays an unread dot by default. Set [showBadge] to false
+  /// to hide it, set [badgeShowCount] to display the count, and use the other
+  /// `badge` parameters to customize it. Opening the launcher marks visible
+  /// agent messages as read and clears the indicator automatically.
   static WisperBotChatLauncher launcher({
     Key? key,
     Alignment? alignment,
     EdgeInsetsGeometry? margin,
     WisperBotPresentation? presentation,
     WisperBotLauncherBuilder? builder,
-    bool showBadge = true,
+    bool showBadge = false,
     bool badgeShowCount = false,
     int badgeMaxCount = 99,
     WisperBotBadgeLabelBuilder? badgeLabelBuilder,
