@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
+import 'package:wisperbot_chat/src/configuration/wisperbot_config.dart';
 import 'package:wisperbot_chat/src/application/services/widget_realtime_connector.dart';
 import 'package:wisperbot_chat/src/data/network/response_decoder.dart';
 import 'package:wisperbot_chat/src/data/storage/session_scope.dart';
@@ -27,6 +28,7 @@ void main() {
     widgetKey: 'test-widget',
     apiBaseUrl: 'https://chat.example.com/base/',
     enableOneSignal: false,
+    requireNotificationPermission: false,
   );
 
   registerSessionTests(config);

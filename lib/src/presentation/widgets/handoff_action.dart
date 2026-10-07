@@ -17,8 +17,8 @@ class _HandoffAction extends StatelessWidget {
     if (status == WisperBotHandoffStatus.unavailable) {
       return const SizedBox.shrink();
     }
-    final isActionable =
-        status == WisperBotHandoffStatus.eligible || status == WisperBotHandoffStatus.failed;
+    final isActionable = status == WisperBotHandoffStatus.eligible ||
+        status == WisperBotHandoffStatus.failed;
     final agentName = state.handoff.agentName?.trim();
     final prompt = switch (status) {
       WisperBotHandoffStatus.eligible => 'Need a person?',
@@ -30,7 +30,9 @@ class _HandoffAction extends StatelessWidget {
       WisperBotHandoffStatus.failed => 'Could not connect.',
       WisperBotHandoffStatus.unavailable => '',
     };
-    final actionLabel = status == WisperBotHandoffStatus.failed ? 'Try again' : 'Talk to an agent';
+    final actionLabel = status == WisperBotHandoffStatus.failed
+        ? 'Try again'
+        : 'Talk to an agent';
     return Container(
       width: double.infinity,
       constraints: const BoxConstraints(minHeight: 48),
@@ -40,7 +42,8 @@ class _HandoffAction extends StatelessWidget {
           colors.primary.withValues(alpha: 0.08),
           colors.surface,
         ),
-        border: Border(bottom: BorderSide(color: colors.primary.withValues(alpha: 0.16))),
+        border: Border(
+            bottom: BorderSide(color: colors.primary.withValues(alpha: 0.16))),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -56,7 +59,8 @@ class _HandoffAction extends StatelessWidget {
             ),
             const SizedBox(width: 8),
           ] else ...<Widget>[
-            Icon(Icons.headset_mic_outlined, size: 16, color: colors.onSurfaceMuted),
+            Icon(Icons.headset_mic_outlined,
+                size: 16, color: colors.onSurfaceMuted),
             const SizedBox(width: 8),
           ],
           Expanded(

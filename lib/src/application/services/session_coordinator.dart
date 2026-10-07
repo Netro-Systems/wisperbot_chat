@@ -1,17 +1,19 @@
 part of '../wisperbot_runtime.dart';
 
-/// Coordinates identity-scoped restoration and secure session persistence.
+/// Coordinates identity-scoped restoration and secure session persistence for
+/// one runtime.
 ///
 /// The active namespace changes before another identity can restore, ensuring
 /// a token from one visitor scope is never sent for another visitor.
 final class _SessionCoordinator {
   _SessionCoordinator({
     required this.config,
+    required WisperBotUser? initialUser,
     required WidgetRemoteDataSource remoteDataSource,
     required WisperBotSessionStore sessionStore,
   })  : _remoteDataSource = remoteDataSource,
         _sessionStore = sessionStore,
-        _activeUser = config.user {
+        _activeUser = initialUser {
     _unsignedEphemeralScope = createEphemeralScopeId();
     _namespace = sessionNamespace(
       config: config,
@@ -39,8 +41,9 @@ final class _SessionCoordinator {
       preChatCompleted: stored?.preChatCompleted ?? false,
       deviceId: deviceId,
     );
-    await _writeStoredSession(result.session);
-    _session = result.session;
+    final persisted = _withActiveIdentity(result.session);
+    await _writeStoredSession(persisted);
+    _session = persisted;
     return result;
   }
 
@@ -58,15 +61,15 @@ final class _SessionCoordinator {
         email: preChat.email ?? active?.email,
         avatarUrl: active?.avatarUrl,
         signature: active?.signature,
-        location: active?.location,
         customFields: active?.customFields,
       ),
       storedSession: current,
       preChatCompleted: true,
       deviceId: deviceId,
     );
-    await _writeStoredSession(result.session);
-    _session = result.session;
+    final persisted = _withActiveIdentity(result.session);
+    await _writeStoredSession(persisted);
+    _session = persisted;
     return result;
   }
 
@@ -78,6 +81,7 @@ final class _SessionCoordinator {
       token: current.token,
       savedAt: current.savedAt,
       preChatCompleted: true,
+      identityFingerprint: current.identityFingerprint,
       schemaVersion: current.schemaVersion,
     );
     await _writeStoredSession(completed);
@@ -101,19 +105,7 @@ final class _SessionCoordinator {
       return true;
     }
     if (_sameUser(_activeUser, user)) return false;
-    final candidate = WisperBotConfig(
-      widgetKey: config.widgetKey,
-      apiBaseUrl: config.apiBaseUrl,
-      user: user,
-      theme: config.theme,
-      useApiColors: config.useApiColors,
-      lightStatusBarIcons: config.lightStatusBarIcons,
-      presentation: config.presentation,
-      enableTyping: config.enableTyping,
-      mediaAdapter: config.mediaAdapter,
-      diagnostics: config.diagnostics,
-    );
-    validateWisperBotConfig(candidate);
+    validateWisperBotUser(user);
 
     final previousNamespace = _namespace;
     final nextEphemeral = createEphemeralScopeId();
@@ -123,7 +115,11 @@ final class _SessionCoordinator {
       unsignedEphemeralScope: nextEphemeral,
     );
     _activeUser = user;
-    if (nextNamespace == previousNamespace) return true;
+    if (nextNamespace == previousNamespace) {
+      await _deleteStoredSession(nextNamespace);
+      _session = null;
+      return true;
+    }
     _unsignedEphemeralScope = nextEphemeral;
     _namespace = nextNamespace;
     _session = null;
@@ -152,7 +148,18 @@ final class _SessionCoordinator {
   Future<WisperBotStoredSession?> _readStoredSession() async {
     if (!_shouldPersistActiveSession) return null;
     try {
-      return await _sessionStore.read(_namespace);
+      final stored = await _sessionStore.read(_namespace);
+      if (stored == null) return null;
+      final expected = wisperBotUserProfileFingerprint(_activeUser);
+      final saved = stored.identityFingerprint;
+      final legacyIdentifiedSession = saved == null &&
+          _activeUser != null &&
+          !isAnonymousEquivalentUser(_activeUser);
+      if (legacyIdentifiedSession || (saved != null && saved != expected)) {
+        await _deleteStoredSession(_namespace);
+        return null;
+      }
+      return stored;
     } on WisperBotException {
       rethrow;
     } on Object {
@@ -172,7 +179,8 @@ final class _SessionCoordinator {
       rethrow;
     } on Object catch (error) {
       if (kDebugMode) {
-        final code = error is PlatformException ? error.code : error.runtimeType;
+        final code =
+            error is PlatformException ? error.code : error.runtimeType;
         final status = error is PlatformException && error.details is int
             ? ' (OSStatus: ${error.details})'
             : '';
@@ -185,6 +193,16 @@ final class _SessionCoordinator {
       );
     }
   }
+
+  WisperBotStoredSession _withActiveIdentity(WisperBotStoredSession session) =>
+      WisperBotStoredSession(
+        visitorId: session.visitorId,
+        token: session.token,
+        savedAt: session.savedAt,
+        preChatCompleted: session.preChatCompleted,
+        identityFingerprint: wisperBotUserProfileFingerprint(_activeUser),
+        schemaVersion: session.schemaVersion,
+      );
 
   Future<void> _deleteStoredSession(String namespace) async {
     try {
@@ -210,7 +228,8 @@ final class _SessionCoordinator {
       left?.name == right?.name &&
       left?.email == right?.email &&
       left?.avatarUrl == right?.avatarUrl &&
-      left?.signature == right?.signature;
+      left?.signature == right?.signature &&
+      mapEquals(left?.customFields, right?.customFields);
 }
 
 /// Validates configuration at the application composition boundary.
@@ -218,14 +237,29 @@ void validateWisperBotRuntimeConfig(WisperBotConfig config) {
   validateWisperBotConfig(config);
 }
 
+/// Validates a visitor identity at the application composition boundary.
+void validateWisperBotRuntimeUser(WisperBotUser? user) {
+  validateWisperBotUser(user);
+}
+
 /// Returns the identity-scoped key used to prevent duplicate presentations.
 String wisperBotPresentationScope(WisperBotConfig config) =>
     presentationScopeKey(config);
 
+/// Returns the identity-scoped key used to prevent duplicate presentations.
+String wisperBotUserPresentationScope(
+  WisperBotConfig config,
+  WisperBotUser? user,
+) =>
+    presentationScopeKey(config, user: user);
+
 /// Clears default secure credentials without exposing storage to presentation.
-Future<void> resetWisperBotStoredSession(WisperBotConfig config) async {
+Future<void> resetWisperBotStoredSession(
+  WisperBotConfig config, {
+  WisperBotUser? user,
+}) async {
   validateWisperBotConfig(config);
-  final user = config.user;
+  validateWisperBotUser(user);
   if (user != null &&
       !isAnonymousEquivalentUser(user) &&
       user.signature == null &&

@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../configuration/wisperbot_config.dart';
+import '../../domain/entities/wisperbot_user.dart';
 import '../../domain/errors/wisperbot_exception.dart';
 
 const int wisperBotSessionSchemaVersion = 1;
@@ -59,10 +60,9 @@ void validateWisperBotConfig(WisperBotConfig config) {
     );
   }
   validateAndCanonicalizeBaseUrl(config.apiBaseUrl);
-  _validateUser(config.user);
 }
 
-void _validateUser(WisperBotUser? user) {
+void validateWisperBotUser(WisperBotUser? user) {
   if (user == null) return;
   final externalId = user.externalId;
   if (externalId != null &&
@@ -156,9 +156,37 @@ String? unsignedStableIdentityValue(WisperBotUser? user) {
   return user.externalId ?? user.email;
 }
 
-String presentationScopeKey(WisperBotConfig config) {
+/// Returns a privacy-safe hash used to detect profile changes on restoration.
+String wisperBotUserProfileFingerprint(WisperBotUser? user) {
+  final profile = <String, Object?>{
+    'external_id': user?.externalId,
+    'name': user?.name,
+    'email': user?.email,
+    'avatar': user?.avatarUrl?.toString(),
+    'signature': user?.signature,
+    'custom_fields': _canonicalJsonValue(user?.customFields),
+  };
+  return sha256.convert(utf8.encode(jsonEncode(profile))).toString();
+}
+
+Object? _canonicalJsonValue(Object? value) {
+  if (value is Map) {
+    final keys = value.keys.map((key) => key.toString()).toList()..sort();
+    return <String, Object?>{
+      for (final key in keys) key: _canonicalJsonValue(value[key]),
+    };
+  }
+  if (value is Iterable) {
+    return value.map(_canonicalJsonValue).toList(growable: false);
+  }
+  return value;
+}
+
+String presentationScopeKey(
+  WisperBotConfig config, {
+  WisperBotUser? user,
+}) {
   final canonical = validateAndCanonicalizeBaseUrl(config.apiBaseUrl);
-  final user = config.user;
   final identity = user?.signature != null
       ? '${user?.externalId ?? user?.email}\u0000${user?.signature}'
       : user == null

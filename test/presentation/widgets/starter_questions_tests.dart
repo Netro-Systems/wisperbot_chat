@@ -78,7 +78,7 @@ void registerStarterQuestionsTests(WisperBotConfig config) {
     );
 
     await tester.pumpWidget(
-      _app(WisperBotChatView(config: config, controller: runtime.controller)),
+      _app(WisperBotChatView(controller: runtime.controller)),
     );
     await tester.pumpAndSettle();
 
@@ -140,7 +140,7 @@ void registerStarterQuestionsTests(WisperBotConfig config) {
       }),
     );
     await tester.pumpWidget(
-      _app(WisperBotChatView(config: config, controller: runtime.controller)),
+      _app(WisperBotChatView(controller: runtime.controller)),
     );
     await tester.pumpAndSettle();
 
@@ -208,7 +208,7 @@ void registerStarterQuestionsTests(WisperBotConfig config) {
             )),
       );
       await tester.pumpWidget(
-        _app(WisperBotChatView(config: config, controller: runtime.controller)),
+        _app(WisperBotChatView(controller: runtime.controller)),
       );
       await tester.pump();
       await tester.pump();
@@ -240,7 +240,7 @@ void registerStarterQuestionsTests(WisperBotConfig config) {
           )),
     );
     await tester.pumpWidget(
-      _app(WisperBotChatView(config: config, controller: runtime.controller)),
+      _app(WisperBotChatView(controller: runtime.controller)),
     );
     await tester.pumpAndSettle();
     expect(
@@ -280,7 +280,7 @@ void registerStarterQuestionsTests(WisperBotConfig config) {
       }),
     );
     await tester.pumpWidget(
-      _app(WisperBotChatView(config: config, controller: runtime.controller)),
+      _app(WisperBotChatView(controller: runtime.controller)),
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey<String>('sq_hours')), findsOneWidget);

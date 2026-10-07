@@ -1,10 +1,19 @@
 /// Ready-made and headless Flutter integrations for WisperBot visitor chat.
 library;
 
-export 'src/application/wisperbot_runtime.dart' show WisperBotChatController, WisperBotClient;
-export 'src/application/services/widget_onesignal_service.dart' show WidgetOneSignalService;
-export 'src/domain/contracts/session_store.dart' show WisperBotSessionStore, WisperBotStoredSession;
-export 'src/configuration/wisperbot_config.dart';
+export 'src/application/wisperbot_runtime.dart'
+    show WisperBotChatController, WisperBotClient;
+export 'src/domain/contracts/session_store.dart'
+    show WisperBotSessionStore, WisperBotStoredSession;
+export 'src/configuration/wisperbot_config.dart'
+    show
+        WisperBotChatResult,
+        WisperBotDiagnosticEvent,
+        WisperBotDiagnosticKind,
+        WisperBotDiagnosticsCallback,
+        WisperBotPresentation,
+        WisperBotThemeData;
+export 'src/domain/entities/wisperbot_user.dart' show WisperBotUser;
 export 'src/domain/errors/wisperbot_exception.dart';
 export 'src/domain/events/chat_event.dart';
 export 'src/domain/contracts/media_adapter.dart';
@@ -20,4 +29,7 @@ export 'src/presentation/view/chat_view.dart'
         WisperBotMessageBuilder;
 export 'src/presentation/facade/wisperbot_chat.dart' show WisperBotChat;
 export 'src/presentation/launcher/chat_launcher.dart'
-    show WisperBotChatLauncher, WisperBotLauncherBuilder;
+    show
+        WisperBotBadgeLabelBuilder,
+        WisperBotChatLauncher,
+        WisperBotLauncherBuilder;

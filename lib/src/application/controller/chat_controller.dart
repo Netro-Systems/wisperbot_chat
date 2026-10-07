@@ -59,14 +59,44 @@ class WisperBotChatController with WidgetsBindingObserver {
 
   WisperBotChatState get _state => _stateMachine.state;
 
+  WisperBotConfig get _runtimeConfig => _client._config;
+
   /// Broadcast state updates and a foreground realtime lease.
   Stream<WisperBotChatState> get states => _statesController.stream;
 
   /// Broadcast lifecycle and message events and a realtime lease.
   Stream<WisperBotChatEvent> get events => _eventsController.stream;
 
-  /// Configuration owned by the backing client.
-  WisperBotConfig get config => _client.config;
+  @internal
+  WisperBotThemeData? get runtimeTheme => _client._config.theme;
+
+  @internal
+  bool get runtimeUseApiColors => _client._config.useApiColors;
+
+  @internal
+  bool get runtimeLightStatusBarIcons => _client._config.lightStatusBarIcons;
+
+  @internal
+  WisperBotPresentation get runtimePresentation => _client._config.presentation;
+
+  @internal
+  bool get runtimeRegistersVisitorOnAppLaunch =>
+      _client._config.registerVisitorOnAppLaunch;
+
+  @internal
+  WisperBotMediaAdapter? get runtimeMediaAdapter =>
+      _client._config.mediaAdapter;
+
+  @internal
+  String get runtimePresentationScope =>
+      wisperBotUserPresentationScope(_client._config, user);
+
+  @internal
+  Future<void> ensureRuntimeChatPermission() =>
+      _oneSignalService.ensureChatPermission(_client._config);
+
+  /// Visitor identity currently owned by this runtime.
+  WisperBotUser? get user => _client._activeUser;
 
   /// Resolves the current OneSignal Push Subscription ID if enabled.
   Future<String?> currentPushToken() => _oneSignalService.currentPushToken();
@@ -111,12 +141,11 @@ class WisperBotChatController with WidgetsBindingObserver {
   }
 
   Future<void> _loadConfigurationInternal() async {
-    final result = await _client._startSession();
+    final widget = await _client._loadConfiguration();
     if (_disposed || _state.widget != null) return;
     _emit(
       _state.copyWith(
-        widget: result.widget,
-        supportAvailability: result.supportAvailability,
+        widget: widget,
       ),
     );
   }
@@ -132,7 +161,7 @@ class WisperBotChatController with WidgetsBindingObserver {
       ),
     );
     try {
-      await _oneSignalService.ensureChatPermission(config);
+      await _oneSignalService.ensureChatPermission(_runtimeConfig);
       final configurationLoading = _configurationLoading;
       if (configurationLoading != null) {
         try {
@@ -142,8 +171,8 @@ class WisperBotChatController with WidgetsBindingObserver {
         }
       }
       String? deviceId;
-      final oneSignalAppId = config.oneSignalAppId;
-      if (config.enableOneSignal &&
+      final oneSignalAppId = _runtimeConfig.oneSignalAppId;
+      if (_runtimeConfig.enableOneSignal &&
           oneSignalAppId != null &&
           oneSignalAppId.isNotEmpty) {
         await _oneSignalService.initialize(appId: oneSignalAppId);
@@ -270,8 +299,8 @@ class WisperBotChatController with WidgetsBindingObserver {
     _emit(_state.copyWith(connection: WisperBotConnectionState.connecting));
     try {
       String? deviceId;
-      final oneSignalAppId = config.oneSignalAppId;
-      if (config.enableOneSignal &&
+      final oneSignalAppId = _runtimeConfig.oneSignalAppId;
+      if (_runtimeConfig.enableOneSignal &&
           oneSignalAppId != null &&
           oneSignalAppId.isNotEmpty) {
         deviceId = await _oneSignalService.currentPushToken();
@@ -661,7 +690,7 @@ class WisperBotChatController with WidgetsBindingObserver {
 
   /// Publishes throttled visitor typing state when enabled and ready.
   Future<void> setTyping(bool isTyping) async {
-    if (!_client.config.enableTyping ||
+    if (!_client._config.enableTyping ||
         _state.phase != WisperBotChatPhase.ready) {
       return;
     }
@@ -727,14 +756,23 @@ class WisperBotChatController with WidgetsBindingObserver {
   /// Passing `null` is treated as host-application logout: realtime and typing
   /// stop, credentials and in-memory messages are cleared, and no anonymous
   /// session is created until [initialize] is called again.
-  Future<void> updateUser(WisperBotUser? user) async {
+  Future<void> updateUser(
+    WisperBotUser? user, {
+    bool startSession = true,
+  }) async {
     _ensureNotDisposed();
+    final shouldInitialize = startSession &&
+        (_runtimeConfig.registerVisitorOnAppLaunch ||
+            _state.phase != WisperBotChatPhase.idle ||
+            _state.widget != null ||
+            _stateLease ||
+            _eventLease);
     unawaited(_client._stopRealtime().catchError((_) {}));
     _realtimeActive = false;
     _sessionRevision++;
     if (user == null) {
       await _stopTypingBestEffort();
-      if (config.enableOneSignal) {
+      if (_runtimeConfig.enableOneSignal) {
         await _oneSignalService.logout();
       }
     }
@@ -747,7 +785,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     _recoveryAttempted = false;
     _realtimeConfig = null;
     _emit(WisperBotChatState.initial());
-    if (user == null) return;
+    if (user == null || !shouldInitialize) return;
     _emit(_state.copyWith(
       phase: WisperBotChatPhase.initializing,
       connection: WisperBotConnectionState.connecting,
@@ -763,7 +801,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     _ensureNotDisposed();
     _sessionRevision++;
     await _stopTypingBestEffort();
-    if (config.enableOneSignal) {
+    if (_runtimeConfig.enableOneSignal) {
       await _oneSignalService.logout();
     }
     await _client._stopRealtime();
@@ -783,9 +821,28 @@ class WisperBotChatController with WidgetsBindingObserver {
   }
 
   /// Manually marks unread agent messages as seen/read.
+  ///
+  /// This updates [state] optimistically and then calls the existing widget
+  /// read endpoint. Prebuilt chat surfaces call this when chat becomes visible;
+  /// headless integrations should call it when their own chat UI is shown.
   Future<void> markRead() async {
     _ensureNotDisposed();
-    if (_state.phase != WisperBotChatPhase.ready) return;
+    if (_state.phase != WisperBotChatPhase.ready &&
+        _state.phase != WisperBotChatPhase.reconnecting) {
+      return;
+    }
+    if (!_state.hasUnreadMessages) return;
+
+    final messages = _state.messages
+        .map(
+          (message) => message.role == WisperBotMessageRole.agent &&
+                  !message.isActivity &&
+                  !message.isRead
+              ? message.copyWith(status: WisperBotMessageStatus.read)
+              : message,
+        )
+        .toList();
+    _emit(_state.copyWith(messages: messages));
     try {
       await _client._markRead();
     } catch (_) {}
@@ -815,15 +872,7 @@ class WisperBotChatController with WidgetsBindingObserver {
   /// Records that a prebuilt chat presentation opened.
   void handlePresentationOpened() {
     _addEvent(const WisperBotChatOpened());
-    if (_state.phase == WisperBotChatPhase.ready &&
-        _state.messages.any(
-          (m) =>
-              m.role == WisperBotMessageRole.agent &&
-              !m.isActivity &&
-              m.status != WisperBotMessageStatus.read,
-        )) {
-      unawaited(_client._markRead().catchError((_) {}));
-    }
+    unawaited(markRead().catchError((_) {}));
   }
 
   @internal
@@ -839,6 +888,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     _diagnostic(WisperBotDiagnosticKind.lifecycle);
     if (_foreground) {
       if (_hasLease && _state.phase == WisperBotChatPhase.ready) {
+        unawaited(refresh().catchError((_) {}));
         unawaited(_syncRealtime().catchError((_) {}));
       }
     } else {
@@ -985,9 +1035,6 @@ class WisperBotChatController with WidgetsBindingObserver {
   void _handleRealtimeMessageCreated(Object? payload) {
     final message = const WidgetResponseDecoder().realtimeMessage(payload);
     if (message == null) return;
-    if (message.role == WisperBotMessageRole.agent && !message.isActivity) {
-      unawaited(_client._markRead().catchError((_) {}));
-    }
     final messages = _mergeIncomingMessages(
       _state.messages,
       <WisperBotMessage>[message],
@@ -1319,7 +1366,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     Duration? duration,
     WisperBotException? exception,
   }) {
-    final callback = _client.config.diagnostics;
+    final callback = _client._config.diagnostics;
     if (callback == null) return;
     try {
       callback(

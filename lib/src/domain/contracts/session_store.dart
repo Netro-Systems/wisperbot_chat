@@ -9,6 +9,7 @@ class WisperBotStoredSession {
     required this.token,
     required this.savedAt,
     this.preChatCompleted = false,
+    this.identityFingerprint,
     this.schemaVersion = 1,
   });
 
@@ -24,12 +25,17 @@ class WisperBotStoredSession {
   /// Whether required pre-chat was previously accepted for this session.
   final bool preChatCompleted;
 
+  /// Hash of the user profile that created or last refreshed this session.
+  final String? identityFingerprint;
+
   /// Storage schema used to reject incompatible records safely.
   final int schemaVersion;
 
   @override
-  String toString() => 'WisperBotStoredSession(visitorId: [redacted], token: [redacted], '
+  String toString() =>
+      'WisperBotStoredSession(visitorId: [redacted], token: [redacted], '
       'savedAt: $savedAt, preChatCompleted: $preChatCompleted, '
+      'identityFingerprint: [redacted], '
       'schemaVersion: $schemaVersion)';
 }
 

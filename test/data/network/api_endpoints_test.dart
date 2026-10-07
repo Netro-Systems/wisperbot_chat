@@ -4,6 +4,8 @@ import 'package:wisperbot_chat/src/data/network/api_endpoints.dart';
 void main() {
   test('lists every visitor API endpoint', () {
     expect(ApiEndpoints.session, '/widget/v1/session');
+    expect(
+        ApiEndpoints.widgetLoader('widget-key'), '/widgets/chat/widget-key.js');
     expect(ApiEndpoints.messages, '/widget/v1/messages');
     expect(ApiEndpoints.typing, '/widget/v1/typing');
     expect(ApiEndpoints.handoff, '/widget/v1/handoff');
@@ -15,6 +17,7 @@ void main() {
       ApiEndpoints.session,
     );
 
-    expect(endpoint.toString(), 'https://chat.example.test/custom/base/widget/v1/session');
+    expect(endpoint.toString(),
+        'https://chat.example.test/custom/base/widget/v1/session');
   });
 }

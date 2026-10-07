@@ -5,6 +5,10 @@ abstract final class ApiEndpoints {
   /// Creates or restores an identity-scoped visitor session.
   static const String session = '/widget/v1/session';
 
+  /// Returns the public widget loader containing presentation configuration.
+  static String widgetLoader(String widgetKey) =>
+      '/widgets/chat/${Uri.encodeComponent(widgetKey)}.js';
+
   /// Sends visitor messages and fetches bounded conversation refresh pages.
   static const String messages = '/widget/v1/messages';
 

@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import '../../configuration/wisperbot_config.dart';
 import '../../domain/contracts/session_store.dart';
+import '../../domain/entities/wisperbot_user.dart';
 import '../../domain/errors/wisperbot_exception.dart';
 import '../../domain/models/models.dart';
 
@@ -29,8 +29,7 @@ final class WidgetRequestEncoder {
         if (user?.avatarUrl != null) 'avatar': user!.avatarUrl!.toString(),
         if (user?.externalId != null) 'external_id': user!.externalId!,
         if (user?.signature != null) 'user_hash': user!.signature!,
-        if (user?.resolvedCustomFields case final fields?
-            when fields.isNotEmpty)
+        if (user?.customFields case final fields? when fields.isNotEmpty)
           'custom_fields': fields,
         if (deviceId != null && deviceId.trim().isNotEmpty) ...<String, Object>{
           'device_id': deviceId.trim(),

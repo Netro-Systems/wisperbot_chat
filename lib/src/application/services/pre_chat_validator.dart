@@ -1,4 +1,4 @@
-import '../../configuration/wisperbot_config.dart';
+import '../../domain/entities/wisperbot_user.dart';
 import '../../domain/errors/wisperbot_exception.dart';
 import '../../domain/models/models.dart';
 
@@ -22,7 +22,8 @@ final class PreChatValidator {
   }
 
   void validateConfiguration(WisperBotWidgetConfig widget) {
-    if (widget.requiresPreChat && widget.preChatFields.contains(WisperBotPreChatField.unknown)) {
+    if (widget.requiresPreChat &&
+        widget.preChatFields.contains(WisperBotPreChatField.unknown)) {
       throw const WisperBotException(
         code: WisperBotErrorCode.unsupported,
         message: 'This widget requires an unsupported pre-chat field.',
@@ -36,9 +37,15 @@ final class PreChatValidator {
     WisperBotPreChatData data, {
     WisperBotUser? user,
   }) {
-    final name = (data.name?.trim().isNotEmpty == true ? data.name : user?.name)?.trim() ?? '';
-    final email = (data.email?.trim().isNotEmpty == true ? data.email : user?.email)?.trim() ?? '';
-    if (widget.preChatFields.contains(WisperBotPreChatField.name) && name.isEmpty) {
+    final name = (data.name?.trim().isNotEmpty == true ? data.name : user?.name)
+            ?.trim() ??
+        '';
+    final email =
+        (data.email?.trim().isNotEmpty == true ? data.email : user?.email)
+                ?.trim() ??
+            '';
+    if (widget.preChatFields.contains(WisperBotPreChatField.name) &&
+        name.isEmpty) {
       throw const WisperBotException(
         code: WisperBotErrorCode.validation,
         message: 'Name is required.',
@@ -55,7 +62,8 @@ final class PreChatValidator {
         retryable: false,
       );
     }
-    if (widget.preChatFields.contains(WisperBotPreChatField.email) && email.isEmpty) {
+    if (widget.preChatFields.contains(WisperBotPreChatField.email) &&
+        email.isEmpty) {
       throw const WisperBotException(
         code: WisperBotErrorCode.validation,
         message: 'Email is required.',
@@ -66,7 +74,8 @@ final class PreChatValidator {
       );
     }
     if (email.length > 190 ||
-        (email.isNotEmpty && !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email))) {
+        (email.isNotEmpty &&
+            !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email))) {
       throw const WisperBotException(
         code: WisperBotErrorCode.validation,
         message: 'Enter a valid email address.',

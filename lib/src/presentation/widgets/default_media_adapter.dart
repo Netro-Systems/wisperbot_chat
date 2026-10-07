@@ -49,10 +49,12 @@ class _DefaultMediaAdapter implements WisperBotMediaAdapter {
   }
 
   /// Opens camera to capture an image.
-  Future<WisperBotUpload?> pickCameraImage() => pickImage(source: ImageSource.camera);
+  Future<WisperBotUpload?> pickCameraImage() =>
+      pickImage(source: ImageSource.camera);
 
   /// Opens gallery to select an image.
-  Future<WisperBotUpload?> pickGalleryImage() => pickImage(source: ImageSource.gallery);
+  Future<WisperBotUpload?> pickGalleryImage() =>
+      pickImage(source: ImageSource.gallery);
 
   @override
   Future<WisperBotUpload?> pickDocument() async {
@@ -91,7 +93,8 @@ class _DefaultMediaAdapter implements WisperBotMediaAdapter {
 
     final bytes = await file.readAsBytes();
     final filename = file.name.trim();
-    final mimeType = (file.mimeType ?? _documentMimeType(filename)).toLowerCase();
+    final mimeType =
+        (file.mimeType ?? _documentMimeType(filename)).toLowerCase();
     _validateMedia(
       bytes: bytes,
       filename: filename,

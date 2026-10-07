@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
+import 'package:wisperbot_chat/src/configuration/wisperbot_config.dart';
 import 'package:wisperbot_chat/src/presentation/media/remote_image.dart';
 
 import '../../support/support.dart';
@@ -23,6 +24,7 @@ void main() {
     widgetKey: 'test-widget',
     apiBaseUrl: 'https://chat.example.com',
     enableOneSignal: false,
+    requireNotificationPermission: false,
   );
 
   registerViewStateTests(config);
@@ -34,9 +36,14 @@ void main() {
 
 Widget _app(Widget child) => MaterialApp(home: Scaffold(body: child));
 
-_TestRuntime _runtime(WisperBotConfig config, http.Client httpClient) {
-  final client = WisperBotClient(
+_TestRuntime _runtime(
+  WisperBotConfig config,
+  http.Client httpClient, {
+  WisperBotUser? user,
+}) {
+  final client = WisperBotClient.fromConfig(
     config: config,
+    user: user,
     httpClient: httpClient,
     sessionStore: MemorySessionStore(),
   );

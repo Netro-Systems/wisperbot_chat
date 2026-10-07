@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
+import 'package:wisperbot_chat/src/configuration/wisperbot_config.dart';
+import 'package:wisperbot_chat/src/application/services/widget_onesignal_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -11,6 +13,7 @@ void main() {
   const config = WisperBotConfig(
       widgetKey: 'test',
       oneSignalAppId: 'app-id',
+      registerVisitorOnAppLaunch: false,
       requireNotificationPermission: true);
   final service = WidgetOneSignalService.instance;
   var granted = false;
@@ -102,8 +105,10 @@ void main() {
     expect(requests, 1);
   });
   test('disabled requirement preserves existing behavior', () async {
-    await service
-        .ensureChatPermission(const WisperBotConfig(widgetKey: 'test'));
+    await service.ensureChatPermission(const WisperBotConfig(
+      widgetKey: 'test',
+      requireNotificationPermission: false,
+    ));
     expect(requests, 0);
   });
 
@@ -124,11 +129,17 @@ void main() {
           .setMockMethodCallHandler(urlChannel, null);
     });
     canRequest = false;
+    await WisperBotChat.initialize(
+      widgetKey: 'test',
+      oneSignalAppId: 'app-id',
+      registerVisitorOnAppLaunch: false,
+      requireNotificationPermission: true,
+    );
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: Builder(
           builder: (context) => TextButton(
-            onPressed: () => WisperBotChat.open(context, config: config),
+            onPressed: () => WisperBotChat.open(context),
             child: const Text('Open support'),
           ),
         ),
@@ -149,13 +160,15 @@ void main() {
 
   testWidgets('launcher reports missing app ID without an unhandled exception',
       (tester) async {
-    await tester.pumpWidget(const MaterialApp(
+    await WisperBotChat.initialize(
+      widgetKey: 'test',
+      registerVisitorOnAppLaunch: false,
+      requireNotificationPermission: true,
+    );
+    await tester.pumpWidget(MaterialApp(
       home: Scaffold(
-          body: WisperBotChatLauncher(
-              config: WisperBotConfig(
-        widgetKey: 'test',
-        requireNotificationPermission: true,
-      ))),
+        body: WisperBotChat.launcher(),
+      ),
     ));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Open chat'));
@@ -174,17 +187,24 @@ void main() {
       'launcher waits for tap and hard denial shows snackbar without starting chat',
       (tester) async {
     canRequest = false;
-    var sessionRequests = 0;
-    final client = MockClient((_) async {
-      sessionRequests++;
+    final networkRequests = <http.Request>[];
+    final client = MockClient((request) async {
+      networkRequests.add(request);
       return http.Response('{}', 500);
     });
     await http.runWithClient(() async {
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(body: WisperBotChatLauncher(config: config)),
+      await WisperBotChat.initialize(
+        widgetKey: 'test',
+        oneSignalAppId: 'app-id',
+        registerVisitorOnAppLaunch: false,
+        requireNotificationPermission: true,
+      );
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: WisperBotChat.launcher()),
       ));
       await tester.pumpAndSettle();
-      expect(sessionRequests, 0);
+      expect(networkRequests, hasLength(1));
+      expect(networkRequests.single.method, 'GET');
       expect(requests, 0);
       await tester.tap(find.byTooltip('Open chat'));
       await tester.pumpAndSettle();
@@ -193,7 +213,7 @@ void main() {
               'Enable notifications from settings to use the support feature.'),
           findsOneWidget);
       expect(find.byType(WisperBotChatScreen), findsNothing);
-      expect(sessionRequests, 0);
+      expect(networkRequests, hasLength(1));
       expect(requests, 0);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();

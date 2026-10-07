@@ -5,19 +5,66 @@ part of '../wisperbot_runtime.dart';
 /// Create a controller with [WisperBotChatController] and call [close] after
 /// every controller using this client has been disposed.
 class WisperBotClient {
-  /// Creates a client with injectable transport and credential storage.
+  /// Creates a headless client with injectable transport and credential storage.
   ///
   /// The client owns a default HTTP client and secure store. Injected
   /// dependencies remain caller-owned. Throws [WisperBotException] when the
   /// configuration is invalid.
-  WisperBotClient({
-    required this.config,
+  factory WisperBotClient({
+    required String widgetKey,
+    String apiBaseUrl = 'https://wisperbot.com',
+    WisperBotUser? user,
+    WisperBotThemeData? theme,
+    bool useApiColors = true,
+    bool lightStatusBarIcons = false,
+    WisperBotPresentation presentation = WisperBotPresentation.fullScreen,
+    bool enableTyping = true,
+    WisperBotMediaAdapter? mediaAdapter,
+    WisperBotDiagnosticsCallback? diagnostics,
+    String? oneSignalAppId,
+    bool enableOneSignal = true,
+    bool requireNotificationPermission = true,
+    bool registerVisitorOnAppLaunch = true,
     http.Client? httpClient,
     WisperBotSessionStore? sessionStore,
     WidgetRealtimeConnector? realtimeConnector,
-  })  : _httpClient = httpClient ?? http.Client(),
+  }) =>
+      WisperBotClient.fromConfig(
+        config: WisperBotConfig(
+          widgetKey: widgetKey,
+          apiBaseUrl: apiBaseUrl,
+          theme: theme,
+          useApiColors: useApiColors,
+          lightStatusBarIcons: lightStatusBarIcons,
+          presentation: presentation,
+          enableTyping: enableTyping,
+          mediaAdapter: mediaAdapter,
+          diagnostics: diagnostics,
+          oneSignalAppId: oneSignalAppId,
+          enableOneSignal: enableOneSignal,
+          requireNotificationPermission: requireNotificationPermission,
+          registerVisitorOnAppLaunch: registerVisitorOnAppLaunch,
+          sessionStore: sessionStore,
+        ),
+        user: user,
+        httpClient: httpClient,
+        sessionStore: sessionStore,
+        realtimeConnector: realtimeConnector,
+      );
+
+  /// Internal constructor used by the shared runtime.
+  @internal
+  WisperBotClient.fromConfig({
+    required WisperBotConfig config,
+    WisperBotUser? user,
+    http.Client? httpClient,
+    WisperBotSessionStore? sessionStore,
+    WidgetRealtimeConnector? realtimeConnector,
+  })  : _config = config,
+        _httpClient = httpClient ?? http.Client(),
         _ownsHttpClient = httpClient == null {
     validateWisperBotConfig(config);
+    validateWisperBotUser(user);
     final baseUrl = validateAndCanonicalizeBaseUrl(config.apiBaseUrl);
     _remoteDataSource = _createWidgetRemoteDataSource(
       baseUrl: baseUrl,
@@ -25,6 +72,7 @@ class WisperBotClient {
     );
     _sessions = _SessionCoordinator(
       config: config,
+      initialUser: user,
       remoteDataSource: _remoteDataSource,
       sessionStore: sessionStore ??
           config.sessionStore ??
@@ -35,7 +83,7 @@ class WisperBotClient {
   }
 
   /// Immutable configuration used for every operation.
-  final WisperBotConfig config;
+  final WisperBotConfig _config;
   final http.Client _httpClient;
   final bool _ownsHttpClient;
   late final WidgetRemoteDataSource _remoteDataSource;
@@ -56,10 +104,15 @@ class WisperBotClient {
     return _sessions.start(deviceId: deviceId);
   }
 
+  Future<WisperBotWidgetConfig> _loadConfiguration() {
+    _ensureOpen();
+    return _remoteDataSource.loadConfiguration(widgetKey: _config.widgetKey);
+  }
+
   Future<WidgetRefreshResult> _refresh(int after) {
     final session = _requireSession();
     return _remoteDataSource.refresh(
-      widgetKey: config.widgetKey,
+      widgetKey: _config.widgetKey,
       token: session.token,
       after: after,
     );
@@ -68,7 +121,7 @@ class WisperBotClient {
   Future<WidgetSendResult> _sendText(String text) {
     final session = _requireSession();
     return _remoteDataSource.sendText(
-      widgetKey: config.widgetKey,
+      widgetKey: _config.widgetKey,
       token: session.token,
       text: text,
     );
@@ -81,7 +134,7 @@ class WisperBotClient {
   ) {
     final session = _requireSession();
     return _remoteDataSource.sendUpload(
-      widgetKey: config.widgetKey,
+      widgetKey: _config.widgetKey,
       token: session.token,
       upload: upload,
       type: type,
@@ -100,7 +153,7 @@ class WisperBotClient {
   Future<void> _setTyping(bool isTyping) {
     final session = _requireSession();
     return _remoteDataSource.setTyping(
-      widgetKey: config.widgetKey,
+      widgetKey: _config.widgetKey,
       token: session.token,
       isTyping: isTyping,
     );
@@ -109,7 +162,7 @@ class WisperBotClient {
   Future<WisperBotHandoffState> _requestHandoff() {
     final session = _requireSession();
     return _remoteDataSource.requestHandoff(
-      widgetKey: config.widgetKey,
+      widgetKey: _config.widgetKey,
       token: session.token,
     );
   }
@@ -117,7 +170,7 @@ class WisperBotClient {
   Future<void> _markRead() {
     final session = _requireSession();
     return _remoteDataSource.markRead(
-      widgetKey: config.widgetKey,
+      widgetKey: _config.widgetKey,
       token: session.token,
     );
   }
@@ -147,7 +200,7 @@ class WisperBotClient {
     final session = _requireSession();
     return _realtimeConnector.start(
       config: realtime,
-      widgetKey: config.widgetKey,
+      widgetKey: _config.widgetKey,
       token: session.token,
       conversationId: conversationId,
       onConnected: onConnected,

@@ -1,12 +1,20 @@
 part of 'models.dart';
 
 /// Current human-support handoff state reported by the backend.
-enum WisperBotHandoffStatus { unavailable, eligible, requesting, waiting, connected, failed }
+enum WisperBotHandoffStatus {
+  unavailable,
+  eligible,
+  requesting,
+  waiting,
+  connected,
+  failed
+}
 
 /// Immutable handoff state exposed by the controller.
 class WisperBotHandoffState {
   /// Creates a handoff state with an optional safe [error].
-  const WisperBotHandoffState({required this.status, this.error, this.agentName});
+  const WisperBotHandoffState(
+      {required this.status, this.error, this.agentName});
 
   /// Creates the default state when handoff is not available.
   const WisperBotHandoffState.unavailable()

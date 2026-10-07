@@ -37,8 +37,9 @@ class WisperBotRemoteImage extends StatelessWidget {
       fit: fit,
       alignment: alignment,
       semanticLabel: semanticLabel,
-      errorBuilder: (context, _, __) =>
-          _hasKnownRasterExtension(url) ? errorBuilder(context) : _buildSvg(context),
+      errorBuilder: (context, _, __) => _hasKnownRasterExtension(url)
+          ? errorBuilder(context)
+          : _buildSvg(context),
     );
   }
 

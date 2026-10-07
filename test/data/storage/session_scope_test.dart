@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
+import 'package:wisperbot_chat/src/configuration/wisperbot_config.dart';
 import 'package:wisperbot_chat/src/data/storage/session_scope.dart';
 
 void main() {
@@ -28,8 +29,10 @@ void main() {
   });
 
   test('sessions are isolated by widget, base URL, and signed identity', () {
-    const signatureA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-    const signatureB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    const signatureA =
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const signatureB =
+        'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
     const userA = WisperBotUser(
       externalId: 'customer-top-secret-a',
       signature: signatureA,
@@ -57,7 +60,8 @@ void main() {
       user: userA,
     );
 
-    expect(<String>{anonymous, signedA, signedB, otherWidget, otherHost}, hasLength(5));
+    expect(<String>{anonymous, signedA, signedB, otherWidget, otherHost},
+        hasLength(5));
     expect(signedA, isNot(contains('customer-top-secret-a')));
     expect(signedA, isNot(contains(signatureA)));
   });
@@ -105,17 +109,15 @@ void main() {
 
   test('configuration rejects unsafe identity values', () {
     expect(
-      () => WisperBotClient(
+      () => WisperBotClient.fromConfig(
         config: const WisperBotConfig(widgetKey: ''),
       ),
       throwsA(isA<WisperBotException>()),
     );
     expect(
-      () => WisperBotClient(
-        config: const WisperBotConfig(
-          widgetKey: 'key',
-          user: WisperBotUser(externalId: ' padded '),
-        ),
+      () => WisperBotClient.fromConfig(
+        config: const WisperBotConfig(widgetKey: 'key'),
+        user: const WisperBotUser(externalId: ' padded '),
       ),
       throwsA(isA<WisperBotException>()),
     );

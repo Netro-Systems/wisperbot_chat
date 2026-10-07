@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
@@ -15,48 +13,25 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
   final widgetKey = dotenv.get('WISPERBOT_WIDGET_KEY').trim();
-  final oneSignalAppId = dotenv.maybeGet('WISPERBOT_ONESIGNAL_APP_ID')?.trim();
-  final config = WisperBotConfig(
+  final configuredApiBaseUrl = dotenv.maybeGet('WISPERBOT_API_BASE_URL')?.trim();
+  final oneSignalAppId = dotenv.maybeGet('ONESIGNAL_APP_ID')?.trim();
+  final notificationsConfigured = oneSignalAppId?.isNotEmpty == true;
+  await WisperBotChat.initialize(
     widgetKey: widgetKey,
-    requireNotificationPermission: true,
+    apiBaseUrl: configuredApiBaseUrl?.isNotEmpty == true ? configuredApiBaseUrl! : 'https://wisperbot.com',
+    navigatorKey: navigatorKey,
+    requireNotificationPermission: notificationsConfigured,
+    registerVisitorOnAppLaunch: true,
     useApiColors: true,
     lightStatusBarIcons: true,
-    oneSignalAppId:
-        (oneSignalAppId?.isNotEmpty == true) ? oneSignalAppId : null,
-    user: const WisperBotUser(
-      name: 'Demo Visitor',
-      email: 'visitor@demo.com',
-      location: WisperBotLocation(
-        country: 'Bangladesh',
-        countryCode: 'BD',
-        city: 'Dhaka',
-        region: 'Dhaka Division',
-        latitude: 23.8103,
-        longitude: 90.4125,
-        pageTitle: 'Example app',
-        pageUrl: 'https://example.com',
-      ),
-    ),
+    oneSignalAppId: notificationsConfigured ? oneSignalAppId : null,
   );
 
-  // 1. Initialize push notification handlers
-  WisperBotChat.initializeNotificationHandlers(
-    config: config,
-    navigatorKey: navigatorKey,
-  );
-
-  // 2. Register live visitor presence in background
-  unawaited(WisperBotChat.registerVisitor(config: config));
-
-  runApp(
-    ExampleApp(config: config),
-  );
+  runApp(const ExampleApp());
 }
 
 class ExampleApp extends StatelessWidget {
-  const ExampleApp({super.key, required this.config});
-
-  final WisperBotConfig config;
+  const ExampleApp({super.key});
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -64,20 +39,19 @@ class ExampleApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         title: 'WisperBot Chat',
         theme: buildExampleTheme(),
-        home: ExampleHome(config: config),
+        home: const ExampleHome(),
       );
 }
 
 class ExampleHome extends StatelessWidget {
-  const ExampleHome({super.key, required this.config});
+  const ExampleHome({super.key});
 
-  final WisperBotConfig config;
-
-  Future<void> _openChat(BuildContext context,
-      {WisperBotPresentation? presentation}) async {
+  Future<void> _openChat(BuildContext context, {WisperBotPresentation? presentation}) async {
     try {
-      await WisperBotChat.open(context,
-          config: config, presentation: presentation);
+      await WisperBotChat.open(
+        context,
+        presentation: presentation,
+      );
     } on WisperBotException catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
@@ -157,7 +131,7 @@ class ExampleHome extends StatelessWidget {
                   subtitle: 'Place chat directly inside your layout',
                   onTap: () => Navigator.of(context).push<void>(
                     MaterialPageRoute<void>(
-                      builder: (_) => EmbeddedExample(config: config),
+                      builder: (_) => const EmbeddedExample(),
                     ),
                   ),
                 ),
@@ -166,14 +140,17 @@ class ExampleHome extends StatelessWidget {
             ),
           ),
         ),
-        floatingActionButton: WisperBotChatLauncher(config: config),
+        floatingActionButton: WisperBotChat.launcher(
+            showBadge: true,
+            badgeShowCount: true,
+            badgeBackgroundColor: Color(0xFFFF0000),
+            badgeLargeSize: 18,
+            badgeOffset: Offset(4, -4)),
       );
 }
 
 class EmbeddedExample extends StatelessWidget {
-  const EmbeddedExample({super.key, required this.config});
-
-  final WisperBotConfig config;
+  const EmbeddedExample({super.key});
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -188,7 +165,7 @@ class EmbeddedExample extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Card(
             clipBehavior: Clip.antiAlias,
-            child: WisperBotChatView(config: config),
+            child: WisperBotChat.view(),
           ),
         ),
       );
