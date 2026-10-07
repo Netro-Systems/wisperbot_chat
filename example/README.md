@@ -12,7 +12,7 @@ an application-owned button or design, wrap its visible child with
 Opening chat through `WisperBotChat.open(context)` marks visible agent messages
 read and clears the badge. Badge updates use the existing realtime connection
 and require no separate backend integration. See the package's
-[unread badge guide](../docs/unread-badges.md) for customization and the complete
+[unread badge guide](../doc/unread-badges.md) for customization and the complete
 option reference.
 
 1. Copy `.env.example` to `.env`.

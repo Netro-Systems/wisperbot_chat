@@ -231,7 +231,7 @@ WisperBotChat.launcher(
 )
 ```
 
-See the [complete unread badge guide](docs/unread-badges.md) for every option,
+See the [complete unread badge guide](doc/unread-badges.md) for every option,
 positioning, count shapes, custom labels, custom state handling, headless
 controllers, lifecycle behavior, and troubleshooting.
 
