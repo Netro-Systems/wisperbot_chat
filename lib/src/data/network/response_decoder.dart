@@ -14,6 +14,91 @@ final class WidgetResponseDecoder {
   /// Creates the stateless response decoder.
   const WidgetResponseDecoder();
 
+  /// Decodes public configuration embedded in the widget loader script.
+  ///
+  /// The script is treated as data and is never evaluated. JSON responses
+  /// containing a `config` object are also accepted for compatible backends.
+  WisperBotWidgetConfig configuration(
+    http.Response response, {
+    required String expectedWidgetKey,
+  }) {
+    try {
+      if (response.bodyBytes.length > 1024 * 1024) {
+        throw const FormatException();
+      }
+      final source = utf8.decode(response.bodyBytes);
+      Object? decoded;
+      final trimmed = source.trimLeft();
+      if (trimmed.startsWith('{')) {
+        decoded = jsonDecode(source);
+      } else {
+        decoded = <String, Object?>{
+          'config': jsonDecode(_widgetLoaderConfigurationJson(source)),
+        };
+      }
+      if (decoded is! Map<String, dynamic>) throw const FormatException();
+      final returnedKey = _stringOrNull(decoded['key']);
+      if (returnedKey != null && returnedKey != expectedWidgetKey) {
+        throw const FormatException();
+      }
+      final config = decoded['config'];
+      if (config is! Map<String, dynamic>) throw const FormatException();
+      final configKey = _stringOrNull(config['key']);
+      if (configKey != null && configKey != expectedWidgetKey) {
+        throw const FormatException();
+      }
+      return _parseWidgetConfig(config);
+    } on Object {
+      throw WisperBotException(
+        code: WisperBotErrorCode.server,
+        message: 'WisperBot returned an invalid widget configuration.',
+        retryable: response.statusCode >= 500,
+        httpStatus: response.statusCode,
+      );
+    }
+  }
+
+  String _widgetLoaderConfigurationJson(String source) {
+    const marker = 'window.__WB_CHAT__';
+    final markerIndex = source.indexOf(marker);
+    if (markerIndex < 0) throw const FormatException();
+    final assignmentIndex = source.indexOf('=', markerIndex + marker.length);
+    if (assignmentIndex < 0) throw const FormatException();
+    final configProperty = RegExp(
+      r'''(?:["']config["']|config)\s*:''',
+    ).firstMatch(source.substring(assignmentIndex + 1));
+    if (configProperty == null) throw const FormatException();
+    final configStart = assignmentIndex + 1 + configProperty.end;
+    final objectStart = source.indexOf('{', configStart);
+    if (objectStart < 0) throw const FormatException();
+
+    var depth = 0;
+    var inString = false;
+    var escaped = false;
+    for (var index = objectStart; index < source.length; index++) {
+      final character = source[index];
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (character == '\\') {
+          escaped = true;
+        } else if (character == '"') {
+          inString = false;
+        }
+        continue;
+      }
+      if (character == '"') {
+        inString = true;
+      } else if (character == '{') {
+        depth++;
+      } else if (character == '}') {
+        depth--;
+        if (depth == 0) return source.substring(objectStart, index + 1);
+      }
+    }
+    throw const FormatException();
+  }
+
   /// Decodes a session creation or restoration response.
   WidgetSessionResult session(
     http.Response response, {

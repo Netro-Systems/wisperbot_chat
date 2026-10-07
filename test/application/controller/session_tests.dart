@@ -1,7 +1,8 @@
 part of 'chat_controller_test.dart';
 
 void registerSessionTests(WisperBotConfig config) {
-  test('parses history, unknown fields, and unknown enum values safely', () async {
+  test('parses history, unknown fields, and unknown enum values safely',
+      () async {
     final store = MemorySessionStore();
     final httpClient = MockClient((request) async {
       expect(request.url.path, '/base/widget/v1/session');
@@ -17,7 +18,7 @@ void registerSessionTests(WisperBotConfig config) {
         200,
       );
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: store,
@@ -27,7 +28,8 @@ void registerSessionTests(WisperBotConfig config) {
     await controller.initialize();
 
     expect(controller.state.phase, WisperBotChatPhase.ready);
-    expect(controller.state.messages.map((item) => item.serverId), <int?>[2, 3]);
+    expect(
+        controller.state.messages.map((item) => item.serverId), <int?>[2, 3]);
     expect(
       controller.state.messages.last.role,
       WisperBotMessageRole.unknown,
@@ -42,7 +44,8 @@ void registerSessionTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('uses the web-widget primary fallback for missing or invalid colors', () async {
+  test('uses the web-widget primary fallback for missing or invalid colors',
+      () async {
     var calls = 0;
     final httpClient = MockClient((request) async {
       calls++;
@@ -57,7 +60,7 @@ void registerSessionTests(WisperBotConfig config) {
     });
 
     for (var index = 0; index < 2; index++) {
-      final client = WisperBotClient(
+      final client = WisperBotClient.fromConfig(
         config: config,
         httpClient: httpClient,
         sessionStore: MemorySessionStore(),

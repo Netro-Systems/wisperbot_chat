@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
-import '../../configuration/wisperbot_config.dart';
 import '../../domain/contracts/session_store.dart';
+import '../../domain/entities/wisperbot_user.dart';
 import '../../domain/models/models.dart';
 import '../network/api_endpoints.dart';
 import '../network/http_error_mapper.dart';
@@ -12,6 +12,10 @@ import '../network/widget_results.dart';
 
 /// Backend operations required by the WisperBot application runtime.
 abstract interface class WidgetRemoteDataSource {
+  Future<WisperBotWidgetConfig> loadConfiguration({
+    required String widgetKey,
+  });
+
   Future<WidgetSessionResult> startSession({
     required String widgetKey,
     required WisperBotUser? user,
@@ -74,6 +78,18 @@ final class HttpWidgetRemoteDataSource implements WidgetRemoteDataSource {
   final NetworkCaller _networkCaller;
   final WidgetRequestEncoder _encoder = const WidgetRequestEncoder();
   final WidgetResponseDecoder _decoder = const WidgetResponseDecoder();
+
+  @override
+  Future<WisperBotWidgetConfig> loadConfiguration({
+    required String widgetKey,
+  }) async {
+    final response = await _networkCaller.get(
+      ApiEndpoints.widgetLoader(widgetKey),
+      operation: WidgetOperation.configuration,
+      accept: 'application/javascript, text/javascript, application/json',
+    );
+    return _decoder.configuration(response, expectedWidgetKey: widgetKey);
+  }
 
   @override
   Future<WidgetSessionResult> startSession({

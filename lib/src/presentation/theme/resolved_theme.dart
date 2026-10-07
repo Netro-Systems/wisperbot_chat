@@ -35,7 +35,8 @@ class WisperBotResolvedTheme {
     required WisperBotWidgetConfig? server,
     required bool useApiColors,
   }) {
-    final serverPrimary = useApiColors ? _parseHex(server?.primaryColorHex) : null;
+    final serverPrimary =
+        useApiColors ? _parseHex(server?.primaryColorHex) : null;
     final requestedBrightness = override?.brightness;
     final colorScheme = requestedBrightness == null
         ? hostTheme.colorScheme
@@ -45,7 +46,8 @@ class WisperBotResolvedTheme {
           );
     final primary = override?.primaryColor ?? serverPrimary ?? _brandPrimary;
     final isDark = colorScheme.brightness == Brightness.dark;
-    final surface = override?.surfaceColor ?? (isDark ? colorScheme.surface : _brandSurface);
+    final surface = override?.surfaceColor ??
+        (isDark ? colorScheme.surface : _brandSurface);
     final background = override?.backgroundColor ??
         (isDark
             ? Color.alphaBlend(
@@ -61,15 +63,18 @@ class WisperBotResolvedTheme {
       onPrimary: _contrasting(primary),
       background: background,
       surface: surface,
-      surfaceMuted: isDark ? colorScheme.surfaceContainerHigh : _brandSurfaceMuted,
+      surfaceMuted:
+          isDark ? colorScheme.surfaceContainerHigh : _brandSurfaceMuted,
       visitorBubble: visitorBubble,
-      onVisitorBubble: override?.onVisitorBubbleColor ?? _contrasting(visitorBubble),
+      onVisitorBubble:
+          override?.onVisitorBubbleColor ?? _contrasting(visitorBubble),
       agentBubble: agentBubble,
       onAgentBubble: override?.onAgentBubbleColor ?? onSurface,
       error: override?.errorColor ?? colorScheme.error,
       onSurface: onSurface,
-      onSurfaceMuted:
-          isDark ? colorScheme.onSurface.withValues(alpha: 0.68) : const Color(0xFF687386),
+      onSurfaceMuted: isDark
+          ? colorScheme.onSurface.withValues(alpha: 0.68)
+          : const Color(0xFF687386),
       outline: isDark ? colorScheme.outlineVariant : const Color(0xFFECEEF2),
       borderRadius: override?.borderRadius?.clamp(4, 32).toDouble() ?? 16,
       messageSpacing: override?.messageSpacing?.clamp(2, 24).toDouble() ?? 8,

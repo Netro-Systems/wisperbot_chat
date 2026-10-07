@@ -31,6 +31,7 @@ class FlutterSecureWisperBotSessionStore implements WisperBotSessionStore {
       final token = value['token'];
       final savedAt = value['saved_at'];
       final preChatCompleted = value['pre_chat_completed'];
+      final identityFingerprint = value['identity_fingerprint'];
       final schemaVersion = value['schema_version'];
       if (visitorId is! String ||
           visitorId.isEmpty ||
@@ -38,6 +39,7 @@ class FlutterSecureWisperBotSessionStore implements WisperBotSessionStore {
           token.isEmpty ||
           savedAt is! String ||
           (preChatCompleted != null && preChatCompleted is! bool) ||
+          (identityFingerprint != null && identityFingerprint is! String) ||
           schemaVersion is! int ||
           schemaVersion != 1) {
         throw const FormatException('Session record is incomplete.');
@@ -47,6 +49,7 @@ class FlutterSecureWisperBotSessionStore implements WisperBotSessionStore {
         token: token,
         savedAt: DateTime.parse(savedAt).toUtc(),
         preChatCompleted: preChatCompleted == true,
+        identityFingerprint: identityFingerprint as String?,
         schemaVersion: schemaVersion,
       );
     } on Object {
@@ -67,6 +70,8 @@ class FlutterSecureWisperBotSessionStore implements WisperBotSessionStore {
         'token': session.token,
         'saved_at': session.savedAt.toUtc().toIso8601String(),
         'pre_chat_completed': session.preChatCompleted,
+        if (session.identityFingerprint != null)
+          'identity_fingerprint': session.identityFingerprint!,
         'schema_version': session.schemaVersion,
       }),
     );

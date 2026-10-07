@@ -3,13 +3,14 @@
 This app demonstrates the full-screen facade, floating launcher, embedded view,
 bottom sheet, dialog, image/document upload, and microphone recording. The SDK
 handles media with its built-in adapter; the app does not create a custom adapter.
-One shared `WisperBotConfig` is used for notifications, visitor registration,
-and every chat integration.
+One `WisperBotChat.initialize` call owns notifications, visitor registration,
+navigation, and the controller shared by every chat integration.
 
 1. Copy `.env.example` to `.env`.
 2. Put your public widget key in `WISPERBOT_WIDGET_KEY`. Change `WISPERBOT_API_BASE_URL` only for staging or a self-hosted API.
-   Set `WISPERBOT_ONESIGNAL_APP_ID` for Android/iOS notification permission gating,
-   which this example enables. Disable `requireNotificationPermission` for web runs.
+   Set `ONESIGNAL_APP_ID` for Android/iOS notification permission gating. The
+   example enables the requirement only when this value is present, so the
+   default empty value also works for web and notification-free testing.
 3. For native runs, use a widget without a browser-domain allowlist; the SDK
    does not spoof browser origin headers. Required name/email pre-chat is
    supported by the example and SDK. The production LiteSpeed/ModSecurity
@@ -28,3 +29,22 @@ Sharing entitlements required by the default secure session store. Flutter
 bundles `.env` as an application asset, so it is suitable only for public client
 configuration such as the widget key and API base URL. Never put identity
 secrets, workspace credentials, or management API credentials in it.
+
+The example starts anonymously and deliberately does not identify a fake demo
+visitor. In a real app, call `WisperBotChat.identify` only after the actual
+signed-in profile is available, and use a stable application user ID:
+
+```dart
+await WisperBotChat.identify(
+  WisperBotUser(
+    externalId: profile.id,
+    name: profile.name,
+    email: profile.email,
+  ),
+);
+```
+
+Do not send placeholder names or temporary email addresses. If profile loading
+happens after the first app frame, initialize with
+`registerVisitorOnAppLaunch: false`; visual launcher configuration still loads,
+and the identified session starts when chat is opened.

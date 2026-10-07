@@ -11,7 +11,7 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
       );
     });
     final store = MemorySessionStore();
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: store,
@@ -51,7 +51,7 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
       }
       return http.Response(jsonEncode(response), 200);
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
@@ -73,7 +73,7 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
     await client.close();
 
     unknownField = true;
-    final unknownClient = WisperBotClient(
+    final unknownClient = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
@@ -100,10 +100,7 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
       widgetKey: config.widgetKey,
       apiBaseUrl: config.apiBaseUrl,
       enableOneSignal: false,
-      user: const WisperBotUser(
-        name: 'Jane Doe',
-        email: 'jane@example.com',
-      ),
+      requireNotificationPermission: false,
     );
     final responseClient = MockClient(
       (_) async => http.Response(
@@ -111,8 +108,12 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
         200,
       ),
     );
-    final userClient = WisperBotClient(
+    final userClient = WisperBotClient.fromConfig(
       config: userConfig,
+      user: const WisperBotUser(
+        name: 'Jane Doe',
+        email: 'jane@example.com',
+      ),
       httpClient: responseClient,
       sessionStore: userStore,
     );
@@ -130,7 +131,7 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
       savedAt: DateTime.utc(2026, 8, 1),
       preChatCompleted: true,
     );
-    final restoredClient = WisperBotClient(
+    final restoredClient = WisperBotClient.fromConfig(
       config: config,
       httpClient: responseClient,
       sessionStore: stored,
@@ -153,7 +154,7 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
       }
       throw StateError('Unexpected request: ${request.url}');
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),

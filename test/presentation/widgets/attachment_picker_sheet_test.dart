@@ -43,7 +43,8 @@ void main() {
     );
   }
 
-  testWidgets('renders Document, Camera, Gallery, and Audio items by default', (tester) async {
+  testWidgets('renders Document, Camera, Gallery, and Audio items by default',
+      (tester) async {
     await tester.pumpWidget(buildSheet());
     await tester.tap(find.text('Open Sheet'));
     await tester.pumpAndSettle();
@@ -79,7 +80,8 @@ void main() {
     expect(find.text('Audio'), findsOneWidget);
   });
 
-  testWidgets('selecting Camera pops with AttachmentOption.camera', (tester) async {
+  testWidgets('selecting Camera pops with AttachmentOption.camera',
+      (tester) async {
     AttachmentOption? selected;
     await tester.pumpWidget(buildSheet(onSelected: (val) => selected = val));
     await tester.tap(find.text('Open Sheet'));
@@ -92,7 +94,8 @@ void main() {
     expect(find.byType(AttachmentPickerSheet), findsNothing);
   });
 
-  testWidgets('selecting Gallery pops with AttachmentOption.gallery', (tester) async {
+  testWidgets('selecting Gallery pops with AttachmentOption.gallery',
+      (tester) async {
     AttachmentOption? selected;
     await tester.pumpWidget(buildSheet(onSelected: (val) => selected = val));
     await tester.tap(find.text('Open Sheet'));
@@ -105,7 +108,8 @@ void main() {
     expect(find.byType(AttachmentPickerSheet), findsNothing);
   });
 
-  testWidgets('selecting Audio pops with AttachmentOption.audio', (tester) async {
+  testWidgets('selecting Audio pops with AttachmentOption.audio',
+      (tester) async {
     AttachmentOption? selected;
     await tester.pumpWidget(buildSheet(onSelected: (val) => selected = val));
     await tester.tap(find.text('Open Sheet'));
@@ -118,7 +122,8 @@ void main() {
     expect(find.byType(AttachmentPickerSheet), findsNothing);
   });
 
-  testWidgets('selecting Document pops with AttachmentOption.document', (tester) async {
+  testWidgets('selecting Document pops with AttachmentOption.document',
+      (tester) async {
     AttachmentOption? selected;
     await tester.pumpWidget(
       buildSheet(

@@ -9,14 +9,7 @@ void registerLauncherTests(WisperBotConfig config) {
         (_) async => http.Response(jsonEncode(sessionResponse()), 200),
       ),
     );
-    const launcherConfig = WisperBotConfig(
-      widgetKey: 'test-widget',
-      apiBaseUrl: 'https://chat.example.com',
-      enableOneSignal: false,
-      requireNotificationPermission: true,
-    );
     final launcher = WisperBotChatLauncher(
-      config: launcherConfig,
       controller: runtime.controller,
       builder: (_, state, __) => Text('Launcher: ${state.phase.name}'),
     );
@@ -28,7 +21,7 @@ void registerLauncherTests(WisperBotConfig config) {
     unawaited(Navigator.of(tester.element(find.byType(WisperBotChatLauncher)))
         .push<void>(MaterialPageRoute(
       builder: (_) => Scaffold(
-        body: WisperBotChatView(config: config, controller: runtime.controller),
+        body: WisperBotChatView(controller: runtime.controller),
       ),
     )));
     await tester.pumpAndSettle();
@@ -55,7 +48,6 @@ void registerLauncherTests(WisperBotConfig config) {
     );
 
     await tester.pumpWidget(_app(WisperBotChatLauncher(
-      config: gatedConfig,
       controller: runtime.controller,
     )));
 
@@ -67,6 +59,45 @@ void registerLauncherTests(WisperBotConfig config) {
 
     expect(runtime.controller.state.phase, WisperBotChatPhase.idle);
     expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(
+      tester
+          .widget<FloatingActionButton>(find.byType(FloatingActionButton))
+          .backgroundColor,
+      const Color(0xFF6258F9),
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets(
+      'launcher loads API color without registering a visitor on app launch',
+      (tester) async {
+    const deferredConfig = WisperBotConfig(
+      widgetKey: 'test-widget',
+      apiBaseUrl: 'https://chat.example.com',
+      enableOneSignal: false,
+      requireNotificationPermission: false,
+      registerVisitorOnAppLaunch: false,
+    );
+    final requests = <http.Request>[];
+    final runtime = _runtime(
+      deferredConfig,
+      MockClient((request) async {
+        requests.add(request);
+        return http.Response(jsonEncode(sessionResponse()), 200);
+      }),
+    );
+
+    await tester.pumpWidget(_app(WisperBotChatLauncher(
+      controller: runtime.controller,
+    )));
+    await tester.pumpAndSettle();
+
+    expect(requests, hasLength(1));
+    expect(requests.single.method, 'GET');
+    expect(requests.single.url.path, '/widgets/chat/test-widget.js');
+    expect(runtime.controller.state.phase, WisperBotChatPhase.idle);
     expect(
       tester
           .widget<FloatingActionButton>(find.byType(FloatingActionButton))
@@ -92,7 +123,6 @@ void registerLauncherTests(WisperBotConfig config) {
         children: <Widget>[
           const SizedBox.expand(),
           WisperBotChatLauncher(
-            config: config,
             controller: runtime.controller,
           ),
         ],
@@ -130,7 +160,6 @@ void registerLauncherTests(WisperBotConfig config) {
           children: <Widget>[
             const SizedBox.expand(),
             WisperBotChatLauncher(
-              config: config,
               controller: runtime.controller,
               alignment: alignment,
             ),
@@ -202,7 +231,6 @@ void registerLauncherTests(WisperBotConfig config) {
 
     await tester.pumpWidget(_app(
       WisperBotChatLauncher(
-        config: config,
         controller: runtime.controller,
         builder: (_, __, ___) => const Text('Custom launcher'),
       ),
@@ -233,7 +261,6 @@ void registerLauncherTests(WisperBotConfig config) {
         ),
         home: Scaffold(
           body: WisperBotChatLauncher(
-            config: config,
             controller: runtime.controller,
           ),
         ),
@@ -276,9 +303,8 @@ void registerLauncherTests(WisperBotConfig config) {
     await tester.pumpWidget(_app(
       Stack(
         children: <Widget>[
-          WisperBotChatView(config: config, controller: runtime.controller),
+          WisperBotChatView(controller: runtime.controller),
           WisperBotChatLauncher(
-            config: config,
             controller: runtime.controller,
           ),
         ],

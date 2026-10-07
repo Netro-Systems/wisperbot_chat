@@ -19,7 +19,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
         200,
       );
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
@@ -61,7 +61,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
   test('logout continues when the best-effort typing stop fails', () async {
     final store = MemorySessionStore();
     var sessionCalls = 0;
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: MockClient((request) async {
         if (request.url.path.endsWith('/typing')) {
@@ -95,15 +95,50 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('unsigned profile-only sessions remain memory-only', () async {
-    final store = MemorySessionStore();
-    final client = WisperBotClient(
+  test('late user waits for chat when eager visitor tracking is disabled',
+      () async {
+    var sessionCalls = 0;
+    final client = WisperBotClient.fromConfig(
       config: const WisperBotConfig(
         widgetKey: 'test-widget',
         apiBaseUrl: 'https://chat.example.com',
         enableOneSignal: false,
-        user: WisperBotUser(name: 'Unverified display name'),
+        requireNotificationPermission: false,
+        registerVisitorOnAppLaunch: false,
       ),
+      httpClient: MockClient((_) async {
+        sessionCalls++;
+        return http.Response(jsonEncode(sessionResponse()), 200);
+      }),
+      sessionStore: MemorySessionStore(),
+    );
+    final controller = WisperBotChatController(client: client);
+
+    await controller.updateUser(
+      const WisperBotUser(externalId: 'customer-1'),
+    );
+
+    expect(controller.user?.externalId, 'customer-1');
+    expect(controller.state.phase, WisperBotChatPhase.idle);
+    expect(sessionCalls, 0);
+
+    await controller.initialize();
+    expect(sessionCalls, 1);
+
+    await controller.dispose();
+    await client.close();
+  });
+
+  test('unsigned profile-only sessions remain memory-only', () async {
+    final store = MemorySessionStore();
+    final client = WisperBotClient.fromConfig(
+      config: const WisperBotConfig(
+        widgetKey: 'test-widget',
+        apiBaseUrl: 'https://chat.example.com',
+        enableOneSignal: false,
+        requireNotificationPermission: false,
+      ),
+      user: const WisperBotUser(name: 'Unverified display name'),
       httpClient: MockClient(
         (_) async => http.Response(jsonEncode(sessionResponse()), 200),
       ),
@@ -127,7 +162,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com/base/',
       enableOneSignal: false,
-      user: WisperBotUser(),
+      requireNotificationPermission: false,
     );
     final namespace = sessionNamespace(config: emptyUserConfig, user: null);
     final bodies = <Map<String, dynamic>>[];
@@ -148,8 +183,9 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       );
     });
 
-    final firstClient = WisperBotClient(
+    final firstClient = WisperBotClient.fromConfig(
       config: emptyUserConfig,
+      user: const WisperBotUser(),
       httpClient: httpClient,
       sessionStore: store,
     );
@@ -158,8 +194,9 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     await firstController.dispose();
     await firstClient.close();
 
-    final secondClient = WisperBotClient(
+    final secondClient = WisperBotClient.fromConfig(
       config: emptyUserConfig,
+      user: const WisperBotUser(),
       httpClient: httpClient,
       sessionStore: store,
     );
@@ -187,15 +224,16 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com/base/',
       enableOneSignal: false,
-      user: WisperBotUser(
-        externalId: 'customer-123',
-        name: 'Jane Doe',
-        email: 'jane@example.com',
-      ),
+      requireNotificationPermission: false,
+    );
+    const unsignedUser = WisperBotUser(
+      externalId: 'customer-123',
+      name: 'Jane Doe',
+      email: 'jane@example.com',
     );
     final namespace = sessionNamespace(
       config: unsignedConfig,
-      user: unsignedConfig.user,
+      user: unsignedUser,
     );
     final bodies = <Map<String, dynamic>>[];
     final headers = <String?>[];
@@ -215,8 +253,9 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       );
     });
 
-    final firstClient = WisperBotClient(
+    final firstClient = WisperBotClient.fromConfig(
       config: unsignedConfig,
+      user: unsignedUser,
       httpClient: httpClient,
       sessionStore: store,
     );
@@ -225,8 +264,9 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     await firstController.dispose();
     await firstClient.close();
 
-    final secondClient = WisperBotClient(
+    final secondClient = WisperBotClient.fromConfig(
       config: unsignedConfig,
+      user: unsignedUser,
       httpClient: httpClient,
       sessionStore: store,
     );
@@ -240,6 +280,66 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     expect(bodies.last['visitor_id'], 'visitor-1');
     expect(bodies.last['external_id'], 'customer-123');
     expect(store.values[namespace]?.token, 'token-2');
+
+    await secondController.dispose();
+    await secondClient.close();
+  });
+
+  test('changed profile does not restore a stale visitor session', () async {
+    final store = MemorySessionStore();
+    const profileConfig = WisperBotConfig(
+      widgetKey: 'test-widget',
+      apiBaseUrl: 'https://chat.example.com/base/',
+      enableOneSignal: false,
+      requireNotificationPermission: false,
+    );
+    const original = WisperBotUser(
+      name: 'Mr Visitor',
+      email: 'visitor@demo.com',
+    );
+    const updated = WisperBotUser(
+      name: 'Mr Visitor XX',
+      email: 'visitor@demo.com',
+    );
+    final bodies = <Map<String, dynamic>>[];
+    final headers = <String?>[];
+    var sessionCalls = 0;
+    final httpClient = MockClient((request) async {
+      bodies.add(jsonDecode(request.body) as Map<String, dynamic>);
+      headers.add(request.headers['X-Widget-Token']);
+      sessionCalls++;
+      return http.Response(
+        jsonEncode(sessionResponse(
+          visitorId: 'visitor-$sessionCalls',
+          token: 'token-$sessionCalls',
+        )),
+        200,
+      );
+    });
+
+    final firstClient = WisperBotClient.fromConfig(
+      config: profileConfig,
+      user: original,
+      httpClient: httpClient,
+      sessionStore: store,
+    );
+    final firstController = WisperBotChatController(client: firstClient);
+    await firstController.initialize();
+    await firstController.dispose();
+    await firstClient.close();
+
+    final secondClient = WisperBotClient.fromConfig(
+      config: profileConfig,
+      user: updated,
+      httpClient: httpClient,
+      sessionStore: store,
+    );
+    final secondController = WisperBotChatController(client: secondClient);
+    await secondController.initialize();
+
+    expect(headers, <String?>[null, null]);
+    expect(bodies.last.containsKey('visitor_id'), isFalse);
+    expect(bodies.last['name'], 'Mr Visitor XX');
 
     await secondController.dispose();
     await secondClient.close();
@@ -278,7 +378,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       }
       return http.Response(jsonEncode(pollResponse()), 200);
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),

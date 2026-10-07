@@ -38,7 +38,7 @@ void registerRealtimeTests(WisperBotConfig config) {
       throw StateError('Unexpected request: ${request.url}');
     });
 
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
@@ -124,7 +124,7 @@ void registerRealtimeTests(WisperBotConfig config) {
       }
       throw StateError('Unexpected request: ${request.url}');
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),

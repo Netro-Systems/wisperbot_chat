@@ -6,191 +6,160 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
+import 'package:wisperbot_chat/src/application/services/widget_onesignal_service.dart';
 
 import '../../support/fixtures/widget_api_fixtures.dart';
 
 void main() {
-  final navigatorKey = GlobalKey<NavigatorState>();
-  final testConfig = WisperBotConfig(
-    widgetKey: 'notification-test-widget',
-    apiBaseUrl: 'https://chat.example.com',
-    sessionStore: _NoopSessionStore(),
-  );
-
-  setUp(() {
-    WisperBotChat.resetForTesting();
+  setUp(() async {
+    await WisperBotChat.shutdown();
     WidgetOneSignalService.instance.resetForTesting();
     WidgetOneSignalService.instance.setPushTokenOverride('test-token');
   });
 
-  tearDown(() {
-    WisperBotChat.resetForTesting();
+  tearDown(() async {
+    await WisperBotChat.shutdown();
     WidgetOneSignalService.instance.resetForTesting();
   });
 
-  testWidgets('notification click navigates from notification directly to chat message thread',
+  Future<GlobalKey<NavigatorState>> mountHost(
+    WidgetTester tester, {
+    void Function(Map<String, dynamic>)? onNotificationTapped,
+    void Function(Map<String, dynamic>)? onForegroundNotification,
+  }) async {
+    final navigatorKey = GlobalKey<NavigatorState>();
+    await WisperBotChat.initialize(
+      widgetKey: 'notification-test-widget',
+      apiBaseUrl: 'https://chat.example.com',
+      enableOneSignal: false,
+      requireNotificationPermission: false,
+      registerVisitorOnAppLaunch: false,
+      sessionStore: const _NoopSessionStore(),
+      navigatorKey: navigatorKey,
+      onNotificationTapped: onNotificationTapped,
+      onForegroundNotification: onForegroundNotification,
+    );
+    await tester.pumpWidget(MaterialApp(
+      navigatorKey: navigatorKey,
+      home: const Scaffold(
+        body: Center(child: Text('Home Screen')),
+      ),
+    ));
+    return navigatorKey;
+  }
+
+  testWidgets('notification click opens the shared chat runtime',
       (tester) async {
     final client = MockClient(
       (_) async => http.Response(jsonEncode(sessionResponse()), 200),
     );
 
     await http.runWithClient(() async {
-      await tester.pumpWidget(
-        MaterialApp(
-          navigatorKey: navigatorKey,
-          home: const Scaffold(
-            body: Center(child: Text('Home Screen')),
-          ),
-        ),
-      );
+      await mountHost(tester);
       await tester.pumpAndSettle();
 
-      WisperBotChat.initializeNotificationHandlers(
-        config: testConfig,
-        navigatorKey: navigatorKey,
-      );
-
-      expect(find.text('Home Screen'), findsOneWidget);
-      expect(find.byType(WisperBotChatScreen), findsNothing);
-
-      // Simulate tapping on a push notification
       WidgetOneSignalService.instance.simulateNotificationClick({
         'conversation_id': 12345,
         'title': 'Support Agent',
         'body': 'Hello! How can I help you today?',
       });
 
-      await tester.pump();
       await tester.pumpAndSettle();
-
-      // Verifies navigation directly opened the chat screen / message thread
       expect(find.byType(WisperBotChatScreen), findsOneWidget);
       expect(find.text('Test support'), findsOneWidget);
     }, () => client);
   });
 
-  testWidgets('cold start notification click is preserved and opens message thread once mounted',
+  testWidgets('cold-start notification click is preserved until mounting',
       (tester) async {
     final client = MockClient(
       (_) async => http.Response(jsonEncode(sessionResponse()), 200),
     );
 
     await http.runWithClient(() async {
-      // Simulate notification click occurring BEFORE handlers are initialized (e.g. app cold start)
       WidgetOneSignalService.instance.simulateNotificationClick({
         'conversation_id': 999,
-        'title': 'Agent',
         'body': 'Your order has been updated.',
       });
 
-      await tester.pumpWidget(
-        MaterialApp(
-          navigatorKey: navigatorKey,
-          home: const Scaffold(
-            body: Center(child: Text('Home Screen')),
-          ),
-        ),
-      );
+      await mountHost(tester);
       await tester.pumpAndSettle();
-
-      WisperBotChat.initializeNotificationHandlers(
-        config: testConfig,
-        navigatorKey: navigatorKey,
-      );
-
-      await tester.pump();
-      await tester.pumpAndSettle();
-
       expect(find.byType(WisperBotChatScreen), findsOneWidget);
     }, () => client);
   });
 
-  testWidgets('foreground messages never display an SDK SnackBar',
+  testWidgets('foreground messages do not display an SDK SnackBar',
       (tester) async {
-    await tester.pumpWidget(MaterialApp(
-      navigatorKey: navigatorKey,
-      home: const Scaffold(body: Text('Home Screen')),
-    ));
-    WisperBotChat.initializeNotificationHandlers(
-      config: testConfig,
-      navigatorKey: navigatorKey,
-      showInAppForegroundNotification: true,
-    );
-    for (var index = 0; index < 2; index++) {
-      WidgetOneSignalService.instance.simulateForegroundNotification({
-        'title': 'Support Agent',
-        'body': 'We replied to your message.',
-      });
-      await tester.pumpAndSettle();
-      expect(find.byType(SnackBar), findsNothing);
-      expect(find.text('We replied to your message.'), findsNothing);
-    }
+    await mountHost(tester);
+    WidgetOneSignalService.instance.simulateForegroundNotification({
+      'body': 'We replied to your message.',
+    });
+    await tester.pumpAndSettle();
+    expect(find.byType(SnackBar), findsNothing);
+    expect(find.text('We replied to your message.'), findsNothing);
   });
 
-  testWidgets('custom onNotificationTapped callback intercepts click event', (tester) async {
-    Map<String, dynamic>? interceptedPayload;
-
-    await tester.pumpWidget(
-      MaterialApp(
-        navigatorKey: navigatorKey,
-        home: const Scaffold(body: Text('Home Screen')),
-      ),
-    );
-
-    WisperBotChat.initializeNotificationHandlers(
-      config: testConfig,
-      navigatorKey: navigatorKey,
-      onNotificationTapped: (payload) {
-        interceptedPayload = payload;
-      },
+  testWidgets('custom notification callback intercepts click', (tester) async {
+    Map<String, dynamic>? intercepted;
+    await mountHost(
+      tester,
+      onNotificationTapped: (payload) => intercepted = payload,
     );
 
     WidgetOneSignalService.instance.simulateNotificationClick({
       'conversation_id': 555,
-      'title': 'Custom Title',
       'body': 'Custom Body',
     });
-
     await tester.pump();
 
-    expect(interceptedPayload, isNotNull);
-    expect(interceptedPayload!['conversation_id'], 555);
+    expect(intercepted?['conversation_id'], 555);
     expect(find.byType(WisperBotChatScreen), findsNothing);
   });
 
-  testWidgets('custom onForegroundNotification callback intercepts foreground event',
+  testWidgets('custom foreground callback receives the payload',
       (tester) async {
-    Map<String, dynamic>? interceptedForegroundPayload;
-
-    await tester.pumpWidget(
-      MaterialApp(
-        navigatorKey: navigatorKey,
-        home: const Scaffold(body: Text('Home Screen')),
-      ),
-    );
-
-    WisperBotChat.initializeNotificationHandlers(
-      config: testConfig,
-      navigatorKey: navigatorKey,
-      onForegroundNotification: (payload) {
-        interceptedForegroundPayload = payload;
-      },
+    Map<String, dynamic>? intercepted;
+    await mountHost(
+      tester,
+      onForegroundNotification: (payload) => intercepted = payload,
     );
 
     WidgetOneSignalService.instance.simulateForegroundNotification({
       'conversation_id': 777,
-      'title': 'Agent Message',
       'body': 'Foreground payload test',
     });
-
     await tester.pump();
 
-    expect(interceptedForegroundPayload, isNotNull);
-    expect(interceptedForegroundPayload!['conversation_id'], 777);
+    expect(intercepted?['conversation_id'], 777);
     expect(find.text('Foreground payload test'), findsNothing);
   });
 
-  testWidgets('foreground notification does not issue a polling request when chat is open',
+  testWidgets('repeated initialization does not duplicate listeners',
+      (tester) async {
+    var callbacks = 0;
+    final navigatorKey = await mountHost(
+      tester,
+      onForegroundNotification: (_) => callbacks++,
+    );
+    await WisperBotChat.initialize(
+      widgetKey: 'notification-test-widget',
+      apiBaseUrl: 'https://chat.example.com',
+      enableOneSignal: false,
+      requireNotificationPermission: false,
+      registerVisitorOnAppLaunch: false,
+      sessionStore: const _NoopSessionStore(),
+      navigatorKey: navigatorKey,
+      onForegroundNotification: (_) => callbacks++,
+    );
+
+    WidgetOneSignalService.instance.simulateForegroundNotification(
+      <String, dynamic>{'body': 'Once'},
+    );
+    await tester.pump();
+    expect(callbacks, 1);
+  });
+
+  testWidgets('foreground notification does not poll an open chat',
       (tester) async {
     var messageGetCount = 0;
     final client = MockClient((request) async {
@@ -201,36 +170,13 @@ void main() {
     });
 
     await http.runWithClient(() async {
-      await tester.pumpWidget(
-        MaterialApp(
-          navigatorKey: navigatorKey,
-          home: const Scaffold(body: Text('Home Screen')),
-        ),
-      );
+      final navigatorKey = await mountHost(tester);
+      unawaited(WisperBotChat.open(navigatorKey.currentContext!));
       await tester.pumpAndSettle();
 
-      WisperBotChat.initializeNotificationHandlers(
-        config: testConfig,
-        navigatorKey: navigatorKey,
-      );
-
-      // Open the chat first
-      unawaited(WisperBotChat.open(
-        navigatorKey.currentContext!,
-        config: testConfig,
-      ));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(WisperBotChatScreen), findsOneWidget);
-
-      // Simulate foreground notification arriving while chat is open
       WidgetOneSignalService.instance.simulateForegroundNotification({
-        'conversation_id': 12345,
-        'title': 'Support Agent',
         'body': 'Incoming realtime message',
       });
-
-      await tester.pump();
       await tester.pumpAndSettle();
 
       expect(messageGetCount, 0);
@@ -240,6 +186,8 @@ void main() {
 }
 
 final class _NoopSessionStore implements WisperBotSessionStore {
+  const _NoopSessionStore();
+
   @override
   Future<void> delete(String namespace) async {}
 

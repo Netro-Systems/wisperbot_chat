@@ -19,23 +19,19 @@ typedef WisperBotLauncherBuilder = Widget Function(
   VoidCallback openChat,
 );
 
-/// Floating launcher that initializes chat and opens one presentation per scope.
+/// Floating launcher that preloads configuration and opens one presentation.
 class WisperBotChatLauncher extends StatefulWidget {
   /// Creates a launcher.
   ///
-  /// When [controller] is omitted, the launcher owns and disposes its runtime.
+  /// When [controller] is omitted, the initialized shared runtime is used.
   const WisperBotChatLauncher({
     super.key,
-    required this.config,
     this.controller,
     this.alignment,
     this.margin,
     this.presentation,
     this.builder,
   });
-
-  /// Widget and visitor configuration.
-  final WisperBotConfig config;
 
   /// Optional host-owned controller.
   final WisperBotChatController? controller;
@@ -58,7 +54,6 @@ class WisperBotChatLauncher extends StatefulWidget {
 
 class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
   late WisperBotChatController _controller;
-  WisperBotClient? _ownedClient;
   StreamSubscription<WisperBotChatState>? _subscription;
   late WisperBotChatState _state;
   bool _opening = false;
@@ -68,12 +63,10 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
   void initState() {
     super.initState();
     final supplied = widget.controller;
-    if (supplied == null) {
-      final client = WisperBotClient(config: widget.config);
-      _ownedClient = client;
-      _controller = WisperBotChatController(client: client);
-    } else {
+    if (supplied != null) {
       _controller = supplied;
+    } else {
+      _controller = WisperBotChat.requireDefaultController();
     }
     _state = _controller.state;
     _subscription = _controller.states.listen((state) {
@@ -89,12 +82,8 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
         setState(() {});
       }
     });
-    if (widget.config.requireNotificationPermission) {
-      _configurationPending = _state.widget == null;
-      unawaited(_loadConfiguration());
-    } else {
-      unawaited(_controller.initialize().catchError((_) {}));
-    }
+    _configurationPending = _state.widget == null;
+    unawaited(_loadConfiguration());
   }
 
   Future<void> _loadConfiguration() async {
@@ -113,8 +102,8 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
     final custom = widget.builder;
     if (custom != null) return custom(context, _state, open);
 
-    final isConfigurationLoaded = _state.widget != null ||
-        (widget.config.requireNotificationPermission && !_configurationPending);
+    final isConfigurationLoaded =
+        _state.widget != null || !_configurationPending;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     if (reduceMotion) {
@@ -163,8 +152,8 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
     final colors = WisperBotResolvedTheme.resolve(
       hostTheme: Theme.of(context),
       server: _state.widget,
-      override: widget.config.theme,
-      useApiColors: widget.config.useApiColors,
+      override: _controller.runtimeTheme,
+      useApiColors: _controller.runtimeUseApiColors,
     );
     const label = 'Open chat';
     return Semantics(
@@ -240,7 +229,6 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
     try {
       await WisperBotChat.open(
         context,
-        config: widget.config,
         controller: _controller,
         presentation: widget.presentation,
       );
@@ -258,10 +246,6 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
   @override
   void dispose() {
     unawaited(_subscription?.cancel());
-    final client = _ownedClient;
-    if (client != null) {
-      unawaited(_controller.dispose().then((_) => client.close()));
-    }
     super.dispose();
   }
 }

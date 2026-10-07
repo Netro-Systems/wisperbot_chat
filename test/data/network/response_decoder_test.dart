@@ -10,6 +10,25 @@ import '../../support/support.dart';
 void main() {
   const decoder = WidgetResponseDecoder();
 
+  test('public widget loader configuration is decoded without evaluation', () {
+    final config = sessionResponse()['config'];
+    final loader = '''
+/* WisperBot Chat Widget loader */
+(function () {
+  window.__WB_CHAT__ = { key: "test-widget", config: ${jsonEncode(config)} };
+  var s = document.createElement('script');
+})();
+''';
+
+    final result = decoder.configuration(
+      http.Response(loader, 200),
+      expectedWidgetKey: 'test-widget',
+    );
+
+    expect(result.primaryColorHex, '#6258f9');
+    expect(result.launcherPosition, WisperBotLauncherPosition.bottomRight);
+  });
+
   test('public activities decode consistently in history and realtime', () {
     final activity =
         message(id: 5, type: 'event', body: 'Rahim joined the chat')

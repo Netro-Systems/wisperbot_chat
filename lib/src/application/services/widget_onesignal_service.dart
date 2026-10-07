@@ -32,6 +32,7 @@ final class WidgetOneSignalService {
 
   Map<String, dynamic>? _pendingNotificationClick;
   bool _initialized = false;
+  bool _listenersAttached = false;
   String? _initializedAppId;
   String? _loggedInExternalId;
 
@@ -54,7 +55,8 @@ final class WidgetOneSignalService {
         (config.oneSignalAppId?.trim().isEmpty ?? true)) {
       throw const WisperBotException(
         code: WisperBotErrorCode.configuration,
-        message: 'Support is unavailable because notification setup is incomplete.',
+        message:
+            'Support is unavailable because notification setup is incomplete.',
         retryable: false,
       );
     }
@@ -101,10 +103,13 @@ final class WidgetOneSignalService {
         await OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
       }
       await OneSignal.initialize(appId);
-      OneSignal.Notifications.addClickListener(_onNotificationClick);
-      OneSignal.Notifications.addForegroundWillDisplayListener(
-        _onForegroundWillDisplay,
-      );
+      if (!_listenersAttached) {
+        OneSignal.Notifications.addClickListener(_onNotificationClick);
+        OneSignal.Notifications.addForegroundWillDisplayListener(
+          _onForegroundWillDisplay,
+        );
+        _listenersAttached = true;
+      }
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[WisperBot] OneSignal initialization failed: $e');
