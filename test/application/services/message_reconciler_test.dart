@@ -61,6 +61,19 @@ void main() {
     expect(result.map((message) => message.localId),
         <String>['one', 'two', 'pending']);
   });
+
+  test('does not restore an unread status after a message was read', () {
+    final read = _message(localId: 'agent-7', serverId: 7).copyWith(
+      status: WisperBotMessageStatus.read,
+    );
+    final stale = _message(localId: 'server-7', serverId: 7).copyWith(
+      status: WisperBotMessageStatus.delivered,
+    );
+
+    final result = reconciler.merge([read], [stale]);
+
+    expect(result.single.status, WisperBotMessageStatus.read);
+  });
 }
 
 WisperBotMessage _message({

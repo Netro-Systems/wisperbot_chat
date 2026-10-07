@@ -79,6 +79,21 @@ class WisperBotChatState {
   /// Number of pending or unconfirmed visitor messages.
   final int pendingCount;
 
+  /// Number of unread, non-activity messages sent by an agent.
+  ///
+  /// This can be used by host applications to render their own launcher badge.
+  int get unreadCount => messages
+      .where(
+        (message) =>
+            message.role == WisperBotMessageRole.agent &&
+            !message.isActivity &&
+            message.status != WisperBotMessageStatus.read,
+      )
+      .length;
+
+  /// Whether at least one unread agent message is available.
+  bool get hasUnreadMessages => unreadCount > 0;
+
   /// Current recoverable or terminal error.
   final WisperBotException? error;
 

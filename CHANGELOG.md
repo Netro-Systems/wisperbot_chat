@@ -9,6 +9,8 @@ upgrading from `0.1.x`.
 
 - Added flat `WisperBotChat.initialize`, `identify`, `logout`, and `shutdown` APIs for a shared default runtime.
 - Added `WisperBotChat.launcher()`, `view()`, and `screen()` presentation helpers.
+- Added an unread dot to the built-in launcher, `WisperBotChat.unreadCount` for host-owned buttons, and `unreadCount`/`hasUnreadMessages` on controller state.
+- Added the customizable `WisperBotChat.badge(child: ...)` wrapper for unread-aware host widgets of any type.
 - Added `registerVisitorOnAppLaunch`, which defaults to `true`, to initialization and headless-client options.
 - Added direct configuration and an optional initial `user` to `WisperBotClient`.
 - Notification permission gating now defaults to enabled; set `requireNotificationPermission: false` to opt out.
@@ -22,6 +24,7 @@ upgrading from `0.1.x`.
 - Made the prebuilt screen, embedded view, launcher, and modal facade use the shared runtime by default.
 - Updated the example to initialize once and use config-free chat surfaces.
 - Decoupled public launcher configuration loading from visitor registration, so API colors and placement load even when `registerVisitorOnAppLaunch` is `false`.
+- Agent messages are marked read only while chat UI is visible, and foreground resume refreshes history before restoring realtime updates.
 
 ### Fixed
 

@@ -174,6 +174,51 @@ configuration before appearing. This is independent of
 `registerVisitorOnAppLaunch`: disabling visitor registration still loads the
 API color and placement without creating a visitor session.
 
+The built-in launcher shows a dot while agent messages are unread. Wrap any
+host-owned widget with `WisperBotChat.badge` to get the same behavior without
+managing a listener:
+
+```dart
+WisperBotChat.badge(
+  child: MyCustomChatButton(
+    onPressed: () => WisperBotChat.open(context),
+  ),
+)
+```
+
+The floating launcher accepts the same kinds of badge customization directly:
+
+```dart
+WisperBotChat.launcher(
+  badgeBackgroundColor: Colors.blue,
+  badgeSmallSize: 10,
+  badgeOffset: const Offset(2, -2),
+  // badgeShowCount: true,
+)
+```
+
+Opening the shared chat marks visible agent messages as read and updates the
+badge automatically. It supports `backgroundColor`, `textColor`, `smallSize`,
+`largeSize`, `alignment`, `offset`, `padding`, and `textStyle`. Set
+`showCount: true` for a numeric badge, or provide `labelBuilder` for custom
+badge content. Fully custom state handling can continue listening to
+`WisperBotChat.unreadCount`. The default `registerVisitorOnAppLaunch: true` is
+required to receive unread updates before the chat has been opened once.
+
+When `showCount` is enabled, `largeSize` controls the labeled badge height;
+`smallSize` applies only to dot badges. Counts from 1 through 99 are circular
+by default; overflow text such as `99+` and custom labels expand into a pill.
+Use a matching compact text style for small count badges:
+
+```dart
+WisperBotChat.badge(
+  showCount: true,
+  largeSize: 14,
+  textStyle: const TextStyle(fontSize: 9, height: 1),
+  child: const Icon(Icons.chat),
+)
+```
+
 ### 5. Embedded View
 Place the chat view directly inside an existing layout, drawer, or split-view:
 

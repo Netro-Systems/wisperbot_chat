@@ -152,6 +152,9 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
           200,
         );
       }
+      if (request.method == 'GET' && request.url.path.endsWith('/messages')) {
+        return http.Response(jsonEncode(pollResponse()), 200);
+      }
       throw StateError('Unexpected request: ${request.url}');
     });
     final client = WisperBotClient.fromConfig(

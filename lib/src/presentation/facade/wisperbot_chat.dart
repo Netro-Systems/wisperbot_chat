@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../application/services/widget_onesignal_service.dart';
@@ -16,6 +17,7 @@ import '../../domain/models/models.dart';
 import '../screen/chat_screen.dart';
 import '../view/chat_view.dart';
 import '../launcher/chat_launcher.dart';
+import '../widgets/unread_badge.dart';
 
 /// Static entry point for the default WisperBot runtime and modal chat UI.
 abstract final class WisperBotChat {
@@ -30,6 +32,8 @@ abstract final class WisperBotChat {
       _notificationClickSubscription;
   static StreamSubscription<Map<String, dynamic>>?
       _foregroundNotificationSubscription;
+  static StreamSubscription<WisperBotChatState>? _runtimeStateSubscription;
+  static final ValueNotifier<int> _unreadCount = ValueNotifier<int>(0);
   static void Function(Map<String, dynamic> payload)? _onNotificationTapped;
   static void Function(Map<String, dynamic> payload)? _onForegroundNotification;
   static Map<String, dynamic>? _pendingNotificationPayload;
@@ -102,6 +106,9 @@ abstract final class WisperBotChat {
     _defaultConfig = config;
     _defaultClient = client;
     _defaultController = WisperBotChatController(client: client);
+    _runtimeStateSubscription = _defaultController!.states.listen((state) {
+      _publishUnreadCount(state.unreadCount);
+    });
 
     final generation = ++_lifecycleGeneration;
     final future = _initializeRuntime(config, generation);
@@ -170,6 +177,62 @@ abstract final class WisperBotChat {
     await requireDefaultController().updateUser(null, startSession: false);
   }
 
+  /// Unread agent-message count for host-owned launcher buttons.
+  ///
+  /// Listen with [ValueListenableBuilder] and show a badge when the value is
+  /// greater than zero. Opening the shared chat marks those messages as read.
+  static ValueListenable<int> get unreadCount => _unreadCount;
+
+  static void _publishUnreadCount(int count) {
+    if (_unreadCount.value == count) return;
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      final generation = _lifecycleGeneration;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (generation == _lifecycleGeneration && _defaultController != null) {
+          _unreadCount.value = count;
+        }
+      });
+      return;
+    }
+    _unreadCount.value = count;
+  }
+
+  /// Adds an unread indicator to any host-owned widget.
+  ///
+  /// By default this renders a dot. Set [showCount] to display the unread
+  /// count, or provide [labelBuilder] for a fully custom label.
+  static Widget badge({
+    Key? key,
+    required Widget child,
+    bool showCount = false,
+    int maxCount = 99,
+    Widget Function(BuildContext context, int unreadCount)? labelBuilder,
+    Color? backgroundColor,
+    Color? textColor,
+    double? smallSize = 8,
+    double? largeSize,
+    TextStyle? textStyle,
+    EdgeInsetsGeometry? padding,
+    AlignmentGeometry? alignment,
+    Offset? offset,
+  }) =>
+      _WisperBotUnreadBadge(
+        key: key,
+        showCount: showCount,
+        maxCount: maxCount,
+        labelBuilder: labelBuilder,
+        backgroundColor: backgroundColor,
+        textColor: textColor,
+        smallSize: smallSize,
+        largeSize: largeSize,
+        textStyle: textStyle,
+        padding: padding,
+        alignment: alignment,
+        offset: offset,
+        child: child,
+      );
+
   /// Creates a floating launcher backed by the shared runtime.
   static WisperBotChatLauncher launcher({
     Key? key,
@@ -177,6 +240,18 @@ abstract final class WisperBotChat {
     EdgeInsetsGeometry? margin,
     WisperBotPresentation? presentation,
     WisperBotLauncherBuilder? builder,
+    bool showBadge = true,
+    bool badgeShowCount = false,
+    int badgeMaxCount = 99,
+    WisperBotBadgeLabelBuilder? badgeLabelBuilder,
+    Color? badgeBackgroundColor,
+    Color? badgeTextColor,
+    double? badgeSmallSize = 14,
+    double? badgeLargeSize,
+    TextStyle? badgeTextStyle,
+    EdgeInsetsGeometry? badgePadding,
+    AlignmentGeometry? badgeAlignment,
+    Offset? badgeOffset = const Offset(1, -1),
   }) =>
       WisperBotChatLauncher(
         key: key,
@@ -184,6 +259,18 @@ abstract final class WisperBotChat {
         margin: margin,
         presentation: presentation,
         builder: builder,
+        showBadge: showBadge,
+        badgeShowCount: badgeShowCount,
+        badgeMaxCount: badgeMaxCount,
+        badgeLabelBuilder: badgeLabelBuilder,
+        badgeBackgroundColor: badgeBackgroundColor,
+        badgeTextColor: badgeTextColor,
+        badgeSmallSize: badgeSmallSize,
+        badgeLargeSize: badgeLargeSize,
+        badgeTextStyle: badgeTextStyle,
+        badgePadding: badgePadding,
+        badgeAlignment: badgeAlignment,
+        badgeOffset: badgeOffset,
       );
 
   /// Creates an embeddable chat view backed by the shared runtime.
@@ -224,8 +311,11 @@ abstract final class WisperBotChat {
     _registrationGeneration++;
     await _notificationClickSubscription?.cancel();
     await _foregroundNotificationSubscription?.cancel();
+    await _runtimeStateSubscription?.cancel();
     _notificationClickSubscription = null;
     _foregroundNotificationSubscription = null;
+    _runtimeStateSubscription = null;
+    _unreadCount.value = 0;
 
     final controller = _defaultController;
     final client = _defaultClient;
@@ -488,6 +578,7 @@ abstract final class WisperBotChat {
     _registrationGeneration++;
     unawaited(_notificationClickSubscription?.cancel());
     unawaited(_foregroundNotificationSubscription?.cancel());
+    unawaited(_runtimeStateSubscription?.cancel());
     if (controller != null) {
       unawaited(controller.dispose().whenComplete(() => client?.close()));
     } else if (client != null) {
@@ -499,10 +590,67 @@ abstract final class WisperBotChat {
     _initializing = null;
     _notificationClickSubscription = null;
     _foregroundNotificationSubscription = null;
+    _runtimeStateSubscription = null;
+    _unreadCount.value = 0;
     _onNotificationTapped = null;
     _onForegroundNotification = null;
     _pendingNotificationPayload = null;
     _navigatorKey = null;
     _activePresentations.clear();
   }
+}
+
+class _WisperBotUnreadBadge extends StatelessWidget {
+  const _WisperBotUnreadBadge({
+    super.key,
+    required this.child,
+    required this.showCount,
+    required this.maxCount,
+    required this.labelBuilder,
+    required this.backgroundColor,
+    required this.textColor,
+    required this.smallSize,
+    required this.largeSize,
+    required this.textStyle,
+    required this.padding,
+    required this.alignment,
+    required this.offset,
+  });
+
+  final Widget child;
+  final bool showCount;
+  final int maxCount;
+  final Widget Function(BuildContext context, int unreadCount)? labelBuilder;
+  final Color? backgroundColor;
+  final Color? textColor;
+  final double? smallSize;
+  final double? largeSize;
+  final TextStyle? textStyle;
+  final EdgeInsetsGeometry? padding;
+  final AlignmentGeometry? alignment;
+  final Offset? offset;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<int>(
+        valueListenable: WisperBotChat.unreadCount,
+        child: child,
+        builder: (context, unreadCount, child) => WisperBotUnreadBadgeView(
+          unreadCount: unreadCount,
+          indicatorKey: const ValueKey<String>(
+            'wisperbot-unread-badge-indicator',
+          ),
+          showCount: showCount,
+          maxCount: maxCount,
+          labelBuilder: labelBuilder,
+          backgroundColor: backgroundColor,
+          textColor: textColor,
+          smallSize: smallSize,
+          largeSize: largeSize,
+          textStyle: textStyle,
+          padding: padding,
+          alignment: alignment,
+          offset: offset,
+          child: child!,
+        ),
+      );
 }

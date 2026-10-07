@@ -11,12 +11,19 @@ import '../facade/wisperbot_chat.dart';
 import '../media/remote_image.dart';
 import '../theme/resolved_theme.dart';
 import '../widgets/brand_logo.dart';
+import '../widgets/unread_badge.dart';
 
 /// Builds a custom launcher from controller state and an idempotent open action.
 typedef WisperBotLauncherBuilder = Widget Function(
   BuildContext context,
   WisperBotChatState state,
   VoidCallback openChat,
+);
+
+/// Builds custom content for an unread badge.
+typedef WisperBotBadgeLabelBuilder = Widget Function(
+  BuildContext context,
+  int unreadCount,
 );
 
 /// Floating launcher that preloads configuration and opens one presentation.
@@ -31,6 +38,18 @@ class WisperBotChatLauncher extends StatefulWidget {
     this.margin,
     this.presentation,
     this.builder,
+    this.showBadge = true,
+    this.badgeShowCount = false,
+    this.badgeMaxCount = 99,
+    this.badgeLabelBuilder,
+    this.badgeBackgroundColor,
+    this.badgeTextColor,
+    this.badgeSmallSize = 14,
+    this.badgeLargeSize,
+    this.badgeTextStyle,
+    this.badgePadding,
+    this.badgeAlignment,
+    this.badgeOffset = const Offset(1, -1),
   });
 
   /// Optional host-owned controller.
@@ -47,6 +66,42 @@ class WisperBotChatLauncher extends StatefulWidget {
 
   /// Optional custom launcher renderer.
   final WisperBotLauncherBuilder? builder;
+
+  /// Whether the default launcher displays unread state.
+  final bool showBadge;
+
+  /// Whether the badge displays its unread count instead of a dot.
+  final bool badgeShowCount;
+
+  /// Largest count displayed before the badge uses a plus suffix.
+  final int badgeMaxCount;
+
+  /// Optional custom unread badge label.
+  final WisperBotBadgeLabelBuilder? badgeLabelBuilder;
+
+  /// Optional unread badge fill color.
+  final Color? badgeBackgroundColor;
+
+  /// Optional unread badge label color.
+  final Color? badgeTextColor;
+
+  /// Diameter of a dot badge.
+  final double? badgeSmallSize;
+
+  /// Height of a badge with label content.
+  final double? badgeLargeSize;
+
+  /// Optional unread badge label style.
+  final TextStyle? badgeTextStyle;
+
+  /// Padding around unread badge label content.
+  final EdgeInsetsGeometry? badgePadding;
+
+  /// Alignment of the badge relative to the launcher.
+  final AlignmentGeometry? badgeAlignment;
+
+  /// Fine positioning adjustment for the badge.
+  final Offset? badgeOffset;
 
   @override
   State<WisperBotChatLauncher> createState() => _WisperBotChatLauncherState();
@@ -156,27 +211,46 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
       useApiColors: _controller.runtimeUseApiColors,
     );
     const label = 'Open chat';
+    final button = FloatingActionButton(
+      heroTag: null,
+      tooltip: label,
+      onPressed: open,
+      backgroundColor: colors.primary,
+      foregroundColor: colors.onPrimary,
+      child: _launcherIcon(_state, colors.launcherSize),
+    );
     return Semantics(
       button: true,
       label: label,
       child: SizedBox.square(
         dimension: colors.launcherSize,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: <Widget>[
-            Positioned.fill(
-              child: FloatingActionButton(
-                heroTag: null,
-                tooltip: label,
-                onPressed: open,
-                backgroundColor: colors.primary,
-                foregroundColor: colors.onPrimary,
-                child: _launcherIcon(_state, colors.launcherSize),
-              ),
-            ),
-          ],
-        ),
+        child: _buildUnreadBadge(context, colors, button),
       ),
+    );
+  }
+
+  Widget _buildUnreadBadge(
+    BuildContext context,
+    WisperBotResolvedTheme colors,
+    Widget child,
+  ) {
+    if (!widget.showBadge) return child;
+    final unreadCount = _state.unreadCount;
+    return WisperBotUnreadBadgeView(
+      unreadCount: unreadCount,
+      indicatorKey: const ValueKey<String>('wisperbot-unread-indicator'),
+      showCount: widget.badgeShowCount,
+      maxCount: widget.badgeMaxCount,
+      labelBuilder: widget.badgeLabelBuilder,
+      backgroundColor: widget.badgeBackgroundColor ?? colors.error,
+      textColor: widget.badgeTextColor,
+      smallSize: widget.badgeSmallSize,
+      largeSize: widget.badgeLargeSize,
+      textStyle: widget.badgeTextStyle,
+      padding: widget.badgePadding,
+      alignment: widget.badgeAlignment,
+      offset: widget.badgeOffset,
+      child: child,
     );
   }
 

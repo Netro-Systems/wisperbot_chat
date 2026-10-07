@@ -144,7 +144,7 @@ class ExampleHome extends StatelessWidget {
             ),
           ),
         ),
-        floatingActionButton: WisperBotChat.launcher(),
+        floatingActionButton: WisperBotChat.launcher(showBadge: false),
       );
 }
 

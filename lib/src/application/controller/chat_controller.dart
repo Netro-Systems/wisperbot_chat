@@ -823,7 +823,22 @@ class WisperBotChatController with WidgetsBindingObserver {
   /// Manually marks unread agent messages as seen/read.
   Future<void> markRead() async {
     _ensureNotDisposed();
-    if (_state.phase != WisperBotChatPhase.ready) return;
+    if (_state.phase != WisperBotChatPhase.ready &&
+        _state.phase != WisperBotChatPhase.reconnecting) {
+      return;
+    }
+    if (!_state.hasUnreadMessages) return;
+
+    final messages = _state.messages
+        .map(
+          (message) => message.role == WisperBotMessageRole.agent &&
+                  !message.isActivity &&
+                  !message.isRead
+              ? message.copyWith(status: WisperBotMessageStatus.read)
+              : message,
+        )
+        .toList();
+    _emit(_state.copyWith(messages: messages));
     try {
       await _client._markRead();
     } catch (_) {}
@@ -853,15 +868,7 @@ class WisperBotChatController with WidgetsBindingObserver {
   /// Records that a prebuilt chat presentation opened.
   void handlePresentationOpened() {
     _addEvent(const WisperBotChatOpened());
-    if (_state.phase == WisperBotChatPhase.ready &&
-        _state.messages.any(
-          (m) =>
-              m.role == WisperBotMessageRole.agent &&
-              !m.isActivity &&
-              m.status != WisperBotMessageStatus.read,
-        )) {
-      unawaited(_client._markRead().catchError((_) {}));
-    }
+    unawaited(markRead().catchError((_) {}));
   }
 
   @internal
@@ -877,6 +884,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     _diagnostic(WisperBotDiagnosticKind.lifecycle);
     if (_foreground) {
       if (_hasLease && _state.phase == WisperBotChatPhase.ready) {
+        unawaited(refresh().catchError((_) {}));
         unawaited(_syncRealtime().catchError((_) {}));
       }
     } else {
@@ -1023,9 +1031,6 @@ class WisperBotChatController with WidgetsBindingObserver {
   void _handleRealtimeMessageCreated(Object? payload) {
     final message = const WidgetResponseDecoder().realtimeMessage(payload);
     if (message == null) return;
-    if (message.role == WisperBotMessageRole.agent && !message.isActivity) {
-      unawaited(_client._markRead().catchError((_) {}));
-    }
     final messages = _mergeIncomingMessages(
       _state.messages,
       <WisperBotMessage>[message],

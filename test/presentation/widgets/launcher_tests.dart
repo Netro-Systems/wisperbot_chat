@@ -145,6 +145,67 @@ void registerLauncherTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
+  testWidgets('launcher displays a dot for unread agent messages',
+      (tester) async {
+    final runtime = _runtime(
+      config,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          return http.Response(
+            jsonEncode(
+              sessionResponse(
+                messages: <Map<String, Object?>>[
+                  message(id: 1, role: 'agent', body: 'Can we help?'),
+                ],
+              ),
+            ),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/read')) {
+          return http.Response('{"ok":true}', 200);
+        }
+        throw StateError('Unexpected request: ${request.url}');
+      }),
+    );
+    await runtime.controller.initialize();
+
+    await tester.pumpWidget(_app(WisperBotChatLauncher(
+      controller: runtime.controller,
+      badgeShowCount: true,
+      badgeBackgroundColor: Colors.blue,
+      badgeTextColor: Colors.white,
+      badgeLargeSize: 20,
+      badgeOffset: const Offset(3, -3),
+    )));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('wisperbot-unread-indicator')),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel(RegExp(r'1 unread message')),
+      findsOneWidget,
+    );
+    final badge = tester.widget<Container>(
+      find.byKey(const ValueKey<String>('wisperbot-unread-indicator')),
+    );
+    expect((badge.decoration! as ShapeDecoration).color, Colors.blue);
+    expect(
+      tester
+          .getSize(
+            find.byKey(const ValueKey<String>('wisperbot-unread-indicator')),
+          )
+          .height,
+      20,
+    );
+    expect(find.text('1'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
   for (final alignment in <Alignment?>[null, Alignment.topLeft]) {
     final alignmentName = alignment == null ? 'server' : 'custom';
     testWidgets('launcher zoom stays fixed with $alignmentName alignment',

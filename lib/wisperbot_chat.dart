@@ -29,4 +29,7 @@ export 'src/presentation/view/chat_view.dart'
         WisperBotMessageBuilder;
 export 'src/presentation/facade/wisperbot_chat.dart' show WisperBotChat;
 export 'src/presentation/launcher/chat_launcher.dart'
-    show WisperBotChatLauncher, WisperBotLauncherBuilder;
+    show
+        WisperBotBadgeLabelBuilder,
+        WisperBotChatLauncher,
+        WisperBotLauncherBuilder;

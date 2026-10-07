@@ -138,7 +138,16 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
     }
     _state = _controller.state;
     _subscription = _controller.states.listen(_onState);
-    unawaited(_controller.initialize().catchError((_) {}));
+    unawaited(_initializeVisibleChat());
+  }
+
+  Future<void> _initializeVisibleChat() async {
+    try {
+      await _controller.initialize();
+      await _controller.markRead();
+    } on Object {
+      // Initialization failures are represented by controller state.
+    }
   }
 
   Future<void> _replaceRuntime() async {
@@ -154,11 +163,6 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
     final sentByVisitor = grew &&
         next.messages.isNotEmpty &&
         next.messages.last.role == WisperBotMessageRole.visitor;
-    final hasUnreadAgentMessages = next.messages.any(
-      (m) =>
-          m.role == WisperBotMessageRole.agent &&
-          m.status != WisperBotMessageStatus.read,
-    );
     setState(() => _state = next);
     if (next.error?.code == WisperBotErrorCode.notificationPermission &&
         next.error != null) {
@@ -179,7 +183,7 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
         );
       });
     }
-    if (hasUnreadAgentMessages) {
+    if (next.hasUnreadMessages) {
       unawaited(_controller.markRead().catchError((_) {}));
     }
     if (grew && (_nearBottom || sentByVisitor)) {

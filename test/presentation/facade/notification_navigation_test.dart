@@ -8,6 +8,7 @@ import 'package:http/testing.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 import 'package:wisperbot_chat/src/application/services/widget_onesignal_service.dart';
 
+import '../../support/builders/message_builder.dart';
 import '../../support/fixtures/widget_api_fixtures.dart';
 
 void main() {
@@ -97,6 +98,119 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(SnackBar), findsNothing);
     expect(find.text('We replied to your message.'), findsNothing);
+  });
+
+  testWidgets('shared unread count supports a host-owned launcher button',
+      (tester) async {
+    final client = MockClient(
+      (_) async => http.Response(
+        jsonEncode(
+          sessionResponse(
+            messages: <Map<String, Object?>>[
+              message(id: 1, role: 'agent', body: 'Unread reply'),
+            ],
+          ),
+        ),
+        200,
+      ),
+    );
+
+    await http.runWithClient(() async {
+      await mountHost(tester);
+      await WisperBotChat.requireDefaultController().initialize();
+      await tester.pump();
+
+      expect(WisperBotChat.unreadCount.value, 1);
+
+      await WisperBotChat.requireDefaultController().markRead();
+      await tester.pump();
+
+      expect(WisperBotChat.unreadCount.value, 0);
+    }, () => client);
+  });
+
+  testWidgets('badge wraps any widget, honors dot offset, and clears on open',
+      (tester) async {
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/session')) {
+        return http.Response(
+          jsonEncode(
+            sessionResponse(
+              messages: <Map<String, Object?>>[
+                message(id: 1, role: 'agent', body: 'Unread reply'),
+              ],
+            ),
+          ),
+          200,
+        );
+      }
+      if (request.url.path.endsWith('/read')) {
+        return http.Response('{"ok":true}', 200);
+      }
+      throw StateError('Unexpected request: ${request.url}');
+    });
+
+    await http.runWithClient(() async {
+      final navigatorKey = await mountHost(tester);
+      await WisperBotChat.requireDefaultController().initialize();
+      await tester.pump();
+
+      await tester.pumpWidget(MaterialApp(
+        navigatorKey: navigatorKey,
+        home: Scaffold(
+          body: Center(
+            child: Container(
+              key: const ValueKey<String>('badge-parent'),
+              width: 66,
+              height: 66,
+              color: Colors.yellow,
+              child: WisperBotChat.badge(
+                backgroundColor: Colors.green,
+                smallSize: 10,
+                offset: const Offset(-3, 4),
+                child: GestureDetector(
+                  key: const ValueKey<String>('custom-chat-widget'),
+                  onTap: () => WisperBotChat.open(
+                    navigatorKey.currentContext!,
+                  ),
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.pump();
+      expect(WisperBotChat.unreadCount.value, 1);
+      final childRect = tester.getRect(
+        find.byKey(const ValueKey<String>('custom-chat-widget')),
+      );
+      final indicator = find.byKey(
+        const ValueKey<String>('wisperbot-unread-badge-indicator'),
+      );
+      final indicatorRect = tester.getRect(indicator);
+      expect(childRect.size, const Size(56, 56));
+      expect(indicatorRect.size, const Size(10, 10));
+      expect(indicatorRect.right, childRect.right - 3);
+      expect(indicatorRect.top, childRect.top + 4);
+      final indicatorContainer = tester.widget<Container>(indicator);
+      expect(
+        (indicatorContainer.decoration! as ShapeDecoration).color,
+        Colors.green,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('custom-chat-widget')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(WisperBotChatScreen), findsOneWidget);
+      expect(WisperBotChat.unreadCount.value, 0);
+    }, () => client);
   });
 
   testWidgets('custom notification callback intercepts click', (tester) async {
