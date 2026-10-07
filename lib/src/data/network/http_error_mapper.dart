@@ -6,6 +6,7 @@ import '../../domain/errors/wisperbot_exception.dart';
 
 /// Widget operation categories whose HTTP semantics differ by endpoint.
 enum WidgetOperation {
+  configuration,
   session,
   refresh,
   read,
@@ -22,7 +23,8 @@ WisperBotException mapWidgetHttpError(
   required WidgetOperation operation,
 }) {
   final status = response.statusCode;
-  final sessionRequest = operation == WidgetOperation.session;
+  final configurationRequest = operation == WidgetOperation.configuration ||
+      operation == WidgetOperation.session;
   final fieldErrors = _safeFieldErrors(response);
   final serverMessage = _safeServerMessage(response);
   final retryAfterSeconds = int.tryParse(response.headers['retry-after'] ?? '');
@@ -37,7 +39,7 @@ WisperBotException mapWidgetHttpError(
     401 => WisperBotException(
         code: WisperBotErrorCode.sessionExpired,
         message: 'The chat session expired.',
-        retryable: !sessionRequest,
+        retryable: !configurationRequest,
         httpStatus: status,
       ),
     403 => WisperBotException(
@@ -47,13 +49,13 @@ WisperBotException mapWidgetHttpError(
         httpStatus: status,
       ),
     404 => WisperBotException(
-        code: sessionRequest
+        code: configurationRequest
             ? WisperBotErrorCode.configuration
             : WisperBotErrorCode.sessionExpired,
-        message: sessionRequest
+        message: configurationRequest
             ? 'The widget is missing or disabled.'
             : 'The chat session is no longer available.',
-        retryable: !sessionRequest,
+        retryable: !configurationRequest,
         httpStatus: status,
       ),
     406 when operation == WidgetOperation.sendMedia && _isHtml(response) =>

@@ -1,28 +1,22 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../application/wisperbot_runtime.dart';
-import '../../configuration/wisperbot_config.dart';
 import '../../domain/events/chat_event.dart';
+import '../facade/wisperbot_chat.dart';
 import '../view/chat_view.dart';
 
 /// Full-screen scaffold integration for the prebuilt chat experience.
 class WisperBotChatScreen extends StatefulWidget {
   /// Creates a full-screen chat.
   ///
-  /// When [controller] is omitted, the screen owns and disposes its runtime.
+  /// When [controller] is omitted, the initialized shared runtime is used.
   const WisperBotChatScreen({
     super.key,
-    required this.config,
     this.controller,
     this.appBar,
     this.onClosed,
   });
-
-  /// Widget and visitor configuration.
-  final WisperBotConfig config;
 
   /// Optional host-owned controller.
   final WisperBotChatController? controller;
@@ -39,19 +33,16 @@ class WisperBotChatScreen extends StatefulWidget {
 
 class _WisperBotChatScreenState extends State<WisperBotChatScreen> {
   late WisperBotChatController _controller;
-  WisperBotClient? _ownedClient;
   bool _closed = false;
 
   @override
   void initState() {
     super.initState();
     final supplied = widget.controller;
-    if (supplied == null) {
-      final client = WisperBotClient(config: widget.config);
-      _ownedClient = client;
-      _controller = WisperBotChatController(client: client);
-    } else {
+    if (supplied != null) {
       _controller = supplied;
+    } else {
+      _controller = WisperBotChat.requireDefaultController();
     }
     _controller.handlePresentationOpened();
   }
@@ -60,7 +51,7 @@ class _WisperBotChatScreenState extends State<WisperBotChatScreen> {
   Widget build(BuildContext context) {
     final usesBrandedHeader = widget.appBar == null;
     final navigator = Navigator.of(context);
-    final lightStatusBarIcons = widget.config.lightStatusBarIcons;
+    final lightStatusBarIcons = _controller.runtimeLightStatusBarIcons;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -72,7 +63,6 @@ class _WisperBotChatScreenState extends State<WisperBotChatScreen> {
       child: Scaffold(
         appBar: widget.appBar,
         body: WisperBotChatView(
-          config: widget.config,
           controller: _controller,
           showHeader: usesBrandedHeader,
           onClose: usesBrandedHeader && navigator.canPop()
@@ -94,10 +84,6 @@ class _WisperBotChatScreenState extends State<WisperBotChatScreen> {
   @override
   void dispose() {
     _notifyClosed();
-    final client = _ownedClient;
-    if (client != null) {
-      unawaited(_controller.dispose().then((_) => client.close()));
-    }
     super.dispose();
   }
 }

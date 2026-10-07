@@ -11,6 +11,7 @@ import '../facade/wisperbot_chat.dart';
 import '../media/remote_image.dart';
 import '../theme/resolved_theme.dart';
 import '../widgets/brand_logo.dart';
+import '../widgets/unread_badge.dart';
 
 /// Builds a custom launcher from controller state and an idempotent open action.
 typedef WisperBotLauncherBuilder = Widget Function(
@@ -19,23 +20,38 @@ typedef WisperBotLauncherBuilder = Widget Function(
   VoidCallback openChat,
 );
 
-/// Floating launcher that initializes chat and opens one presentation per scope.
+/// Builds custom content for an unread badge from the current unread count.
+typedef WisperBotBadgeLabelBuilder = Widget Function(
+  BuildContext context,
+  int unreadCount,
+);
+
+/// Floating launcher that preloads configuration and opens one presentation.
 class WisperBotChatLauncher extends StatefulWidget {
   /// Creates a launcher.
   ///
-  /// When [controller] is omitted, the launcher owns and disposes its runtime.
+  /// When [controller] is omitted, the initialized shared runtime is used.
+  /// The default launcher displays an unread dot until chat is viewed.
   const WisperBotChatLauncher({
     super.key,
-    required this.config,
     this.controller,
     this.alignment,
     this.margin,
     this.presentation,
     this.builder,
+    this.showBadge = true,
+    this.badgeShowCount = false,
+    this.badgeMaxCount = 99,
+    this.badgeLabelBuilder,
+    this.badgeBackgroundColor,
+    this.badgeTextColor,
+    this.badgeSmallSize = 14,
+    this.badgeLargeSize,
+    this.badgeTextStyle,
+    this.badgePadding,
+    this.badgeAlignment,
+    this.badgeOffset = const Offset(1, -1),
   });
-
-  /// Widget and visitor configuration.
-  final WisperBotConfig config;
 
   /// Optional host-owned controller.
   final WisperBotChatController? controller;
@@ -52,13 +68,57 @@ class WisperBotChatLauncher extends StatefulWidget {
   /// Optional custom launcher renderer.
   final WisperBotLauncherBuilder? builder;
 
+  /// Whether the default launcher displays unread state. Defaults to true.
+  final bool showBadge;
+
+  /// Whether the badge displays its unread count instead of a dot.
+  ///
+  /// One- and two-digit counts are circular. Overflow and custom labels use a
+  /// pill shape.
+  final bool badgeShowCount;
+
+  /// Largest count displayed before the badge uses a plus suffix.
+  final int badgeMaxCount;
+
+  /// Optional custom unread badge label, built from the current count.
+  final WisperBotBadgeLabelBuilder? badgeLabelBuilder;
+
+  /// Optional unread badge fill color.
+  final Color? badgeBackgroundColor;
+
+  /// Optional unread badge label color.
+  final Color? badgeTextColor;
+
+  /// Diameter of a dot badge.
+  final double? badgeSmallSize;
+
+  /// Height of a badge with label content.
+  ///
+  /// This is also the diameter of normal one- and two-digit count badges.
+  final double? badgeLargeSize;
+
+  /// Optional unread badge label style.
+  final TextStyle? badgeTextStyle;
+
+  /// Padding around overflow or custom unread badge label content.
+  final EdgeInsetsGeometry? badgePadding;
+
+  /// Alignment of the badge relative to the launcher.
+  ///
+  /// Defaults to the logical top end.
+  final AlignmentGeometry? badgeAlignment;
+
+  /// Fine positioning adjustment after alignment.
+  ///
+  /// Positive x moves right and positive y moves down.
+  final Offset? badgeOffset;
+
   @override
   State<WisperBotChatLauncher> createState() => _WisperBotChatLauncherState();
 }
 
 class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
   late WisperBotChatController _controller;
-  WisperBotClient? _ownedClient;
   StreamSubscription<WisperBotChatState>? _subscription;
   late WisperBotChatState _state;
   bool _opening = false;
@@ -68,12 +128,10 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
   void initState() {
     super.initState();
     final supplied = widget.controller;
-    if (supplied == null) {
-      final client = WisperBotClient(config: widget.config);
-      _ownedClient = client;
-      _controller = WisperBotChatController(client: client);
-    } else {
+    if (supplied != null) {
       _controller = supplied;
+    } else {
+      _controller = WisperBotChat.requireDefaultController();
     }
     _state = _controller.state;
     _subscription = _controller.states.listen((state) {
@@ -89,12 +147,8 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
         setState(() {});
       }
     });
-    if (widget.config.requireNotificationPermission) {
-      _configurationPending = _state.widget == null;
-      unawaited(_loadConfiguration());
-    } else {
-      unawaited(_controller.initialize().catchError((_) {}));
-    }
+    _configurationPending = _state.widget == null;
+    unawaited(_loadConfiguration());
   }
 
   Future<void> _loadConfiguration() async {
@@ -113,8 +167,8 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
     final custom = widget.builder;
     if (custom != null) return custom(context, _state, open);
 
-    final isConfigurationLoaded = _state.widget != null ||
-        (widget.config.requireNotificationPermission && !_configurationPending);
+    final isConfigurationLoaded =
+        _state.widget != null || !_configurationPending;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     if (reduceMotion) {
@@ -163,31 +217,50 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
     final colors = WisperBotResolvedTheme.resolve(
       hostTheme: Theme.of(context),
       server: _state.widget,
-      override: widget.config.theme,
-      useApiColors: widget.config.useApiColors,
+      override: _controller.runtimeTheme,
+      useApiColors: _controller.runtimeUseApiColors,
     );
     const label = 'Open chat';
+    final button = FloatingActionButton(
+      heroTag: null,
+      tooltip: label,
+      onPressed: open,
+      backgroundColor: colors.primary,
+      foregroundColor: colors.onPrimary,
+      child: _launcherIcon(_state, colors.launcherSize),
+    );
     return Semantics(
       button: true,
       label: label,
       child: SizedBox.square(
         dimension: colors.launcherSize,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: <Widget>[
-            Positioned.fill(
-              child: FloatingActionButton(
-                heroTag: null,
-                tooltip: label,
-                onPressed: open,
-                backgroundColor: colors.primary,
-                foregroundColor: colors.onPrimary,
-                child: _launcherIcon(_state, colors.launcherSize),
-              ),
-            ),
-          ],
-        ),
+        child: _buildUnreadBadge(context, colors, button),
       ),
+    );
+  }
+
+  Widget _buildUnreadBadge(
+    BuildContext context,
+    WisperBotResolvedTheme colors,
+    Widget child,
+  ) {
+    if (!widget.showBadge) return child;
+    final unreadCount = _state.unreadCount;
+    return WisperBotUnreadBadgeView(
+      unreadCount: unreadCount,
+      indicatorKey: const ValueKey<String>('wisperbot-unread-indicator'),
+      showCount: widget.badgeShowCount,
+      maxCount: widget.badgeMaxCount,
+      labelBuilder: widget.badgeLabelBuilder,
+      backgroundColor: widget.badgeBackgroundColor ?? colors.error,
+      textColor: widget.badgeTextColor,
+      smallSize: widget.badgeSmallSize,
+      largeSize: widget.badgeLargeSize,
+      textStyle: widget.badgeTextStyle,
+      padding: widget.badgePadding,
+      alignment: widget.badgeAlignment,
+      offset: widget.badgeOffset,
+      child: child,
     );
   }
 
@@ -240,7 +313,6 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
     try {
       await WisperBotChat.open(
         context,
-        config: widget.config,
         controller: _controller,
         presentation: widget.presentation,
       );
@@ -258,10 +330,6 @@ class _WisperBotChatLauncherState extends State<WisperBotChatLauncher> {
   @override
   void dispose() {
     unawaited(_subscription?.cancel());
-    final client = _ownedClient;
-    if (client != null) {
-      unawaited(_controller.dispose().then((_) => client.close()));
-    }
     super.dispose();
   }
 }

@@ -1,4 +1,4 @@
-# Wisperbot chat
+# WisperBot Chat
 
 ![WisperBot](assets/images/wb_horizontal_white.png)
 
@@ -32,7 +32,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  wisperbot_chat: ^0.1.7
+  wisperbot_chat: ^0.2.0
 ```
 
 Or run:
@@ -56,15 +56,34 @@ flutter pub add wisperbot_chat
 
 ## Quick Start
 
-Open a functional chat interface with just a few lines of code using your public **Widget Key**:
+Initialize WisperBot once using your public **Widget Key**:
 
 ```dart
 import 'package:flutter/material.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 
-void openSupportChat(BuildContext context) async {
-  final config = WisperBotConfig(widgetKey: 'YOUR_WIDGET_KEY');
-  await WisperBotChat.open(context, config: config);
+// Optional: needed only for automatic navigation from notification taps.
+final navigatorKey = GlobalKey<NavigatorState>();
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await WisperBotChat.initialize(
+    widgetKey: 'YOUR_WIDGET_KEY',
+    oneSignalAppId: 'YOUR_ONESIGNAL_APP_ID',
+    navigatorKey: navigatorKey,
+  );
+
+  // If your auth state already contains a signed-in user, call identify here
+  // with its stable ID and real profile data before runApp().
+  // await WisperBotChat.identify(...);
+
+  runApp(MaterialApp(
+    navigatorKey: navigatorKey,
+    home: Scaffold(
+      floatingActionButton: WisperBotChat.launcher(),
+    ),
+  ));
 }
 ```
 
@@ -86,10 +105,10 @@ An immersive, dedicated support page with app bar navigation:
 import 'package:flutter/material.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 
-void openFullScreen(BuildContext context, WisperBotConfig config) {
+void openFullScreen(BuildContext context) {
   Navigator.of(context).push(
     MaterialPageRoute<void>(
-      builder: (_) => WisperBotChatScreen(config: config),
+      builder: (_) => WisperBotChat.screen(),
     ),
   );
 }
@@ -104,10 +123,9 @@ Keeps the current screen in context while sliding up the chat interface:
 import 'package:flutter/material.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 
-Future<void> openBottomSheet(BuildContext context, WisperBotConfig config) async {
+Future<void> openBottomSheet(BuildContext context) async {
   await WisperBotChat.open(
     context,
-    config: config,
     presentation: WisperBotPresentation.bottomSheet,
   );
 }
@@ -122,10 +140,9 @@ A compact, centered chat window ideal for tablets, desktops, or web:
 import 'package:flutter/material.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 
-Future<void> openDialog(BuildContext context, WisperBotConfig config) async {
+Future<void> openDialog(BuildContext context) async {
   await WisperBotChat.open(
     context,
-    config: config,
     presentation: WisperBotPresentation.dialog,
   );
 }
@@ -140,11 +157,11 @@ An expandable floating action button that overlays your screen:
 import 'package:flutter/material.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 
-Widget buildFloatingLauncher(WisperBotConfig config) {
+Widget buildFloatingLauncher() {
   return Stack(
     children: [
       const Placeholder(), // Application content
-      WisperBotChatLauncher(config: config),
+      WisperBotChat.launcher(),
     ],
   );
 }
@@ -152,9 +169,71 @@ Widget buildFloatingLauncher(WisperBotConfig config) {
 
 ![Floating Launcher](screenshot/floating_launcher.png)
 
-When `useApiColors` is enabled, the launcher waits for the dashboard widget
-configuration before appearing. This prevents the fallback brand color from
-flashing before the API color is applied.
+When `useApiColors` is enabled, the launcher loads public dashboard widget
+configuration before appearing. This is independent of
+`registerVisitorOnAppLaunch`: disabling visitor registration still loads the
+API color and placement without creating a visitor session.
+
+#### Unread badges
+
+The SDK shows, updates, and clears unread badges automatically using its
+existing realtime connection. No additional backend work is required.
+
+**Using the WisperBot launcher?** The badge is already enabled:
+
+```dart
+Scaffold(
+  floatingActionButton: WisperBotChat.launcher(),
+)
+```
+
+**Using your own button?** Wrap its visible widget with
+`WisperBotChat.badge`:
+
+```dart
+IconButton(
+  tooltip: 'Open chat',
+  onPressed: () => WisperBotChat.open(context),
+  icon: WisperBotChat.badge(
+    child: const Icon(Icons.chat),
+  ),
+)
+```
+
+That is the complete setup for the common case. The wrapper accepts any widget,
+keeps its original gestures and layout, and displays a dot only when unread
+agent messages exist. Opening chat clears the badge after those messages are
+marked read.
+
+To show a count instead of a dot:
+
+```dart
+IconButton(
+  tooltip: 'Open chat',
+  onPressed: () => WisperBotChat.open(context),
+  icon: WisperBotChat.badge(
+    showCount: true,
+    backgroundColor: Colors.pink,
+    child: const Icon(Icons.chat),
+  ),
+)
+```
+
+The built-in launcher provides the same customization with `badge`-prefixed
+parameters:
+
+```dart
+WisperBotChat.launcher(
+  badgeShowCount: true,
+  badgeBackgroundColor: Colors.pink,
+  badgeLargeSize: 16,
+  badgeOffset: const Offset(8, -8),
+)
+```
+
+See the [complete unread badge guide](doc/unread-badges.md) for every option,
+positioning, count shapes, custom labels, custom state handling, headless
+controllers, lifecycle behavior, and troubleshooting.
 
 ### 5. Embedded View
 Place the chat view directly inside an existing layout, drawer, or split-view:
@@ -163,9 +242,8 @@ Place the chat view directly inside an existing layout, drawer, or split-view:
 import 'package:flutter/material.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 
-Widget buildEmbeddedChat(WisperBotConfig config) {
-  return WisperBotChatView(
-    config: config,
+Widget buildEmbeddedChat() {
+  return WisperBotChat.view(
     showHeader: true,
   );
 }
@@ -179,8 +257,11 @@ Take full programmatic control with `WisperBotChatController`:
 ```dart
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 
-Future<void> runHeadlessChat(WisperBotConfig config) async {
-  final client = WisperBotClient(config: config);
+Future<void> runHeadlessChat(WisperBotUser? user) async {
+  final client = WisperBotClient(
+    widgetKey: 'YOUR_WIDGET_KEY',
+    user: user,
+  );
   final controller = WisperBotChatController(client: client);
 
   // Listen to state changes
@@ -202,13 +283,12 @@ Future<void> runHeadlessChat(WisperBotConfig config) async {
 
 ## Configuration Reference
 
-`WisperBotConfig` accepts the following options:
+`WisperBotChat.initialize` accepts the following configuration options:
 
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `widgetKey` | `String` | *(required)* | Public Mobile SDK key issued in Widget Integrations. |
-| `apiBaseUrl` | `String` | `'https://wisperbot.com'` | Base origin endpoint for widget API requests (`/widget/v1/*`). |
-| `user` | `WisperBotUser?` | `null` | Visitor identity, profile data, and HMAC signature for verified users. |
+| `apiBaseUrl` | `String` | `'https://wisperbot.com'` | Base origin for widget API and public launcher-configuration requests. |
 | `theme` | `WisperBotThemeData?` | `null` | Presentation overrides for colors, bubble radius, spacing, and brightness. |
 | `useApiColors` | `bool` | `true` | When true, applies the dashboard-configured branding palette automatically. |
 | `lightStatusBarIcons` | `bool` | `false` | Uses white status-bar icons and text in full-screen chat. Enable it for dark or strongly colored headers. |
@@ -218,8 +298,27 @@ Future<void> runHeadlessChat(WisperBotConfig config) async {
 | `diagnostics` | `WisperBotDiagnosticsCallback?` | `null` | Callback receiving redacted operational metrics and lifecycle events. |
 | `oneSignalAppId` | `String?` | `null` | OneSignal App ID used for push notification registration. |
 | `enableOneSignal` | `bool` | `true` | Whether device push notification tokens are registered on session start. |
-| `requireNotificationPermission` | `bool` | `false` | Requires notification permission before chat starts on Android or iOS. The launcher can still preload visual configuration. |
+| `requireNotificationPermission` | `bool` | `true` | Requires notification permission before chat starts on Android or iOS. |
+| `registerVisitorOnAppLaunch` | `bool` | `true` | Registers visitor presence after the first app frame. When false, registration waits until chat opens. |
 | `sessionStore` | `WisperBotSessionStore?` | `null` | Optional custom storage for identity-scoped session credentials. |
+| `navigatorKey` | `GlobalKey<NavigatorState>?` | `null` | Enables automatic chat navigation when a push notification is tapped. Use the same key on your `MaterialApp` or `CupertinoApp`. |
+| `onNotificationTapped` | `void Function(Map<String, dynamic>)?` | `null` | Optional callback that intercepts notification taps instead of automatic navigation. |
+| `onForegroundNotification` | `void Function(Map<String, dynamic>)?` | `null` | Optional callback for notifications received while the app is in the foreground. |
+
+---
+
+## Migrating from 0.1.x
+
+| Before | 0.2.0 |
+|---|---|
+| `WisperBotChat.initializeNotificationHandlers(...)` | `await WisperBotChat.initialize(...)` |
+| `WisperBotChat.registerVisitor(...)` | Set `registerVisitorOnAppLaunch` (defaults to `true`) |
+| `WisperBotConfig(user: user)` | Pass options to `initialize()`, then call `identify(user)` |
+| `WisperBotLocation(...)` | Removed; use generic `customFields` only when required |
+| Constructing or forwarding `WisperBotConfig` | Pass options directly to `initialize()` |
+
+For advanced headless or multi-runtime applications, construct
+`WisperBotClient` directly and provide its controller to a prebuilt widget.
 
 ---
 
@@ -236,14 +335,14 @@ punctuation is excluded from the link target. If opening fails, the chat shows
 ---
 
 ### 👤 Verified & Authenticated Users
-To associate chat sessions with registered users in your application, provide a `WisperBotUser` along with an HMAC signature computed on your backend:
+To associate the shared chat runtime with a registered user, call `identify`
+after initialization with an HMAC signature computed on your backend:
 
 ```dart
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 
-final config = WisperBotConfig(
-  widgetKey: 'YOUR_WIDGET_KEY',
-  user: WisperBotUser(
+await WisperBotChat.identify(
+  const WisperBotUser(
     externalId: 'user_123',
     name: 'John Doe',
     email: 'user@example.com',
@@ -252,9 +351,22 @@ final config = WisperBotConfig(
 );
 ```
 
+Use `externalId` as the stable identity. Names, email addresses, avatars, and
+custom fields are profile attributes and can change. Do not call `identify`
+with placeholder or randomly generated profile data: each distinct identity can
+create a separate visitor in the dashboard.
+
+If the real profile is available before `runApp`, identify it after
+`initialize` and before `runApp`; this cancels pending anonymous registration.
+If the profile loads later, use `registerVisitorOnAppLaunch: false`, then call
+`identify` when the profile arrives. The launcher still loads API colors and
+placement, while the visitor session remains deferred until chat opens.
+
 #### Switching Accounts & Logout
-* **Switch user**: Call `controller.updateUser(newUser)` when switching accounts.
-* **Logout**: Call `controller.updateUser(null)` on logout to wipe active credentials and clear local conversation state securely.
+* **Switch user**: Call `WisperBotChat.identify(newUser)` after the host application's authenticated user changes.
+* **Logout**: Call `WisperBotChat.logout()` to wipe active credentials and clear local conversation state securely.
+* **Headless runtime**: Pass `user` to `WisperBotClient`, or call `controller.updateUser`, when managing an explicit controller.
+* **App shutdown**: Call `WisperBotChat.shutdown()` only when permanently tearing down or reconfiguring the shared SDK runtime. It disposes resources without deleting persisted session credentials.
 
 ---
 
@@ -267,7 +379,7 @@ To customize colors locally or use custom themes:
 import 'package:flutter/material.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 
-final config = WisperBotConfig(
+await WisperBotChat.initialize(
   widgetKey: 'YOUR_WIDGET_KEY',
   useApiColors: false, // Disables server palette
   lightStatusBarIcons: true, // White status-bar content in full-screen chat
@@ -292,7 +404,7 @@ The SDK provides built-in OneSignal push notification integration so visitors re
 To require notification permission before support chat starts on Android or iOS:
 
 ```dart
-final config = WisperBotConfig(
+await WisperBotChat.initialize(
   widgetKey: 'YOUR_WIDGET_KEY',
   oneSignalAppId: 'YOUR_ONESIGNAL_APP_ID',
   requireNotificationPermission: true,
@@ -309,40 +421,40 @@ but defers chat initialization and the notification permission prompt until
 tapped when this option is enabled.
 Direct screens, embedded views, and headless controllers enforce the same session
 requirement; custom UI should handle `WisperBotErrorCode.notificationPermission`.
-The option defaults to `false` and requires OneSignal to be enabled with an app ID.
+The option defaults to `true` and requires OneSignal to be enabled with an app ID. Set it to `false` when notification permission should not gate chat, including web integrations.
 Open chat from a context with a `ScaffoldMessenger` to show the snackbar.
 
-Initialize notification handlers in `main()`:
+`WisperBotChat.initialize` installs notification handlers internally and uses
+the supplied navigator to open chat from a notification:
 
 ```dart
 import 'package:flutter/material.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+final navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  final config = WisperBotConfig(
+  await WisperBotChat.initialize(
     widgetKey: 'YOUR_WIDGET_KEY',
-    user: const WisperBotUser(name: 'Demo User', email: 'user@demo.com'),
-  );
-
-  WisperBotChat.initializeNotificationHandlers(
-    config: config,
+    oneSignalAppId: 'YOUR_ONESIGNAL_APP_ID',
     navigatorKey: navigatorKey,
+    onForegroundNotification: (payload) {
+      // Optional host-specific foreground handling.
+    },
   );
 
-  runApp(MaterialApp(navigatorKey: navigatorKey, home: const Scaffold()));
+  runApp(MaterialApp(
+    navigatorKey: navigatorKey,
+    home: const Scaffold(),
+  ));
 }
 ```
 When a notification is tapped, the SDK automatically opens the chatbox.
 
-Foreground notifications do not display SDK SnackBars. To handle them in your
-app, pass `onForegroundNotification` to
-`WisperBotChat.initializeNotificationHandlers`. The
-`showInAppForegroundNotification` argument remains accepted for source
-compatibility but is ignored, even when set to `true`.
+Foreground notifications do not display SDK SnackBars. Pass
+`onForegroundNotification` to `initialize` for custom handling, or
+`onNotificationTapped` to override automatic navigation for tapped pushes.
 
 ---
 
@@ -353,7 +465,7 @@ using the SDK's built-in media adapter. No custom adapter is needed:
 ```dart
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 
-final config = WisperBotConfig(
+await WisperBotChat.initialize(
   widgetKey: 'YOUR_WIDGET_KEY',
 );
 ```

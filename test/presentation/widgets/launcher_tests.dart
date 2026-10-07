@@ -9,14 +9,7 @@ void registerLauncherTests(WisperBotConfig config) {
         (_) async => http.Response(jsonEncode(sessionResponse()), 200),
       ),
     );
-    const launcherConfig = WisperBotConfig(
-      widgetKey: 'test-widget',
-      apiBaseUrl: 'https://chat.example.com',
-      enableOneSignal: false,
-      requireNotificationPermission: true,
-    );
     final launcher = WisperBotChatLauncher(
-      config: launcherConfig,
       controller: runtime.controller,
       builder: (_, state, __) => Text('Launcher: ${state.phase.name}'),
     );
@@ -28,7 +21,7 @@ void registerLauncherTests(WisperBotConfig config) {
     unawaited(Navigator.of(tester.element(find.byType(WisperBotChatLauncher)))
         .push<void>(MaterialPageRoute(
       builder: (_) => Scaffold(
-        body: WisperBotChatView(config: config, controller: runtime.controller),
+        body: WisperBotChatView(controller: runtime.controller),
       ),
     )));
     await tester.pumpAndSettle();
@@ -55,7 +48,6 @@ void registerLauncherTests(WisperBotConfig config) {
     );
 
     await tester.pumpWidget(_app(WisperBotChatLauncher(
-      config: gatedConfig,
       controller: runtime.controller,
     )));
 
@@ -67,6 +59,45 @@ void registerLauncherTests(WisperBotConfig config) {
 
     expect(runtime.controller.state.phase, WisperBotChatPhase.idle);
     expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(
+      tester
+          .widget<FloatingActionButton>(find.byType(FloatingActionButton))
+          .backgroundColor,
+      const Color(0xFF6258F9),
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
+  testWidgets(
+      'launcher loads API color without registering a visitor on app launch',
+      (tester) async {
+    const deferredConfig = WisperBotConfig(
+      widgetKey: 'test-widget',
+      apiBaseUrl: 'https://chat.example.com',
+      enableOneSignal: false,
+      requireNotificationPermission: false,
+      registerVisitorOnAppLaunch: false,
+    );
+    final requests = <http.Request>[];
+    final runtime = _runtime(
+      deferredConfig,
+      MockClient((request) async {
+        requests.add(request);
+        return http.Response(jsonEncode(sessionResponse()), 200);
+      }),
+    );
+
+    await tester.pumpWidget(_app(WisperBotChatLauncher(
+      controller: runtime.controller,
+    )));
+    await tester.pumpAndSettle();
+
+    expect(requests, hasLength(1));
+    expect(requests.single.method, 'GET');
+    expect(requests.single.url.path, '/widgets/chat/test-widget.js');
+    expect(runtime.controller.state.phase, WisperBotChatPhase.idle);
     expect(
       tester
           .widget<FloatingActionButton>(find.byType(FloatingActionButton))
@@ -92,7 +123,6 @@ void registerLauncherTests(WisperBotConfig config) {
         children: <Widget>[
           const SizedBox.expand(),
           WisperBotChatLauncher(
-            config: config,
             controller: runtime.controller,
           ),
         ],
@@ -115,6 +145,67 @@ void registerLauncherTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
+  testWidgets('launcher displays a dot for unread agent messages',
+      (tester) async {
+    final runtime = _runtime(
+      config,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          return http.Response(
+            jsonEncode(
+              sessionResponse(
+                messages: <Map<String, Object?>>[
+                  message(id: 1, role: 'agent', body: 'Can we help?'),
+                ],
+              ),
+            ),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/read')) {
+          return http.Response('{"ok":true}', 200);
+        }
+        throw StateError('Unexpected request: ${request.url}');
+      }),
+    );
+    await runtime.controller.initialize();
+
+    await tester.pumpWidget(_app(WisperBotChatLauncher(
+      controller: runtime.controller,
+      badgeShowCount: true,
+      badgeBackgroundColor: Colors.blue,
+      badgeTextColor: Colors.white,
+      badgeLargeSize: 20,
+      badgeOffset: const Offset(3, -3),
+    )));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('wisperbot-unread-indicator')),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel(RegExp(r'1 unread message')),
+      findsOneWidget,
+    );
+    final badge = tester.widget<Container>(
+      find.byKey(const ValueKey<String>('wisperbot-unread-indicator')),
+    );
+    expect((badge.decoration! as ShapeDecoration).color, Colors.blue);
+    expect(
+      tester
+          .getSize(
+            find.byKey(const ValueKey<String>('wisperbot-unread-indicator')),
+          )
+          .height,
+      20,
+    );
+    expect(find.text('1'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
   for (final alignment in <Alignment?>[null, Alignment.topLeft]) {
     final alignmentName = alignment == null ? 'server' : 'custom';
     testWidgets('launcher zoom stays fixed with $alignmentName alignment',
@@ -130,7 +221,6 @@ void registerLauncherTests(WisperBotConfig config) {
           children: <Widget>[
             const SizedBox.expand(),
             WisperBotChatLauncher(
-              config: config,
               controller: runtime.controller,
               alignment: alignment,
             ),
@@ -202,7 +292,6 @@ void registerLauncherTests(WisperBotConfig config) {
 
     await tester.pumpWidget(_app(
       WisperBotChatLauncher(
-        config: config,
         controller: runtime.controller,
         builder: (_, __, ___) => const Text('Custom launcher'),
       ),
@@ -233,7 +322,6 @@ void registerLauncherTests(WisperBotConfig config) {
         ),
         home: Scaffold(
           body: WisperBotChatLauncher(
-            config: config,
             controller: runtime.controller,
           ),
         ),
@@ -276,9 +364,8 @@ void registerLauncherTests(WisperBotConfig config) {
     await tester.pumpWidget(_app(
       Stack(
         children: <Widget>[
-          WisperBotChatView(config: config, controller: runtime.controller),
+          WisperBotChatView(controller: runtime.controller),
           WisperBotChatLauncher(
-            config: config,
             controller: runtime.controller,
           ),
         ],

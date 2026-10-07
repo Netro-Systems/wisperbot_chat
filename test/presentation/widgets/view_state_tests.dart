@@ -23,7 +23,7 @@ void registerViewStateTests(WisperBotConfig config) {
           )),
     );
     await tester.pumpWidget(_app(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pumpAndSettle();
     final activity = find.textContaining('Resolved by Rahim · ');
@@ -54,8 +54,8 @@ void registerViewStateTests(WisperBotConfig config) {
                   : pollResponse()),
               200,
             )));
-    await tester.pumpWidget(_app(
-        WisperBotChatView(config: config, controller: runtime.controller)));
+    await tester
+        .pumpWidget(_app(WisperBotChatView(controller: runtime.controller)));
     await tester.pumpAndSettle();
     final time = DateTime.parse(joined['created_at']! as String).toLocal();
     final hour = time.hour % 12 == 0 ? 12 : time.hour % 12;
@@ -89,7 +89,7 @@ void registerViewStateTests(WisperBotConfig config) {
     );
 
     await tester.pumpWidget(_app(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
 
     expect(find.byType(CircularProgressIndicator), findsNothing);
@@ -151,7 +151,6 @@ void registerViewStateTests(WisperBotConfig config) {
         ),
         home: Scaffold(
           body: WisperBotChatView(
-            config: config,
             controller: runtime.controller,
           ),
         ),
@@ -191,7 +190,6 @@ void registerViewStateTests(WisperBotConfig config) {
           width: 240,
           height: 180,
           child: WisperBotChatView(
-            config: config,
             controller: runtime.controller,
           ),
         ),
@@ -246,7 +244,7 @@ void registerViewStateTests(WisperBotConfig config) {
     );
 
     await tester.pumpWidget(_app(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();
@@ -319,8 +317,7 @@ void registerViewStateTests(WisperBotConfig config) {
     await tester.pumpWidget(_app(
       SizedBox(
         height: 360,
-        child:
-            WisperBotChatView(config: config, controller: runtime.controller),
+        child: WisperBotChatView(controller: runtime.controller),
       ),
     ));
     await tester.pump();
@@ -354,7 +351,7 @@ void registerViewStateTests(WisperBotConfig config) {
     );
 
     await tester.pumpWidget(_app(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();
@@ -422,7 +419,7 @@ void registerViewStateTests(WisperBotConfig config) {
     );
 
     await tester.pumpWidget(_app(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();
@@ -460,7 +457,7 @@ void registerViewStateTests(WisperBotConfig config) {
     );
 
     await tester.pumpWidget(_app(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();
@@ -481,6 +478,7 @@ void registerViewStateTests(WisperBotConfig config) {
     final sendResponse = Completer<http.Response>();
     final mediaAdapter = _FakeMediaAdapter();
     final mediaConfig = WisperBotConfig(
+      requireNotificationPermission: false,
       widgetKey: config.widgetKey,
       apiBaseUrl: config.apiBaseUrl,
       mediaAdapter: mediaAdapter,
@@ -505,7 +503,6 @@ void registerViewStateTests(WisperBotConfig config) {
 
     await tester.pumpWidget(_app(
       WisperBotChatView(
-        config: mediaConfig,
         controller: runtime.controller,
       ),
     ));
@@ -571,6 +568,7 @@ void registerViewStateTests(WisperBotConfig config) {
       (tester) async {
     final mediaAdapter = _FakeMediaAdapter();
     final mediaConfig = WisperBotConfig(
+      requireNotificationPermission: false,
       widgetKey: config.widgetKey,
       apiBaseUrl: config.apiBaseUrl,
       mediaAdapter: mediaAdapter,
@@ -595,7 +593,6 @@ void registerViewStateTests(WisperBotConfig config) {
 
     await tester.pumpWidget(_app(
       WisperBotChatView(
-        config: mediaConfig,
         controller: runtime.controller,
       ),
     ));
@@ -628,6 +625,7 @@ void registerViewStateTests(WisperBotConfig config) {
       (tester) async {
     final mediaAdapter = _FakeMediaAdapter();
     final mediaConfig = WisperBotConfig(
+      requireNotificationPermission: false,
       widgetKey: config.widgetKey,
       apiBaseUrl: config.apiBaseUrl,
       mediaAdapter: mediaAdapter,
@@ -664,7 +662,6 @@ void registerViewStateTests(WisperBotConfig config) {
 
     await tester.pumpWidget(_app(
       WisperBotChatView(
-        config: mediaConfig,
         controller: runtime.controller,
       ),
     ));
@@ -694,6 +691,7 @@ void registerViewStateTests(WisperBotConfig config) {
     final sendResponse = Completer<http.Response>();
     final mediaAdapter = _FakeMediaAdapter();
     final mediaConfig = WisperBotConfig(
+      requireNotificationPermission: false,
       widgetKey: config.widgetKey,
       apiBaseUrl: config.apiBaseUrl,
       mediaAdapter: mediaAdapter,
@@ -718,7 +716,6 @@ void registerViewStateTests(WisperBotConfig config) {
 
     await tester.pumpWidget(_app(
       WisperBotChatView(
-        config: mediaConfig,
         controller: runtime.controller,
       ),
     ));
@@ -808,7 +805,7 @@ void registerViewStateTests(WisperBotConfig config) {
     );
 
     await tester.pumpWidget(_app(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();
@@ -843,7 +840,7 @@ void registerViewStateTests(WisperBotConfig config) {
     );
 
     await tester.pumpWidget(_app(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pumpAndSettle();
 
@@ -886,10 +883,10 @@ void registerViewStateTests(WisperBotConfig config) {
     var calls = 0;
     Map<String, dynamic>? submitted;
     final partialConfig = WisperBotConfig(
+      requireNotificationPermission: false,
       widgetKey: config.widgetKey,
       apiBaseUrl: config.apiBaseUrl,
       enableOneSignal: false,
-      user: const WisperBotUser(name: 'Jane Doe'),
     );
     final runtime = _runtime(
       partialConfig,
@@ -903,11 +900,11 @@ void registerViewStateTests(WisperBotConfig config) {
           200,
         );
       }),
+      user: const WisperBotUser(name: 'Jane Doe'),
     );
 
     await tester.pumpWidget(_app(
       WisperBotChatView(
-        config: partialConfig,
         controller: runtime.controller,
       ),
     ));
@@ -968,7 +965,7 @@ void registerViewStateTests(WisperBotConfig config) {
     );
 
     await tester.pumpWidget(_app(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();
@@ -1021,7 +1018,7 @@ void registerViewStateTests(WisperBotConfig config) {
     );
 
     await tester.pumpWidget(_app(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();
@@ -1073,7 +1070,7 @@ void registerViewStateTests(WisperBotConfig config) {
     );
 
     await tester.pumpWidget(_app(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();

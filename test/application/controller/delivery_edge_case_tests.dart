@@ -28,7 +28,7 @@ void registerDeliveryEdgeCaseTests(WisperBotConfig config) {
       }
       throw StateError('Unexpected request: ${request.url}');
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
@@ -61,7 +61,7 @@ void registerDeliveryEdgeCaseTests(WisperBotConfig config) {
       }
       throw StateError('Unexpected request: ${request.url}');
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
@@ -133,7 +133,7 @@ void registerDeliveryEdgeCaseTests(WisperBotConfig config) {
         200,
       );
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
@@ -170,7 +170,7 @@ void registerDeliveryEdgeCaseTests(WisperBotConfig config) {
       typingValues.add(body['is_typing'] as bool);
       return http.Response('{"ok":true}', 200);
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
@@ -202,7 +202,7 @@ void registerDeliveryEdgeCaseTests(WisperBotConfig config) {
       }
       throw StateError('Unexpected request: ${request.url}');
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
@@ -230,7 +230,7 @@ void registerDeliveryEdgeCaseTests(WisperBotConfig config) {
   test('reset deletes the active credential scope and returns to idle',
       () async {
     final store = MemorySessionStore();
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: MockClient(
         (_) async => http.Response(jsonEncode(sessionResponse()), 200),

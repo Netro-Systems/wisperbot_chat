@@ -29,9 +29,14 @@ final class MessageReconciler {
           onNewAgentMessage?.call(message);
         }
       } else {
+        final existingMessage = messages[existingIndex];
         messages[existingIndex] = message.copyWith(
-          localId: messages[existingIndex].localId,
-          localUpload: messages[existingIndex].localUpload,
+          localId: existingMessage.localId,
+          localUpload: existingMessage.localUpload,
+          status: _mostAdvancedStatus(
+            existingMessage.status,
+            message.status,
+          ),
         );
       }
     }
@@ -47,5 +52,28 @@ final class MessageReconciler {
     if (bId != null) return 1;
     final time = a.createdAt.compareTo(b.createdAt);
     return time != 0 ? time : a.localId.compareTo(b.localId);
+  }
+
+  WisperBotMessageStatus _mostAdvancedStatus(
+    WisperBotMessageStatus current,
+    WisperBotMessageStatus incoming,
+  ) {
+    if (current == incoming) return current;
+    if (incoming == WisperBotMessageStatus.failed) {
+      return current == WisperBotMessageStatus.delivered ||
+              current == WisperBotMessageStatus.read
+          ? current
+          : incoming;
+    }
+    if (current == WisperBotMessageStatus.failed) return current;
+    const rank = <WisperBotMessageStatus, int>{
+      WisperBotMessageStatus.pending: 0,
+      WisperBotMessageStatus.unconfirmed: 0,
+      WisperBotMessageStatus.sent: 1,
+      WisperBotMessageStatus.delivered: 2,
+      WisperBotMessageStatus.read: 3,
+      WisperBotMessageStatus.failed: -1,
+    };
+    return rank[incoming]! > rank[current]! ? incoming : current;
   }
 }

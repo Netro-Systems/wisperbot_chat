@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.2.0 - 2026-10-07
+
+This is a breaking release. See the migration table in the README when
+upgrading from `0.1.x`.
+
+### Added
+
+- Added flat `WisperBotChat.initialize`, `identify`, `logout`, and `shutdown` APIs for a shared default runtime.
+- Added `WisperBotChat.launcher()`, `view()`, and `screen()` presentation helpers.
+- Added an automatic unread badge to the built-in launcher, with dot/count modes and color, size, typography, alignment, offset, padding, overflow, and custom-label options.
+- Added the customizable `WisperBotChat.badge(child: ...)` wrapper for unread-aware host widgets of any type, plus `WisperBotChat.unreadCount` for fully custom UI.
+- Added `unreadCount` and `hasUnreadMessages` to controller state and `WisperBotChatController.markRead()` for headless integrations.
+- Added `registerVisitorOnAppLaunch`, which defaults to `true`, to initialization and headless-client options.
+- Added direct configuration and an optional initial `user` to `WisperBotClient`.
+- Notification permission gating now defaults to enabled; set `requireNotificationPermission: false` to opt out.
+- Persisted sessions now include a redacted identity-profile fingerprint, preventing changed names, avatars, or custom fields from restoring stale visitor metadata.
+
+### Changed
+
+- Developers now pass configuration directly to `WisperBotChat.initialize`; the configuration object is internal.
+- Moved visitor identity to `WisperBotChat.identify`; advanced runtimes can use `WisperBotClient(user: ...)` or `WisperBotChatController.updateUser`.
+- Made OneSignal notification handlers and eager visitor registration internal to `WisperBotChat.initialize`.
+- Made the prebuilt screen, embedded view, launcher, and modal facade use the shared runtime by default.
+- Updated the example to initialize once and use config-free chat surfaces.
+- Decoupled public launcher configuration loading from visitor registration, so API colors and placement load even when `registerVisitorOnAppLaunch` is `false`.
+- Agent messages are marked read only while chat UI is visible, and foreground resume refreshes history before restoring realtime updates.
+- Numeric badges render normal one- and two-digit counts as circles and expand overflow or custom labels into pills.
+
+### Fixed
+
+- Updated launcher configuration decoding to accept the JavaScript object wrapper returned by the public widget loader, allowing API colors to load before chat opens.
+- Invalidated persisted identified sessions when profile data changes, preventing stale names, avatars, or custom fields from being restored on a later launch.
+- Anchored custom unread indicators to the wrapped widget rather than a larger parent and made badge offsets apply consistently in dot and count modes.
+- Prevented stale refreshed or realtime message payloads from downgrading read status and making a cleared badge reappear.
+- Deferred shared unread-listener notifications during active Flutter builds, preventing badge updates from causing build-phase exceptions.
+
+### Documentation
+
+- Added a progressive unread-badge guide with beginner integrations, common recipes, complete launcher and wrapper option references, advanced/headless usage, lifecycle behavior, positioning guidance, and troubleshooting.
+
+### Removed
+
+- Removed `WisperBotLocation` and `WisperBotUser.location`; use `WisperBotUser.customFields` for optional metadata.
+- Removed `WisperBotChat.initializeNotificationHandlers` and `WisperBotChat.registerVisitor`.
+- Removed `WisperBotConfig` from the public API; identity and initialization options now belong to the runtime.
+- Removed `WidgetOneSignalService` from the public package exports.
+- Removed automatic country, city, coordinates, page-title, and page-URL payload generation; explicit `customFields` continue to pass through unchanged.
+
 ## 0.1.7 - 2026-10-04
 
 ### Added

@@ -4,6 +4,7 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
   testWidgets('full-screen chat can use light status-bar icons',
       (tester) async {
     const lightStatusConfig = WisperBotConfig(
+      requireNotificationPermission: false,
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com',
       enableOneSignal: false,
@@ -17,7 +18,6 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
     );
 
     await tester.pumpWidget(_app(WisperBotChatScreen(
-      config: lightStatusConfig,
       controller: runtime.controller,
     )));
     await tester.pump();
@@ -49,7 +49,6 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
           (_) async => http.Response(jsonEncode(sessionResponse()), 200)),
     );
     await tester.pumpWidget(_app(WisperBotChatView(
-      config: config,
       controller: runtime.controller,
     )));
     await tester.pump();
@@ -109,7 +108,7 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
     );
 
     await tester.pumpWidget(_app(
-      WisperBotChatScreen(config: config, controller: runtime.controller),
+      WisperBotChatScreen(controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();
@@ -131,6 +130,7 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
   testWidgets('built-in brand colors ignore API and host primary colors',
       (tester) async {
     const brandConfig = WisperBotConfig(
+      requireNotificationPermission: false,
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com',
       useApiColors: false,
@@ -147,11 +147,9 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
       Stack(
         children: <Widget>[
           WisperBotChatView(
-            config: brandConfig,
             controller: runtime.controller,
           ),
           WisperBotChatLauncher(
-            config: brandConfig,
             controller: runtime.controller,
           ),
         ],
@@ -181,6 +179,7 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
   testWidgets('branded header honors theme override and close action',
       (tester) async {
     const themedConfig = WisperBotConfig(
+      requireNotificationPermission: false,
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com',
       useApiColors: false,
@@ -197,7 +196,6 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
 
     await tester.pumpWidget(_app(
       WisperBotChatView(
-        config: themedConfig,
         controller: runtime.controller,
         onClose: () => closeCalls++,
       ),
@@ -229,7 +227,6 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
 
     await tester.pumpWidget(_app(
       WisperBotChatScreen(
-        config: config,
         controller: runtime.controller,
         appBar: AppBar(title: const Text('Host support title')),
       ),
@@ -265,7 +262,6 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
           onPressed: () => unawaited(
             WisperBotChat.open(
               context,
-              config: config,
               controller: runtime.controller,
               presentation: WisperBotPresentation.bottomSheet,
             ),
@@ -328,7 +324,6 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
           child: child!,
         ),
         home: WisperBotChatView(
-          config: config,
           controller: runtime.controller,
         ),
       ),

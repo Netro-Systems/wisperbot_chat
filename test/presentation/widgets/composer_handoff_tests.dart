@@ -47,7 +47,6 @@ void registerComposerHandoffTests(WisperBotConfig config) {
         await tester.pumpWidget(_app(Builder(
             builder: (context) => TextButton(
                   onPressed: () => WisperBotChat.open(context,
-                      config: config,
                       controller: runtime.controller,
                       presentation: presentation),
                   child: const Text('Open chat'),
@@ -90,9 +89,11 @@ void registerComposerHandoffTests(WisperBotConfig config) {
     }
   }
 
-  testWidgets('default composer picks images and records voice through adapter', (tester) async {
+  testWidgets('default composer picks images and records voice through adapter',
+      (tester) async {
     final mediaAdapter = _FakeMediaAdapter();
     final mediaConfig = WisperBotConfig(
+      requireNotificationPermission: false,
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com',
       mediaAdapter: mediaAdapter,
@@ -107,7 +108,8 @@ void registerComposerHandoffTests(WisperBotConfig config) {
         if (request.url.path.endsWith('/session')) {
           return http.Response(jsonEncode(sessionResponse()), 200);
         }
-        if (request.method == 'POST' && request.url.path.endsWith('/messages')) {
+        if (request.method == 'POST' &&
+            request.url.path.endsWith('/messages')) {
           uploadedContentTypes.add(request.headers['content-type'] ?? '');
           uploadedBodies.add(request.bodyBytes);
           uploadCount++;
@@ -144,7 +146,6 @@ void registerComposerHandoffTests(WisperBotConfig config) {
 
     await tester.pumpWidget(_app(
       WisperBotChatView(
-        config: mediaConfig,
         controller: runtime.controller,
       ),
     ));
@@ -254,7 +255,7 @@ void registerComposerHandoffTests(WisperBotConfig config) {
       );
 
       await tester.pumpWidget(_app(
-        WisperBotChatView(config: config, controller: runtime.controller),
+        WisperBotChatView(controller: runtime.controller),
       ));
       await tester.pump();
       await tester.pump();
@@ -271,25 +272,30 @@ void registerComposerHandoffTests(WisperBotConfig config) {
       expect(find.text('Requesting human support…'), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
       expect(tester.getTopLeft(find.byType(RefreshIndicator)), timelineTop);
-      handoffResponse.complete(http.Response(jsonEncode({
-        'handoff': {'enabled': status == 'waiting', 'eligible': false, 'status': status},
-      }), 200));
+      handoffResponse.complete(http.Response(
+          jsonEncode({
+            'handoff': {
+              'enabled': status == 'waiting',
+              'eligible': false,
+              'status': status
+            },
+          }),
+          200));
       await tester.pump();
       await tester.pump();
-      expect(find.text(status == 'waiting'
-          ? 'Waiting for an agent to join…'
-          : 'An agent joined this chat'), findsOneWidget);
+      expect(
+          find.text(status == 'waiting'
+              ? 'Waiting for an agent to join…'
+              : 'An agent joined this chat'),
+          findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(tester.getTopLeft(find.byType(RefreshIndicator)), timelineTop);
 
-
       expect(handoffCalls, 1);
-
 
       await tester.pumpWidget(const SizedBox.shrink());
       await runtime.dispose();
     });
-
   }
 
   testWidgets('joined agent name appears without a loader', (tester) async {
@@ -300,10 +306,10 @@ void registerComposerHandoffTests(WisperBotConfig config) {
       'status': 'connected',
       'agent': {'name': 'Rahim'},
     };
-    final runtime = _runtime(config, MockClient((_) async =>
-        http.Response(jsonEncode(response), 200)));
+    final runtime = _runtime(config,
+        MockClient((_) async => http.Response(jsonEncode(response), 200)));
     await tester.pumpWidget(_app(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();
@@ -313,14 +319,15 @@ void registerComposerHandoffTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('terminal server failure is actionable and hides composer', (tester) async {
+  testWidgets('terminal server failure is actionable and hides composer',
+      (tester) async {
     final runtime = _runtime(
       config,
       MockClient((_) async => http.Response('{}', 404)),
     );
 
     await tester.pumpWidget(_app(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pump(const Duration(milliseconds: 100));
 
@@ -331,7 +338,8 @@ void registerComposerHandoffTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
-  testWidgets('custom empty builder receives immutable ready state', (tester) async {
+  testWidgets('custom empty builder receives immutable ready state',
+      (tester) async {
     final runtime = _runtime(
       config,
       MockClient(
@@ -341,7 +349,6 @@ void registerComposerHandoffTests(WisperBotConfig config) {
 
     await tester.pumpWidget(_app(
       WisperBotChatView(
-        config: config,
         controller: runtime.controller,
         emptyBuilder: (_, state) => Text('Custom ${state.phase.name}'),
       ),

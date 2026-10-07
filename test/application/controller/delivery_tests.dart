@@ -28,7 +28,7 @@ void registerDeliveryTests(WisperBotConfig config) {
       }
       throw StateError('Unexpected request: ${request.url}');
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
@@ -129,7 +129,7 @@ void registerDeliveryTests(WisperBotConfig config) {
       }
       throw StateError('Unexpected request: ${request.url}');
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
@@ -189,7 +189,7 @@ void registerDeliveryTests(WisperBotConfig config) {
       }
       throw StateError('Unexpected request: ${request.url}');
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
@@ -227,7 +227,7 @@ void registerDeliveryTests(WisperBotConfig config) {
       expect(request.headers['X-Widget-Token'], 'stored-token');
       return http.Response(jsonEncode(sessionResponse()), 200);
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: store,
@@ -280,7 +280,7 @@ void registerDeliveryTests(WisperBotConfig config) {
       }
       throw StateError('Unexpected request: ${request.url}');
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: store,
@@ -355,7 +355,7 @@ void registerDeliveryTests(WisperBotConfig config) {
       }
       throw StateError('Unexpected request: ${request.url}');
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
@@ -416,7 +416,7 @@ void registerDeliveryTests(WisperBotConfig config) {
       }
       throw http.ClientException('connection dropped');
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
@@ -464,7 +464,7 @@ void registerDeliveryTests(WisperBotConfig config) {
       }
       return http.Response(jsonEncode(pollResponse()), 200);
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
@@ -518,7 +518,7 @@ void registerDeliveryTests(WisperBotConfig config) {
       }
       return http.Response(jsonEncode(pollResponse()), 200);
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),
@@ -587,7 +587,7 @@ void registerDeliveryTests(WisperBotConfig config) {
       }
       return http.Response(jsonEncode(pollResponse()), 200);
     });
-    final client = WisperBotClient(
+    final client = WisperBotClient.fromConfig(
       config: config,
       httpClient: httpClient,
       sessionStore: MemorySessionStore(),

@@ -20,7 +20,7 @@ class _PreChatFormState extends State<_PreChatForm> {
   late final TextEditingController _nameController;
   late final TextEditingController _emailController;
 
-  WisperBotUser? get _activeUser => widget.controller.config.user;
+  WisperBotUser? get _activeUser => widget.controller.user;
 
   bool get _requiresName =>
       widget.state.widget?.preChatFields.contains(WisperBotPreChatField.name) ==

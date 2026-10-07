@@ -13,12 +13,13 @@ import 'package:record/record.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../application/wisperbot_runtime.dart';
-import '../../configuration/wisperbot_config.dart';
+import '../../domain/entities/wisperbot_user.dart';
 import '../../diagnostics/debug_upload_logger.dart';
 import '../../domain/contracts/media_adapter.dart';
 import '../../domain/errors/wisperbot_exception.dart';
 import '../../domain/models/models.dart';
 import '../media/audio_source.dart';
+import '../facade/wisperbot_chat.dart';
 import '../media/remote_image.dart';
 import '../theme/resolved_theme.dart';
 import '../widgets/brand_logo.dart';
@@ -69,10 +70,9 @@ typedef WisperBotComposerBuilder = Widget Function(
 class WisperBotChatView extends StatefulWidget {
   /// Creates an embedded chat view.
   ///
-  /// When [controller] is omitted, the view owns and disposes its runtime.
+  /// When [controller] is omitted, the initialized shared runtime is used.
   const WisperBotChatView({
     super.key,
-    required this.config,
     this.controller,
     this.showHeader = true,
     this.emptyBuilder,
@@ -81,9 +81,6 @@ class WisperBotChatView extends StatefulWidget {
     this.composerBuilder,
     this.onClose,
   });
-
-  /// Widget, identity, transport, realtime, and theme configuration.
-  final WisperBotConfig config;
 
   /// Optional host-owned controller.
   final WisperBotChatController? controller;
@@ -113,7 +110,6 @@ class WisperBotChatView extends StatefulWidget {
 class _WisperBotChatViewState extends State<WisperBotChatView> {
   final ScrollController _scrollController = ScrollController();
   late WisperBotChatController _controller;
-  WisperBotClient? _ownedClient;
   StreamSubscription<WisperBotChatState>? _subscription;
   late WisperBotChatState _state;
   bool _nearBottom = true;
@@ -128,34 +124,34 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
   @override
   void didUpdateWidget(covariant WisperBotChatView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.controller, widget.controller) ||
-        !identical(oldWidget.config, widget.config)) {
+    if (!identical(oldWidget.controller, widget.controller)) {
       unawaited(_replaceRuntime());
     }
   }
 
   void _attachRuntime() {
     final supplied = widget.controller;
-    if (supplied == null) {
-      final client = WisperBotClient(config: widget.config);
-      _ownedClient = client;
-      _controller = WisperBotChatController(client: client);
-    } else {
+    if (supplied != null) {
       _controller = supplied;
+    } else {
+      _controller = WisperBotChat.requireDefaultController();
     }
     _state = _controller.state;
     _subscription = _controller.states.listen(_onState);
-    unawaited(_controller.initialize().catchError((_) {}));
+    unawaited(_initializeVisibleChat());
+  }
+
+  Future<void> _initializeVisibleChat() async {
+    try {
+      await _controller.initialize();
+      await _controller.markRead();
+    } on Object {
+      // Initialization failures are represented by controller state.
+    }
   }
 
   Future<void> _replaceRuntime() async {
     await _subscription?.cancel();
-    final oldClient = _ownedClient;
-    if (oldClient != null) {
-      await _controller.dispose();
-      await oldClient.close();
-    }
-    _ownedClient = null;
     if (!mounted) return;
     _attachRuntime();
     setState(() {});
@@ -167,11 +163,6 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
     final sentByVisitor = grew &&
         next.messages.isNotEmpty &&
         next.messages.last.role == WisperBotMessageRole.visitor;
-    final hasUnreadAgentMessages = next.messages.any(
-      (m) =>
-          m.role == WisperBotMessageRole.agent &&
-          m.status != WisperBotMessageStatus.read,
-    );
     setState(() => _state = next);
     if (next.error?.code == WisperBotErrorCode.notificationPermission &&
         next.error != null) {
@@ -192,7 +183,7 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
         );
       });
     }
-    if (hasUnreadAgentMessages) {
+    if (next.hasUnreadMessages) {
       unawaited(_controller.markRead().catchError((_) {}));
     }
     if (grew && (_nearBottom || sentByVisitor)) {
@@ -230,8 +221,8 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
     final colors = WisperBotResolvedTheme.resolve(
       hostTheme: hostTheme,
       server: _state.widget,
-      override: widget.config.theme,
-      useApiColors: widget.config.useApiColors,
+      override: _controller.runtimeTheme,
+      useApiColors: _controller.runtimeUseApiColors,
     );
     final sdkTheme = hostTheme.copyWith(
       colorScheme: hostTheme.colorScheme.copyWith(
@@ -455,7 +446,7 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
             _Composer(
               controller: _controller,
               colors: colors,
-              mediaAdapter: widget.config.mediaAdapter,
+              mediaAdapter: _controller.runtimeMediaAdapter,
               imagesEnabled: true,
               audioEnabled: true,
             ),
@@ -479,10 +470,6 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
       ..removeListener(_trackScrollPosition)
       ..dispose();
     unawaited(_subscription?.cancel());
-    final client = _ownedClient;
-    if (client != null) {
-      unawaited(_controller.dispose().then((_) => client.close()));
-    }
     super.dispose();
   }
 }

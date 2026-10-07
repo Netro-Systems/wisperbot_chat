@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
+import 'package:wisperbot_chat/src/configuration/wisperbot_config.dart';
 import 'package:wisperbot_chat/src/application/services/widget_realtime_connector.dart';
 
 import '../support/support.dart';
@@ -16,6 +17,7 @@ void main() {
   const config = WisperBotConfig(
     widgetKey: 'test-widget',
     apiBaseUrl: 'https://chat.example.com',
+    requireNotificationPermission: false,
   );
 
   setUp(() {
@@ -37,7 +39,7 @@ void main() {
     final runtime = _Runtime(config, MockClient((_) => response.future));
 
     await tester.pumpWidget(_goldenApp(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
 
     await expectLater(
@@ -69,7 +71,7 @@ void main() {
     );
 
     await tester.pumpWidget(_goldenApp(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();
@@ -92,7 +94,7 @@ void main() {
           )),
     );
     await tester.pumpWidget(_goldenApp(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();
@@ -111,7 +113,7 @@ void main() {
       MockClient((_) async => http.Response('{"message":"missing"}', 404)),
     );
     await tester.pumpWidget(_goldenApp(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();
@@ -133,7 +135,7 @@ void main() {
           )),
     );
     await tester.pumpWidget(_goldenApp(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();
@@ -158,7 +160,7 @@ void main() {
       realtimeConnector: _FailingRealtimeConnector(),
     );
     await tester.pumpWidget(_goldenApp(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();
@@ -180,7 +182,7 @@ void main() {
           (_) async => http.Response(jsonEncode(sessionResponse()), 200)),
     );
     await tester.pumpWidget(_goldenApp(
-      WisperBotChatLauncher(config: config, controller: runtime.controller),
+      WisperBotChatLauncher(controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
@@ -210,7 +212,7 @@ void main() {
       MockClient((_) async => http.Response(jsonEncode(response), 200)),
     );
     await tester.pumpWidget(_goldenApp(
-      WisperBotChatView(config: mediaConfig, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
     ));
     await tester.pump();
     await tester.pump();
@@ -234,7 +236,7 @@ void main() {
           (_) async => http.Response(jsonEncode(sessionResponse()), 200)),
     );
     await tester.pumpWidget(_goldenApp(
-      WisperBotChatView(config: config, controller: runtime.controller),
+      WisperBotChatView(controller: runtime.controller),
       textScaler: const TextScaler.linear(2),
     ));
     await tester.pump();
@@ -289,7 +291,7 @@ final class _Runtime {
     WisperBotConfig config,
     http.Client httpClient, {
     WidgetRealtimeConnector? realtimeConnector,
-  }) : client = WisperBotClient(
+  }) : client = WisperBotClient.fromConfig(
           config: config,
           httpClient: httpClient,
           sessionStore: MemorySessionStore(),
