@@ -19,6 +19,7 @@ A customizable, battery-efficient Flutter SDK for embedding WisperBot customer s
 | **Text, Image & Audio Messaging** | ✅ Yes | ✅ Yes | ✅ Yes |
 | **Pusher Realtime Sync** | ✅ Yes | ✅ Yes | ✅ Yes |
 | **Typing Indicators & Human Handoff** | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Reusable Starter Questions** | ✅ Yes | ✅ Yes | ✅ Yes |
 | **Prebuilt UI (Screens, Sheets, Dialogs, Launchers)** | ✅ Yes | ✅ Yes | ✅ Yes |
 | **Required Pre-Chat Lead Forms** | ✅ Yes | ✅ Yes | ✅ Yes |
 
@@ -32,7 +33,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  wisperbot_chat: ^0.2.0
+  wisperbot_chat: ^0.2.1
 ```
 
 Or run:
@@ -491,6 +492,35 @@ Future<void> submitLead(WisperBotChatController controller) async {
   );
 }
 ```
+
+---
+
+### 💬 Starter Questions
+
+Configure up to five starter questions in **Widget Setup → Starter questions**.
+The built-in chat UI displays them below the welcome message and keeps them
+available throughout the bot conversation. No labels or answers need to be
+hardcoded in the host application.
+
+Selecting a question sends its label as a normal text message. WisperBot
+returns the saved answer through realtime delivery or the immediate catch-up
+refresh, including when Smart Bot/AI is disabled. Questions are disabled while
+a message is sending, before required pre-chat fields are completed, and
+during a waiting or connected human handoff.
+
+Headless integrations can read the server-configured questions from controller
+state and send a selected label through the normal API:
+
+```dart
+final questions = controller.state.widget?.starterQuestions ??
+    const <WisperBotStarterQuestion>[];
+if (questions.isNotEmpty) {
+  await controller.sendText(questions.first.label);
+}
+```
+
+`WisperBotStarterQuestion.id` is a stable UI key; send the label rather than
+the ID. Saved answers remain server-side.
 
 ---
 

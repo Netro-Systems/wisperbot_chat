@@ -417,6 +417,7 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
           state.phase == WisperBotChatPhase.reconnecting) &&
       state.pendingCount == 0 &&
       state.handoff.status != WisperBotHandoffStatus.requesting &&
+      state.handoff.status != WisperBotHandoffStatus.waiting &&
       state.handoff.status != WisperBotHandoffStatus.connected;
 
   void _sendStarterQuestion(WisperBotStarterQuestion question) =>

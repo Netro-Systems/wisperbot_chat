@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.1 - 2026-10-08
+
+### Fixed
+
+- Restored decoding of server-configured starter questions so the prebuilt chat UI displays its reusable question buttons again.
+- Kept starter-question buttons disabled while a human handoff is waiting or connected.
+
+### Documentation
+
+- Restored the starter-question setup and headless integration guide.
+
 ## 0.2.0 - 2026-10-07
 
 This is a breaking release. See the migration table in the README when
