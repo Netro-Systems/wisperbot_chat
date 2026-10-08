@@ -498,9 +498,40 @@ final class WidgetResponseDecoder {
       aiEnabled: _requiredBool(json, 'ai_enabled'),
       requiresPreChat: _requiredBool(json, 'require_prechat'),
       preChatFields: preChatFields,
+      starterQuestions: _parseStarterQuestions(json['starter_questions']),
       realtime: _parseRealtimeConfig(json['realtime']),
       offlineMessage: _stringOrNull(json['offline_message']),
     );
+  }
+
+  List<WisperBotStarterQuestion> _parseStarterQuestions(Object? value) {
+    if (value is! List<dynamic>) return const <WisperBotStarterQuestion>[];
+    final questions = <WisperBotStarterQuestion>[];
+    for (final item in value) {
+      if (questions.length == 5) break;
+      if (item is! Map<String, dynamic>) continue;
+      final id = _safeStarterQuestionId(item['id']);
+      final rawLabel = item['label'];
+      if (id == null || rawLabel is! String) continue;
+      final label = rawLabel.trim();
+      if (label.isEmpty ||
+          label.length > 80 ||
+          RegExp(r'[<>\x00-\x1F\x7F]').hasMatch(label)) {
+        continue;
+      }
+      questions.add(WisperBotStarterQuestion(id: id, label: label));
+    }
+    return questions;
+  }
+
+  String? _safeStarterQuestionId(Object? value) {
+    final text = switch (value) {
+      String() => value.trim(),
+      int() => value.toString(),
+      double() when value.isFinite => value.toString(),
+      _ => null,
+    };
+    return text?.isNotEmpty == true ? text : null;
   }
 
   WisperBotRealtimeConfig? _parseRealtimeConfig(Object? value) {
