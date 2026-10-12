@@ -27,6 +27,17 @@ Future<void> main() async {
     oneSignalAppId: notificationsConfigured ? oneSignalAppId : null,
   );
 
+  // Call this after authentication is complete and the user's profile is available.
+  // The provided name and email will be displayed in the WisperBot admin panel.
+  await WisperBotChat.identify(
+    const WisperBotUser(
+      externalId: 'user_123',
+      name: 'John Doe',
+      email: 'user@example.com',
+      signature: 'backend_hmac_signature',
+    ),
+  );
+
   runApp(const ExampleApp());
 }
 
