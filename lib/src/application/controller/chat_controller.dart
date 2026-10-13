@@ -176,9 +176,9 @@ class WisperBotChatController with WidgetsBindingObserver {
           oneSignalAppId != null &&
           oneSignalAppId.isNotEmpty) {
         await _oneSignalService.initialize(appId: oneSignalAppId);
-        final activeExternalId = _client._activeUser?.externalId;
-        if (activeExternalId != null && activeExternalId.isNotEmpty) {
-          await _oneSignalService.login(activeExternalId);
+        final activeUserId = _client._activeUser?.userId;
+        if (activeUserId != null && activeUserId.isNotEmpty) {
+          await _oneSignalService.login(activeUserId);
         }
         deviceId = await _oneSignalService.currentPushToken();
       }

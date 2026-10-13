@@ -20,7 +20,7 @@ void _registerRequestContractTests() {
       await api.startSession(
         widgetKey: 'test-widget',
         user: WisperBotUser(
-          externalId: 'customer-1',
+          userId: 'customer-1',
           name: 'Jane Doe',
           email: 'jane@example.com',
           avatarUrl: Uri.parse('https://example.com/jane.png'),
@@ -46,7 +46,7 @@ void _registerRequestContractTests() {
         'name': 'Jane Doe',
         'email': 'jane@example.com',
         'avatar': 'https://example.com/jane.png',
-        'external_id': 'customer-1',
+        'user_id': 'customer-1',
         'user_hash': 'signed-hash',
       });
     });

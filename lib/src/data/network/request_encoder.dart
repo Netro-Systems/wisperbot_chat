@@ -27,7 +27,7 @@ final class WidgetRequestEncoder {
         if (user?.name != null) 'name': user!.name!,
         if (user?.email != null) 'email': user!.email!,
         if (user?.avatarUrl != null) 'avatar': user!.avatarUrl!.toString(),
-        if (user?.externalId != null) 'external_id': user!.externalId!,
+        if (user?.userId != null) 'user_id': user!.userId!,
         if (user?.signature != null) 'user_hash': user!.signature!,
         if (user?.customFields case final fields? when fields.isNotEmpty)
           'custom_fields': fields,

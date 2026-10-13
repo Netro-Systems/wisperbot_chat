@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.2 - 2026-10-13
+
+### Added
+
+- Added `WisperBotUser.userId` as the canonical durable account identity while retaining `externalId` as a compatibility alias.
+- Added installation-bound secure-session schema v2 so guest history survives app restarts but does not survive uninstall/reinstall when Keychain credentials remain.
+
+### Changed
+
+- Session requests now send `user_id`; names and email addresses are mutable profile fields and never define identity.
+- Name-only users now use the persistent guest scope, while each user ID keeps isolated local credentials.
+- Profile changes for the same user ID retain the existing conversation and synchronize the updated profile.
+- HMAC signatures are documented as optional advanced verification and are not required unless a widget owner enables verification.
+
+### Fixed
+
+- Logged-in users can recover the same server history from new devices or empty local storage through their user ID.
+- Schema-v1 secure sessions migrate to schema v2 without losing existing history.
+
+### Documentation
+
+- Updated the primary integration, guest persistence boundaries, example app, and account-switching guidance for `userId`.
+
 ## 0.2.1 - 2026-10-08
 
 ### Fixed

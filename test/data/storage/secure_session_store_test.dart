@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 import 'package:wisperbot_chat/src/data/storage/secure_session_store.dart';
 
@@ -14,6 +15,7 @@ void main() {
 
   setUp(() {
     FlutterSecureStorage.setMockInitialValues(<String, String>{});
+    SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
   for (final failingKey in [namespace, 'wisperbot_chat_session_index_v1']) {
@@ -62,7 +64,48 @@ void main() {
     expect(restored?.visitorId, session.visitorId);
     expect(restored?.token, session.token);
     expect(restored?.preChatCompleted, isTrue);
-    expect(restored?.schemaVersion, 1);
+    expect(restored?.schemaVersion, 2);
+  });
+
+  test('schema-v1 sessions migrate once without losing credentials', () async {
+    FlutterSecureStorage.setMockInitialValues(<String, String>{
+      namespace: jsonEncode(<String, Object>{
+        'visitor_id': 'visitor-legacy',
+        'token': 'token-legacy',
+        'saved_at': DateTime.utc(2026, 8, 8).toIso8601String(),
+        'pre_chat_completed': true,
+        'schema_version': 1,
+      }),
+    });
+    final store = FlutterSecureWisperBotSessionStore(storage: storage);
+
+    final restored = await store.read(namespace);
+    await store.write(namespace, restored!);
+    final migrated = jsonDecode((await storage.read(key: namespace))!)
+        as Map<String, dynamic>;
+
+    expect(restored.visitorId, 'visitor-legacy');
+    expect(restored.token, 'token-legacy');
+    expect(restored.schemaVersion, 1);
+    expect(migrated['schema_version'], 2);
+    expect(migrated['installation_id'], isNotEmpty);
+  });
+
+  test('new installation rejects surviving schema-v2 credentials', () async {
+    final store = FlutterSecureWisperBotSessionStore(storage: storage);
+    await store.write(
+      namespace,
+      WisperBotStoredSession(
+        visitorId: 'visitor-1',
+        token: 'token-1',
+        savedAt: DateTime.utc(2026, 8, 8),
+      ),
+    );
+
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+
+    expect(await store.read(namespace), isNull);
+    expect(await storage.read(key: namespace), isNull);
   });
 
   test('malformed or obsolete records are deleted during restoration',

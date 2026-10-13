@@ -28,17 +28,17 @@ void main() {
     );
   });
 
-  test('sessions are isolated by widget, base URL, and signed identity', () {
+  test('sessions are isolated by widget, base URL, and user ID', () {
     const signatureA =
         'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     const signatureB =
         'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
     const userA = WisperBotUser(
-      externalId: 'customer-top-secret-a',
+      userId: 'customer-top-secret-a',
       signature: signatureA,
     );
     const userB = WisperBotUser(
-      externalId: 'customer-top-secret-b',
+      userId: 'customer-top-secret-b',
       signature: signatureB,
     );
 
@@ -66,7 +66,7 @@ void main() {
     expect(signedA, isNot(contains(signatureA)));
   });
 
-  test('unsigned profiles require an ephemeral namespace scope', () {
+  test('name-only profiles share the installation guest namespace', () {
     const user = WisperBotUser(name: 'Display only');
     final first = sessionNamespace(
       config: base,
@@ -79,24 +79,26 @@ void main() {
       unsignedEphemeralScope: 'scope-two',
     );
 
-    expect(first, isNot(second));
+    expect(first, second);
+    expect(first, sessionNamespace(config: base, user: null));
   });
 
-  test('unsigned profiles with stable identity reuse a local namespace', () {
-    const externalUser = WisperBotUser(
-      externalId: 'customer-123',
+  test('user IDs reuse an account namespace while email remains guest data',
+      () {
+    const identifiedUser = WisperBotUser(
+      userId: 'customer-123',
       name: 'Customer One',
     );
     const emailUser = WisperBotUser(email: 'customer@example.com');
 
     final externalFirst = sessionNamespace(
       config: base,
-      user: externalUser,
+      user: identifiedUser,
       unsignedEphemeralScope: 'scope-one',
     );
     final externalSecond = sessionNamespace(
       config: base,
-      user: externalUser,
+      user: identifiedUser,
       unsignedEphemeralScope: 'scope-two',
     );
     final emailScope = sessionNamespace(config: base, user: emailUser);
@@ -104,7 +106,31 @@ void main() {
     expect(externalFirst, externalSecond);
     expect(externalFirst, isNot(emailScope));
     expect(externalFirst, isNot(contains('customer-123')));
-    expect(emailScope, isNot(contains('customer@example.com')));
+    expect(emailScope, sessionNamespace(config: base, user: null));
+  });
+
+  test('legacy account namespace remains discoverable for one-time migration',
+      () {
+    const user = WisperBotUser(userId: 'customer-123');
+    final current = sessionNamespace(config: base, user: user);
+    final legacy = legacyAccountSessionNamespace(config: base, user: user);
+
+    expect(legacy, isNotNull);
+    expect(legacy, isNot(current));
+    expect(legacy, isNot(contains('customer-123')));
+  });
+
+  test('userId and externalId aliases resolve to the same account scope', () {
+    expect(
+      sessionNamespace(
+        config: base,
+        user: const WisperBotUser(userId: 'customer-123'),
+      ),
+      sessionNamespace(
+        config: base,
+        user: const WisperBotUser(externalId: 'customer-123'),
+      ),
+    );
   });
 
   test('configuration rejects unsafe identity values', () {
@@ -117,7 +143,17 @@ void main() {
     expect(
       () => WisperBotClient.fromConfig(
         config: const WisperBotConfig(widgetKey: 'key'),
-        user: const WisperBotUser(externalId: ' padded '),
+        user: const WisperBotUser(userId: ' padded '),
+      ),
+      throwsA(isA<WisperBotException>()),
+    );
+    expect(
+      () => WisperBotClient.fromConfig(
+        config: const WisperBotConfig(widgetKey: 'key'),
+        user: const WisperBotUser(
+          userId: 'customer-1',
+          externalId: 'customer-2',
+        ),
       ),
       throwsA(isA<WisperBotException>()),
     );
@@ -125,7 +161,7 @@ void main() {
 
   test('public models redact credentials from string representations', () {
     const user = WisperBotUser(
-      externalId: 'customer-secret',
+      userId: 'customer-secret',
       email: 'secret@example.com',
       signature: 'signature-secret',
     );
