@@ -197,7 +197,7 @@ the entire launcher UI. The launcher's automatic badge decoration and its
 | The read request completes | The existing backend read state is synchronized. |
 | A stale refresh or realtime payload arrives | It cannot downgrade a locally read message and restore the badge. |
 | App returns to the foreground | History is refreshed and realtime is restored so missed messages can be recovered. |
-| `WisperBotChat.logout()` or `shutdown()` runs | Shared unread state resets to zero. |
+| `WisperBotChat.identify(...)` switches identity, or `shutdown()` runs | Shared unread state resets to zero for the previous active identity. |
 
 The default `registerVisitorOnAppLaunch: true` lets the shared runtime establish
 the visitor session needed for unread updates before chat is opened for the

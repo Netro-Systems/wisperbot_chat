@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.3 - 2026-10-14
+
+### Removed
+
+- Removed the destructive `WisperBotChat.logout()` API. Applications now switch to a name-only guest with `identify(...)` when their user logs out.
+
+### Changed
+
+- Account and guest credentials remain stored in separate identity scopes, allowing the same user ID to recover its history after logging out and back in.
+- Switching from an account to a guest clears the account's OneSignal alias without deleting either chat session.
+
 ## 0.2.2 - 2026-10-13
 
 ### Added

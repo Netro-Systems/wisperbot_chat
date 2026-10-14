@@ -33,7 +33,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  wisperbot_chat: ^0.2.2
+  wisperbot_chat: ^0.2.3
 ```
 
 Or run:
@@ -384,8 +384,17 @@ If the profile loads later, use `registerVisitorOnAppLaunch: false`, then call
 placement, while the visitor session remains deferred until chat opens.
 
 #### Switching Accounts & Logout
+
 * **Switch user**: Call `WisperBotChat.identify(newUser)` after the host application's authenticated user changes.
-* **Logout**: Call `WisperBotChat.logout()` to wipe active credentials and clear local conversation state securely.
+* **Application logout**: Switch to a name-only guest:
+
+  ```dart
+  await WisperBotChat.identify(
+    const WisperBotUser(name: 'Guest'),
+  );
+  ```
+
+  The SDK restores the installation-bound guest history and preserves the previous account's isolated history for a later login.
 * **Headless runtime**: Pass `user` to `WisperBotClient`, or call `controller.updateUser`, when managing an explicit controller.
 * **App shutdown**: Call `WisperBotChat.shutdown()` only when permanently tearing down or reconfiguring the shared SDK runtime. It disposes resources without deleting persisted session credentials.
 

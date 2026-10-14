@@ -1,7 +1,7 @@
 part of 'chat_controller_test.dart';
 
 void registerIdentitySyncTests(WisperBotConfig config) {
-  test('identity switch never sends the previous identity token', () async {
+  test('account and guest switches restore their isolated sessions', () async {
     final headers = <String?>[];
     final bodies = <Map<String, dynamic>>[];
     var count = 0;
@@ -40,29 +40,41 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     expect(bodies.last.containsKey('visitor_id'), isFalse);
     expect(controller.state.messages, isEmpty);
 
-    await controller.updateUser(null);
-    expect(headers, <String?>[null, null, 'token-2']);
+    await controller.updateUser(
+      const WisperBotUser(name: 'Guest'),
+    );
+    expect(headers, <String?>[null, null, 'token-2', 'token-1']);
     expect(bodies.last, <String, dynamic>{
       'key': 'test-widget',
-      'is_typing': false,
+      'active': true,
+      'visitor_id': 'visitor-1',
+      'name': 'Guest',
     });
-    expect(controller.state.phase, WisperBotChatPhase.idle);
+    expect(controller.state.phase, WisperBotChatPhase.ready);
     expect(controller.state.messages, isEmpty);
 
-    await controller.initialize();
-    expect(headers, <String?>[null, null, 'token-2', null]);
-    expect(bodies.last.containsKey('user_id'), isFalse);
-    expect(bodies.last.containsKey('visitor_id'), isFalse);
+    await controller.updateUser(
+      const WisperBotUser(
+        userId: 'customer-1',
+        signature:
+            '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      ),
+    );
+    expect(headers.last, 'token-2');
+    expect(bodies.last['user_id'], 'customer-1');
+    expect(bodies.last['visitor_id'], 'visitor-2');
 
     await controller.dispose();
     await client.close();
   });
 
-  test('logout continues when the best-effort typing stop fails', () async {
+  test('account-to-guest switch survives a typing-stop failure', () async {
     final store = MemorySessionStore();
     var sessionCalls = 0;
+    const account = WisperBotUser(userId: 'customer-1');
     final client = WisperBotClient.fromConfig(
       config: config,
+      user: account,
       httpClient: MockClient((request) async {
         if (request.url.path.endsWith('/typing')) {
           throw http.ClientException('offline');
@@ -84,12 +96,12 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     final controller = WisperBotChatController(client: client);
     await controller.initialize();
 
-    await controller.updateUser(null);
+    await controller.updateUser(const WisperBotUser(name: 'Guest'));
 
-    expect(sessionCalls, 1);
-    expect(store.values, isEmpty);
-    expect(controller.state.phase, WisperBotChatPhase.idle);
-    expect(controller.state.messages, isEmpty);
+    expect(sessionCalls, 2);
+    final accountNamespace = sessionNamespace(config: config, user: account);
+    expect(store.values[accountNamespace], isNotNull);
+    expect(controller.state.phase, WisperBotChatPhase.ready);
 
     await controller.dispose();
     await client.close();

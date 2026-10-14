@@ -89,23 +89,7 @@ final class _SessionCoordinator {
     _session = completed;
   }
 
-  Future<bool> switchUser(WisperBotUser? user) async {
-    // Passing null is the host application's logout signal, even when the
-    // current chat scope is already anonymous. Always discard that scope so a
-    // later initialize cannot restore pre-logout visitor credentials.
-    if (user == null) {
-      final previousNamespace = _namespace;
-      await _deleteStoredSession(previousNamespace);
-      _activeUser = null;
-      _unsignedEphemeralScope = createEphemeralScopeId();
-      _namespace = sessionNamespace(config: config, user: null);
-      if (_namespace != previousNamespace) {
-        await _deleteStoredSession(_namespace);
-      }
-      _session = null;
-      _restoredLegacyNamespace = null;
-      return true;
-    }
+  Future<bool> switchUser(WisperBotUser user) async {
     if (_sameUser(_activeUser, user)) return false;
     validateWisperBotUser(user);
 
