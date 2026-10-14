@@ -183,7 +183,7 @@ class WisperBotClient {
 
   Future<void> _markPreChatCompleted() => _sessions.markPreChatCompleted();
 
-  Future<bool> _switchUser(WisperBotUser? user) => _sessions.switchUser(user);
+  Future<bool> _switchUser(WisperBotUser user) => _sessions.switchUser(user);
 
   Future<void> _clearSession() => _sessions.clear();
 

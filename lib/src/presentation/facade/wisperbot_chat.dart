@@ -171,12 +171,6 @@ abstract final class WisperBotChat {
     );
   }
 
-  /// Logs out the shared visitor and clears that identity's session.
-  static Future<void> logout() async {
-    _registrationGeneration++;
-    await requireDefaultController().updateUser(null, startSession: false);
-  }
-
   /// Unread agent-message count exposed for fully custom host UI.
   ///
   /// Prefer [badge] when only a standard dot or count badge is needed. For a

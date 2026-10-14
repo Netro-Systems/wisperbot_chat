@@ -1,7 +1,7 @@
 part of 'chat_controller_test.dart';
 
 void registerIdentitySyncTests(WisperBotConfig config) {
-  test('identity switch never sends the previous identity token', () async {
+  test('account and guest switches restore their isolated sessions', () async {
     final headers = <String?>[];
     final bodies = <Map<String, dynamic>>[];
     var count = 0;
@@ -29,40 +29,52 @@ void registerIdentitySyncTests(WisperBotConfig config) {
 
     await controller.updateUser(
       const WisperBotUser(
-        externalId: 'customer-1',
+        userId: 'customer-1',
         signature:
             '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
       ),
     );
 
     expect(headers, <String?>[null, null]);
-    expect(bodies.last['external_id'], 'customer-1');
+    expect(bodies.last['user_id'], 'customer-1');
     expect(bodies.last.containsKey('visitor_id'), isFalse);
     expect(controller.state.messages, isEmpty);
 
-    await controller.updateUser(null);
-    expect(headers, <String?>[null, null, 'token-2']);
+    await controller.updateUser(
+      const WisperBotUser(name: 'Guest'),
+    );
+    expect(headers, <String?>[null, null, 'token-2', 'token-1']);
     expect(bodies.last, <String, dynamic>{
       'key': 'test-widget',
-      'is_typing': false,
+      'active': true,
+      'visitor_id': 'visitor-1',
+      'name': 'Guest',
     });
-    expect(controller.state.phase, WisperBotChatPhase.idle);
+    expect(controller.state.phase, WisperBotChatPhase.ready);
     expect(controller.state.messages, isEmpty);
 
-    await controller.initialize();
-    expect(headers, <String?>[null, null, 'token-2', null]);
-    expect(bodies.last.containsKey('external_id'), isFalse);
-    expect(bodies.last.containsKey('visitor_id'), isFalse);
+    await controller.updateUser(
+      const WisperBotUser(
+        userId: 'customer-1',
+        signature:
+            '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      ),
+    );
+    expect(headers.last, 'token-2');
+    expect(bodies.last['user_id'], 'customer-1');
+    expect(bodies.last['visitor_id'], 'visitor-2');
 
     await controller.dispose();
     await client.close();
   });
 
-  test('logout continues when the best-effort typing stop fails', () async {
+  test('account-to-guest switch survives a typing-stop failure', () async {
     final store = MemorySessionStore();
     var sessionCalls = 0;
+    const account = WisperBotUser(userId: 'customer-1');
     final client = WisperBotClient.fromConfig(
       config: config,
+      user: account,
       httpClient: MockClient((request) async {
         if (request.url.path.endsWith('/typing')) {
           throw http.ClientException('offline');
@@ -84,12 +96,12 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     final controller = WisperBotChatController(client: client);
     await controller.initialize();
 
-    await controller.updateUser(null);
+    await controller.updateUser(const WisperBotUser(name: 'Guest'));
 
-    expect(sessionCalls, 1);
-    expect(store.values, isEmpty);
-    expect(controller.state.phase, WisperBotChatPhase.idle);
-    expect(controller.state.messages, isEmpty);
+    expect(sessionCalls, 2);
+    final accountNamespace = sessionNamespace(config: config, user: account);
+    expect(store.values[accountNamespace], isNotNull);
+    expect(controller.state.phase, WisperBotChatPhase.ready);
 
     await controller.dispose();
     await client.close();
@@ -129,7 +141,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('unsigned profile-only sessions remain memory-only', () async {
+  test('name-only guest sessions persist in the anonymous scope', () async {
     final store = MemorySessionStore();
     final client = WisperBotClient.fromConfig(
       config: const WisperBotConfig(
@@ -148,9 +160,18 @@ void registerIdentitySyncTests(WisperBotConfig config) {
 
     await controller.initialize();
 
-    expect(store.reads, isEmpty);
-    expect(store.writes, isEmpty);
-    expect(store.values, isEmpty);
+    final namespace = sessionNamespace(
+      config: const WisperBotConfig(
+        widgetKey: 'test-widget',
+        apiBaseUrl: 'https://chat.example.com',
+        enableOneSignal: false,
+        requireNotificationPermission: false,
+      ),
+      user: const WisperBotUser(name: 'Unverified display name'),
+    );
+    expect(store.reads, <String>[namespace]);
+    expect(store.writes, <String>[namespace]);
+    expect(store.values[namespace]?.token, isNotEmpty);
 
     await controller.dispose();
     await client.close();
@@ -227,7 +248,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       requireNotificationPermission: false,
     );
     const unsignedUser = WisperBotUser(
-      externalId: 'customer-123',
+      userId: 'customer-123',
       name: 'Jane Doe',
       email: 'jane@example.com',
     );
@@ -273,19 +294,76 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     final secondController = WisperBotChatController(client: secondClient);
     await secondController.initialize();
 
-    expect(store.reads, <String>[namespace, namespace]);
+    expect(store.reads, <String>[
+      namespace,
+      legacyAccountSessionNamespace(
+        config: unsignedConfig,
+        user: unsignedUser,
+      )!,
+      namespace,
+    ]);
     expect(store.writes, <String>[namespace, namespace]);
     expect(headers, <String?>[null, 'token-1']);
     expect(bodies.first.containsKey('visitor_id'), isFalse);
     expect(bodies.last['visitor_id'], 'visitor-1');
-    expect(bodies.last['external_id'], 'customer-123');
+    expect(bodies.last['user_id'], 'customer-123');
     expect(store.values[namespace]?.token, 'token-2');
 
     await secondController.dispose();
     await secondClient.close();
   });
 
-  test('changed profile does not restore a stale visitor session', () async {
+  test('legacy account namespace migrates once into schema v2', () async {
+    final store = MemorySessionStore();
+    const migrationConfig = WisperBotConfig(
+      widgetKey: 'test-widget',
+      apiBaseUrl: 'https://chat.example.com/base/',
+      enableOneSignal: false,
+      requireNotificationPermission: false,
+    );
+    const user = WisperBotUser(userId: 'customer-legacy');
+    final currentNamespace = sessionNamespace(
+      config: migrationConfig,
+      user: user,
+    );
+    final legacyNamespace = legacyAccountSessionNamespace(
+      config: migrationConfig,
+      user: user,
+    )!;
+    store.values[legacyNamespace] = WisperBotStoredSession(
+      visitorId: 'visitor-legacy',
+      token: 'token-legacy',
+      savedAt: DateTime.utc(2026),
+      schemaVersion: 1,
+    );
+    late http.Request request;
+    final client = WisperBotClient.fromConfig(
+      config: migrationConfig,
+      user: user,
+      httpClient: MockClient((incoming) async {
+        request = incoming;
+        return http.Response(jsonEncode(sessionResponse()), 200);
+      }),
+      sessionStore: store,
+    );
+    final controller = WisperBotChatController(client: client);
+
+    await controller.initialize();
+
+    expect(request.headers['X-Widget-Token'], 'token-legacy');
+    expect(
+      jsonDecode(request.body),
+      containsPair('visitor_id', 'visitor-legacy'),
+    );
+    expect(store.values[legacyNamespace], isNull);
+    expect(store.values[currentNamespace]?.schemaVersion, 2);
+    expect(store.deletes, contains(legacyNamespace));
+
+    await controller.dispose();
+    await client.close();
+  });
+
+  test('changed profile restores the same user ID session', () async {
     final store = MemorySessionStore();
     const profileConfig = WisperBotConfig(
       widgetKey: 'test-widget',
@@ -294,10 +372,12 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       requireNotificationPermission: false,
     );
     const original = WisperBotUser(
+      userId: 'customer-123',
       name: 'Mr Visitor',
       email: 'visitor@demo.com',
     );
     const updated = WisperBotUser(
+      userId: 'customer-123',
       name: 'Mr Visitor XX',
       email: 'visitor@demo.com',
     );
@@ -337,8 +417,9 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     final secondController = WisperBotChatController(client: secondClient);
     await secondController.initialize();
 
-    expect(headers, <String?>[null, null]);
-    expect(bodies.last.containsKey('visitor_id'), isFalse);
+    expect(headers, <String?>[null, 'token-1']);
+    expect(bodies.last['visitor_id'], 'visitor-1');
+    expect(bodies.last['user_id'], 'customer-123');
     expect(bodies.last['name'], 'Mr Visitor XX');
 
     await secondController.dispose();

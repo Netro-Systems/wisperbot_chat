@@ -176,9 +176,9 @@ class WisperBotChatController with WidgetsBindingObserver {
           oneSignalAppId != null &&
           oneSignalAppId.isNotEmpty) {
         await _oneSignalService.initialize(appId: oneSignalAppId);
-        final activeExternalId = _client._activeUser?.externalId;
-        if (activeExternalId != null && activeExternalId.isNotEmpty) {
-          await _oneSignalService.login(activeExternalId);
+        final activeUserId = _client._activeUser?.userId;
+        if (activeUserId != null && activeUserId.isNotEmpty) {
+          await _oneSignalService.login(activeUserId);
         }
         deviceId = await _oneSignalService.currentPushToken();
       }
@@ -753,14 +753,16 @@ class WisperBotChatController with WidgetsBindingObserver {
   ///
   /// The previous identity's token is never reused for [user]. Throws a typed
   /// [WisperBotException] when validation, storage, or initialization fails.
-  /// Passing `null` is treated as host-application logout: realtime and typing
-  /// stop, credentials and in-memory messages are cleared, and no anonymous
-  /// session is created until [initialize] is called again.
+  /// Use a name-only user to switch from an account to the installation-bound
+  /// guest. Both identities retain their own isolated stored sessions.
   Future<void> updateUser(
-    WisperBotUser? user, {
+    WisperBotUser user, {
     bool startSession = true,
   }) async {
     _ensureNotDisposed();
+    final previousUserId = _client._activeUser?.userId;
+    final switchingFromAccountToGuest =
+        previousUserId != null && user.userId == null;
     final shouldInitialize = startSession &&
         (_runtimeConfig.registerVisitorOnAppLaunch ||
             _state.phase != WisperBotChatPhase.idle ||
@@ -770,7 +772,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     unawaited(_client._stopRealtime().catchError((_) {}));
     _realtimeActive = false;
     _sessionRevision++;
-    if (user == null) {
+    if (switchingFromAccountToGuest) {
       await _stopTypingBestEffort();
       if (_runtimeConfig.enableOneSignal) {
         await _oneSignalService.logout();
@@ -785,7 +787,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     _recoveryAttempted = false;
     _realtimeConfig = null;
     _emit(WisperBotChatState.initial());
-    if (user == null || !shouldInitialize) return;
+    if (!shouldInitialize) return;
     _emit(_state.copyWith(
       phase: WisperBotChatPhase.initializing,
       connection: WisperBotConnectionState.connecting,

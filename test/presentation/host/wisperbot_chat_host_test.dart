@@ -59,14 +59,14 @@ void main() {
           sessionStore: _NoopSessionStore(),
         ),
         initialUser: const WisperBotUser(
-          externalId: 'customer-1',
+          userId: 'customer-1',
           name: 'Jane Doe',
         ),
       ));
       await tester.pumpAndSettle();
     }, () => httpClient);
 
-    expect(bodies.single['external_id'], 'customer-1');
+    expect(bodies.single['user_id'], 'customer-1');
     expect(bodies.single['name'], 'Jane Doe');
   });
 

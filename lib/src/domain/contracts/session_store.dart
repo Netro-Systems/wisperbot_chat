@@ -10,7 +10,7 @@ class WisperBotStoredSession {
     required this.savedAt,
     this.preChatCompleted = false,
     this.identityFingerprint,
-    this.schemaVersion = 1,
+    this.schemaVersion = 2,
   });
 
   /// Backend visitor identifier bound to [token].

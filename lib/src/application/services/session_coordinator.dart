@@ -29,6 +29,7 @@ final class _SessionCoordinator {
   late String _namespace;
   WisperBotUser? _activeUser;
   WisperBotStoredSession? _session;
+  String? _restoredLegacyNamespace;
 
   WisperBotUser? get activeUser => _activeUser;
 
@@ -56,7 +57,7 @@ final class _SessionCoordinator {
     final result = await _remoteDataSource.startSession(
       widgetKey: config.widgetKey,
       user: WisperBotUser(
-        externalId: active?.externalId,
+        userId: active?.userId,
         name: preChat.name ?? active?.name,
         email: preChat.email ?? active?.email,
         avatarUrl: active?.avatarUrl,
@@ -88,22 +89,7 @@ final class _SessionCoordinator {
     _session = completed;
   }
 
-  Future<bool> switchUser(WisperBotUser? user) async {
-    // Passing null is the host application's logout signal, even when the
-    // current chat scope is already anonymous. Always discard that scope so a
-    // later initialize cannot restore pre-logout visitor credentials.
-    if (user == null) {
-      final previousNamespace = _namespace;
-      await _deleteStoredSession(previousNamespace);
-      _activeUser = null;
-      _unsignedEphemeralScope = createEphemeralScopeId();
-      _namespace = sessionNamespace(config: config, user: null);
-      if (_namespace != previousNamespace) {
-        await _deleteStoredSession(_namespace);
-      }
-      _session = null;
-      return true;
-    }
+  Future<bool> switchUser(WisperBotUser user) async {
     if (_sameUser(_activeUser, user)) return false;
     validateWisperBotUser(user);
 
@@ -116,18 +102,24 @@ final class _SessionCoordinator {
     );
     _activeUser = user;
     if (nextNamespace == previousNamespace) {
-      await _deleteStoredSession(nextNamespace);
-      _session = null;
+      // A name/email/avatar change is profile synchronization, not a new
+      // identity. Retain the token and refresh the profile on the same thread.
       return true;
     }
     _unsignedEphemeralScope = nextEphemeral;
     _namespace = nextNamespace;
     _session = null;
+    _restoredLegacyNamespace = null;
     return true;
   }
 
   Future<void> clear() async {
     await _deleteStoredSession(_namespace);
+    final legacyNamespace = _restoredLegacyNamespace;
+    if (legacyNamespace != null && legacyNamespace != _namespace) {
+      await _deleteStoredSession(legacyNamespace);
+    }
+    _restoredLegacyNamespace = null;
     _session = null;
   }
 
@@ -148,14 +140,25 @@ final class _SessionCoordinator {
   Future<WisperBotStoredSession?> _readStoredSession() async {
     if (!_shouldPersistActiveSession) return null;
     try {
-      final stored = await _sessionStore.read(_namespace);
+      var stored = await _sessionStore.read(_namespace);
+      if (stored == null) {
+        final legacyNamespace = legacyAccountSessionNamespace(
+          config: config,
+          user: _activeUser,
+        );
+        if (legacyNamespace != null && legacyNamespace != _namespace) {
+          stored = await _sessionStore.read(legacyNamespace);
+          if (stored != null) _restoredLegacyNamespace = legacyNamespace;
+        }
+      }
       if (stored == null) return null;
       final expected = wisperBotUserProfileFingerprint(_activeUser);
       final saved = stored.identityFingerprint;
       final legacyIdentifiedSession = saved == null &&
           _activeUser != null &&
           !isAnonymousEquivalentUser(_activeUser);
-      if (legacyIdentifiedSession || (saved != null && saved != expected)) {
+      if (stored.schemaVersion >= 2 &&
+          (legacyIdentifiedSession || (saved != null && saved != expected))) {
         await _deleteStoredSession(_namespace);
         return null;
       }
@@ -175,6 +178,11 @@ final class _SessionCoordinator {
     if (!_shouldPersistActiveSession) return;
     try {
       await _sessionStore.write(_namespace, session);
+      final legacyNamespace = _restoredLegacyNamespace;
+      if (legacyNamespace != null && legacyNamespace != _namespace) {
+        await _sessionStore.delete(legacyNamespace);
+        _restoredLegacyNamespace = null;
+      }
     } on WisperBotException {
       rethrow;
     } on Object catch (error) {
@@ -201,7 +209,7 @@ final class _SessionCoordinator {
         savedAt: session.savedAt,
         preChatCompleted: session.preChatCompleted,
         identityFingerprint: wisperBotUserProfileFingerprint(_activeUser),
-        schemaVersion: session.schemaVersion,
+        schemaVersion: wisperBotSessionSchemaVersion,
       );
 
   Future<void> _deleteStoredSession(String namespace) async {
@@ -224,7 +232,7 @@ final class _SessionCoordinator {
       unsignedStableIdentityValue(_activeUser) != null;
 
   bool _sameUser(WisperBotUser? left, WisperBotUser? right) =>
-      left?.externalId == right?.externalId &&
+      left?.userId == right?.userId &&
       left?.name == right?.name &&
       left?.email == right?.email &&
       left?.avatarUrl == right?.avatarUrl &&
