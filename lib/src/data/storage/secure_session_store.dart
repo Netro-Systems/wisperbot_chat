@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../domain/contracts/session_store.dart';
 
@@ -14,6 +16,7 @@ class FlutterSecureWisperBotSessionStore implements WisperBotSessionStore {
   final FlutterSecureStorage _storage;
   static const int _maxStoredSessions = 15;
   static const String _indexKey = 'wisperbot_chat_session_index_v1';
+  static const String _installationKey = 'wisperbot_chat_installation_id_v1';
 
   @override
   Future<WisperBotStoredSession?> read(String namespace) async {
@@ -33,6 +36,7 @@ class FlutterSecureWisperBotSessionStore implements WisperBotSessionStore {
       final preChatCompleted = value['pre_chat_completed'];
       final identityFingerprint = value['identity_fingerprint'];
       final schemaVersion = value['schema_version'];
+      final installationId = value['installation_id'];
       if (visitorId is! String ||
           visitorId.isEmpty ||
           token is! String ||
@@ -41,8 +45,14 @@ class FlutterSecureWisperBotSessionStore implements WisperBotSessionStore {
           (preChatCompleted != null && preChatCompleted is! bool) ||
           (identityFingerprint != null && identityFingerprint is! String) ||
           schemaVersion is! int ||
-          schemaVersion != 1) {
+          (schemaVersion != 1 && schemaVersion != 2) ||
+          (installationId != null && installationId is! String)) {
         throw const FormatException('Session record is incomplete.');
+      }
+      if (schemaVersion >= 2 &&
+          installationId != await _currentInstallationId()) {
+        await delete(namespace);
+        return null;
       }
       return WisperBotStoredSession(
         visitorId: visitorId,
@@ -63,6 +73,7 @@ class FlutterSecureWisperBotSessionStore implements WisperBotSessionStore {
     String namespace,
     WisperBotStoredSession session,
   ) async {
+    final installationId = await _currentInstallationId();
     await _writeValue(
       key: namespace,
       value: jsonEncode(<String, Object>{
@@ -72,7 +83,8 @@ class FlutterSecureWisperBotSessionStore implements WisperBotSessionStore {
         'pre_chat_completed': session.preChatCompleted,
         if (session.identityFingerprint != null)
           'identity_fingerprint': session.identityFingerprint!,
-        'schema_version': session.schemaVersion,
+        'installation_id': installationId,
+        'schema_version': 2,
       }),
     );
     await _recordSessionWrite(namespace, session.savedAt);
@@ -176,6 +188,18 @@ class FlutterSecureWisperBotSessionStore implements WisperBotSessionStore {
       await _storage.delete(key: key);
       await _storage.write(key: key, value: value);
     }
+  }
+
+  Future<String> _currentInstallationId() async {
+    final preferences = await SharedPreferences.getInstance();
+    final existing = preferences.getString(_installationKey);
+    if (existing != null && existing.isNotEmpty) return existing;
+
+    final random = Random.secure();
+    final bytes = List<int>.generate(24, (_) => random.nextInt(256));
+    final created = base64UrlEncode(bytes).replaceAll('=', '');
+    await preferences.setString(_installationKey, created);
+    return created;
   }
 }
 

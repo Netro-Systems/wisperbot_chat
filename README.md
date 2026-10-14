@@ -33,7 +33,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  wisperbot_chat: ^0.2.1
+  wisperbot_chat: ^0.2.3
 ```
 
 Or run:
@@ -335,27 +335,47 @@ punctuation is excluded from the link target. If opening fails, the chat shows
 
 ---
 
-### 👤 Verified & Authenticated Users
-To associate the shared chat runtime with a registered user, call `identify`
-after initialization with an HMAC signature computed on your backend:
+### 👤 Authenticated Users
+To associate chat history with a registered user, call `identify` after
+initialization. Normal integrations send only the stable user ID and mutable
+profile fields:
 
 ```dart
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 
 await WisperBotChat.identify(
   const WisperBotUser(
-    externalId: 'user_123',
-    name: 'John Doe',
-    email: 'user@example.com',
-    signature: 'backend_hmac_signature',
+    userId: '48291',
+    name: 'Jane Doe',
+    email: 'jane@example.com',
   ),
 );
 ```
 
-Use `externalId` as the stable identity. Names, email addresses, avatars, and
+Use `userId` as the stable identity. The legacy `externalId` parameter remains
+available as a compatibility alias. Names, email addresses, avatars, and
 custom fields are profile attributes and can change. Do not call `identify`
 with placeholder or randomly generated profile data: each distinct identity can
 create a separate visitor in the dashboard.
+
+For a guest, pass only the name when you have it:
+
+```dart
+await WisperBotChat.identify(
+  const WisperBotUser(name: 'Guest User'),
+);
+```
+
+Guest history survives normal app restarts on the same installation. An
+uninstall/reinstall starts a new guest history. Logged-in users recover their
+server history after reinstall or on another device through `userId`.
+
+#### Optional advanced identity verification
+
+HMAC verification is disabled by default, so no signature or backend identity
+endpoint is required. If the widget owner explicitly enables verification,
+generate the existing HMAC on a trusted backend and pass it as `signature`.
+Unsigned or invalid user IDs are not trusted while that setting is enabled.
 
 If the real profile is available before `runApp`, identify it after
 `initialize` and before `runApp`; this cancels pending anonymous registration.
@@ -364,8 +384,17 @@ If the profile loads later, use `registerVisitorOnAppLaunch: false`, then call
 placement, while the visitor session remains deferred until chat opens.
 
 #### Switching Accounts & Logout
+
 * **Switch user**: Call `WisperBotChat.identify(newUser)` after the host application's authenticated user changes.
-* **Logout**: Call `WisperBotChat.logout()` to wipe active credentials and clear local conversation state securely.
+* **Application logout**: Switch to a name-only guest:
+
+  ```dart
+  await WisperBotChat.identify(
+    const WisperBotUser(name: 'Guest'),
+  );
+  ```
+
+  The SDK restores the installation-bound guest history and preserves the previous account's isolated history for a later login.
 * **Headless runtime**: Pass `user` to `WisperBotClient`, or call `controller.updateUser`, when managing an explicit controller.
 * **App shutdown**: Call `WisperBotChat.shutdown()` only when permanently tearing down or reconfiguring the shared SDK runtime. It disposes resources without deleting persisted session credentials.
 

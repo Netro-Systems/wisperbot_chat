@@ -109,14 +109,14 @@ void main() {
         sessionStore: const _NoopSessionStore(),
       );
       await WisperBotChat.identify(
-        const WisperBotUser(externalId: 'customer-1', name: 'Jane'),
+        const WisperBotUser(userId: 'customer-1', name: 'Jane'),
       );
       await tester.pumpWidget(const MaterialApp(home: SizedBox()));
       await tester.pumpAndSettle();
     }, () => client);
 
     expect(bodies, hasLength(1));
-    expect(bodies.single['external_id'], 'customer-1');
+    expect(bodies.single['user_id'], 'customer-1');
     expect(bodies.single['name'], 'Jane');
   });
 

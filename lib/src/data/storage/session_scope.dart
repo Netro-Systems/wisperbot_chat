@@ -8,7 +8,8 @@ import '../../configuration/wisperbot_config.dart';
 import '../../domain/entities/wisperbot_user.dart';
 import '../../domain/errors/wisperbot_exception.dart';
 
-const int wisperBotSessionSchemaVersion = 1;
+const int wisperBotSessionSchemaVersion = 2;
+const int _wisperBotSessionNamespaceVersion = 1;
 
 Uri validateAndCanonicalizeBaseUrl(String value) {
   final uri = Uri.tryParse(value.trim());
@@ -64,16 +65,23 @@ void validateWisperBotConfig(WisperBotConfig config) {
 
 void validateWisperBotUser(WisperBotUser? user) {
   if (user == null) return;
-  final externalId = user.externalId;
-  if (externalId != null &&
-      (externalId.isEmpty || externalId.trim() != externalId)) {
+  final userId = user.userId;
+  if (userId != null && (userId.isEmpty || userId.trim() != userId)) {
     throw const WisperBotException(
       code: WisperBotErrorCode.configuration,
-      message: 'externalId must be non-empty with no surrounding whitespace.',
+      message: 'userId must be non-empty with no surrounding whitespace.',
       retryable: false,
     );
   }
-  if ((externalId?.length ?? 0) > 190 ||
+  final externalId = user.externalId;
+  if (userId != null && externalId != null && userId != externalId) {
+    throw const WisperBotException(
+      code: WisperBotErrorCode.configuration,
+      message: 'userId and externalId must match when both are provided.',
+      retryable: false,
+    );
+  }
+  if ((userId?.length ?? 0) > 190 ||
       (user.email?.length ?? 0) > 190 ||
       (user.name?.length ?? 0) > 120 ||
       (user.avatarUrl?.toString().length ?? 0) > 512 ||
@@ -84,10 +92,10 @@ void validateWisperBotUser(WisperBotUser? user) {
       retryable: false,
     );
   }
-  if (user.signature != null && externalId == null && user.email == null) {
+  if (user.signature != null && userId == null) {
     throw const WisperBotException(
       code: WisperBotErrorCode.configuration,
-      message: 'A signature requires an externalId or email.',
+      message: 'A signature requires a userId.',
       retryable: false,
     );
   }
@@ -123,63 +131,54 @@ String sessionNamespace({
   String? unsignedEphemeralScope,
 }) {
   final canonical = validateAndCanonicalizeBaseUrl(config.apiBaseUrl);
-  final anonymous = isAnonymousEquivalentUser(user);
-  final signature = user?.signature;
-  final signedValue = user?.externalId ?? user?.email;
-  final unsignedStableValue = unsignedStableIdentityValue(user);
-  final identityScope = signature != null && signedValue != null
-      ? 'signed:$signedValue\u0000$signature'
-      : anonymous
-          ? 'anonymous'
-          : unsignedStableValue != null
-              ? 'unsigned-stable:$unsignedStableValue'
-              : 'unsigned:${unsignedEphemeralScope ?? createEphemeralScopeId()}';
+  final stableUserId = user?.userId;
+  final identityScope =
+      stableUserId == null ? 'anonymous' : 'user:$stableUserId';
   final material = <String>[
     canonical.toString(),
     config.widgetKey,
     identityScope,
-    'v$wisperBotSessionSchemaVersion',
+    'v$_wisperBotSessionNamespaceVersion',
   ].join('\u0000');
   return 'wisperbot_chat_${sha256.convert(utf8.encode(material))}';
 }
 
-bool isAnonymousEquivalentUser(WisperBotUser? user) =>
-    user == null ||
-    (user.externalId == null &&
-        user.name == null &&
-        user.email == null &&
-        user.avatarUrl == null &&
-        user.signature == null);
+/// Returns the pre-0.2.2 account namespace so its schema-v1 credentials can be
+/// moved once into the canonical user-ID scope. Email-only/profile-only scopes
+/// are deliberately excluded because those fields no longer define identity.
+String? legacyAccountSessionNamespace({
+  required WisperBotConfig config,
+  required WisperBotUser? user,
+}) {
+  final stableUserId = user?.userId;
+  if (stableUserId == null) return null;
+  final canonical = validateAndCanonicalizeBaseUrl(config.apiBaseUrl);
+  final identityScope = user?.signature == null
+      ? 'unsigned-stable:$stableUserId'
+      : 'signed:$stableUserId\u0000${user!.signature}';
+  final material = <String>[
+    canonical.toString(),
+    config.widgetKey,
+    identityScope,
+    'v1',
+  ].join('\u0000');
+  return 'wisperbot_chat_${sha256.convert(utf8.encode(material))}';
+}
+
+bool isAnonymousEquivalentUser(WisperBotUser? user) => user?.userId == null;
 
 String? unsignedStableIdentityValue(WisperBotUser? user) {
   if (user == null || user.signature != null) return null;
-  return user.externalId ?? user.email;
+  return user.userId;
 }
 
-/// Returns a privacy-safe hash used to detect profile changes on restoration.
+/// Returns a privacy-safe hash of the durable identity. Mutable profile fields
+/// intentionally do not invalidate the visitor token.
 String wisperBotUserProfileFingerprint(WisperBotUser? user) {
   final profile = <String, Object?>{
-    'external_id': user?.externalId,
-    'name': user?.name,
-    'email': user?.email,
-    'avatar': user?.avatarUrl?.toString(),
-    'signature': user?.signature,
-    'custom_fields': _canonicalJsonValue(user?.customFields),
+    'user_id': user?.userId,
   };
   return sha256.convert(utf8.encode(jsonEncode(profile))).toString();
-}
-
-Object? _canonicalJsonValue(Object? value) {
-  if (value is Map) {
-    final keys = value.keys.map((key) => key.toString()).toList()..sort();
-    return <String, Object?>{
-      for (final key in keys) key: _canonicalJsonValue(value[key]),
-    };
-  }
-  if (value is Iterable) {
-    return value.map(_canonicalJsonValue).toList(growable: false);
-  }
-  return value;
 }
 
 String presentationScopeKey(
@@ -187,11 +186,7 @@ String presentationScopeKey(
   WisperBotUser? user,
 }) {
   final canonical = validateAndCanonicalizeBaseUrl(config.apiBaseUrl);
-  final identity = user?.signature != null
-      ? '${user?.externalId ?? user?.email}\u0000${user?.signature}'
-      : user == null
-          ? 'anonymous'
-          : 'unsigned:${user.externalId ?? ''}:${user.email ?? ''}';
+  final identity = user?.userId == null ? 'anonymous' : 'user:${user!.userId}';
   return sha256
       .convert(
         utf8.encode(

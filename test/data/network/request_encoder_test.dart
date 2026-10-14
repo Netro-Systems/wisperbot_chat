@@ -13,7 +13,7 @@ void main() {
       user: const WisperBotUser(
         name: 'Visitor',
         email: 'visitor@example.test',
-        externalId: 'customer-1',
+        userId: 'customer-1',
         signature: 'server-generated-signature',
       ),
       storedSession: WisperBotStoredSession(
@@ -29,7 +29,7 @@ void main() {
       'visitor_id': 'visitor-1',
       'name': 'Visitor',
       'email': 'visitor@example.test',
-      'external_id': 'customer-1',
+      'user_id': 'customer-1',
       'user_hash': 'server-generated-signature',
     });
   });
@@ -56,6 +56,17 @@ void main() {
         'token': 'onesignal-sub-id-123',
       },
     });
+  });
+
+  test('legacy externalId alias emits the canonical user_id field', () {
+    final body = encoder.sessionBody(
+      widgetKey: 'widget-key',
+      user: const WisperBotUser(externalId: 'legacy-customer'),
+      storedSession: null,
+    );
+
+    expect(body['user_id'], 'legacy-customer');
+    expect(body.containsKey('external_id'), isFalse);
   });
 
   test('session body sends custom fields directly', () {

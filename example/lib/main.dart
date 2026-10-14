@@ -13,12 +13,15 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
   final widgetKey = dotenv.get('WISPERBOT_WIDGET_KEY').trim();
-  final configuredApiBaseUrl = dotenv.maybeGet('WISPERBOT_API_BASE_URL')?.trim();
+  final configuredApiBaseUrl =
+      dotenv.maybeGet('WISPERBOT_API_BASE_URL')?.trim();
   final oneSignalAppId = dotenv.maybeGet('ONESIGNAL_APP_ID')?.trim();
   final notificationsConfigured = oneSignalAppId?.isNotEmpty == true;
   await WisperBotChat.initialize(
     widgetKey: widgetKey,
-    apiBaseUrl: configuredApiBaseUrl?.isNotEmpty == true ? configuredApiBaseUrl! : 'https://wisperbot.com',
+    apiBaseUrl: configuredApiBaseUrl?.isNotEmpty == true
+        ? configuredApiBaseUrl!
+        : 'https://wisperbot.com',
     navigatorKey: navigatorKey,
     requireNotificationPermission: notificationsConfigured,
     registerVisitorOnAppLaunch: true,
@@ -27,14 +30,11 @@ Future<void> main() async {
     oneSignalAppId: notificationsConfigured ? oneSignalAppId : null,
   );
 
-  // Call this after authentication is complete and the user's profile is available.
-  // The provided name and email will be displayed in the WisperBot admin panel.
   await WisperBotChat.identify(
     const WisperBotUser(
-      externalId: 'user_123',
-      name: 'John Doe',
-      email: 'user@example.com',
-      signature: 'backend_hmac_signature',
+      userId: '48291',
+      name: 'Jane Doe',
+      email: 'jane@example.com',
     ),
   );
 
@@ -57,7 +57,8 @@ class ExampleApp extends StatelessWidget {
 class ExampleHome extends StatelessWidget {
   const ExampleHome({super.key});
 
-  Future<void> _openChat(BuildContext context, {WisperBotPresentation? presentation}) async {
+  Future<void> _openChat(BuildContext context,
+      {WisperBotPresentation? presentation}) async {
     try {
       await WisperBotChat.open(
         context,

@@ -39,14 +39,14 @@ bundles `.env` as an application asset, so it is suitable only for public client
 configuration such as the widget key and API base URL. Never put identity
 secrets, workspace credentials, or management API credentials in it.
 
-The example starts anonymously and deliberately does not identify a fake demo
-visitor. In a real app, call `WisperBotChat.identify` only after the actual
-signed-in profile is available, and use a stable application user ID:
+The example identifies one sample user directly after initialization. In a real
+app, call `WisperBotChat.identify` only after the actual signed-in profile is
+available, and use a stable application user ID:
 
 ```dart
 await WisperBotChat.identify(
   WisperBotUser(
-    externalId: profile.id,
+    userId: profile.id,
     name: profile.name,
     email: profile.email,
   ),
@@ -57,3 +57,9 @@ Do not send placeholder names or temporary email addresses. If profile loading
 happens after the first app frame, initialize with
 `registerVisitorOnAppLaunch: false`; visual launcher configuration still loads,
 and the identified session starts when chat is opened.
+
+For a guest whose name is known, identify with only
+`WisperBotUser(name: 'Guest User')`. WisperBot restores that guest on normal
+app restarts. Uninstalling and reinstalling creates a new guest, while a
+logged-in user can recover server history on any installation through `userId`.
+HMAC identity verification is optional and disabled by default.

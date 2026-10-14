@@ -1,7 +1,7 @@
 name: wisperbot_chat
 description: A customizable Flutter SDK for adding WisperBot customer chat to mobile, web, and desktop apps.
 repository: https://github.com/Netro-Systems/wisperbot_chat
-version: 0.2.1
+version: 0.2.3
 
 environment:
   sdk: ^3.5.0
@@ -23,6 +23,7 @@ dependencies:
   logger: ^2.7.0
   onesignal_flutter: ^5.6.6
   record: ^7.1.1
+  shared_preferences: ^2.5.3
   url_launcher: ^6.3.0
 
 dev_dependencies:
