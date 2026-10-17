@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.4 - 2026-10-17
+
+### Fixed
+
+- Login during an in-flight guest session now fetches account history after the guest request finishes persisting in its own scope. Delayed old session responses no longer overwrite account state or save guest credentials under an account namespace.
+- Identifying the same user during initialization preserves the pending history request.
+- Launch-time visitor registration no longer requests or requires notification permission. When permission is mandatory, it is deferred until the user opens chat, where denial is handled by the existing chat-opening UI.
+- Launch registration reads an existing OneSignal subscription without opting in, prompting, or waiting for subscription retries.
+
 ## 0.2.3 - 2026-10-14
 
 ### Removed

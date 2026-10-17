@@ -33,7 +33,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  wisperbot_chat: ^0.2.3
+  wisperbot_chat: ^0.2.4
 ```
 
 Or run:
@@ -299,8 +299,8 @@ Future<void> runHeadlessChat(WisperBotUser? user) async {
 | `diagnostics` | `WisperBotDiagnosticsCallback?` | `null` | Callback receiving redacted operational metrics and lifecycle events. |
 | `oneSignalAppId` | `String?` | `null` | OneSignal App ID used for push notification registration. |
 | `enableOneSignal` | `bool` | `true` | Whether device push notification tokens are registered on session start. |
-| `requireNotificationPermission` | `bool` | `true` | Requires notification permission before chat starts on Android or iOS. |
-| `registerVisitorOnAppLaunch` | `bool` | `true` | Registers visitor presence after the first app frame. When false, registration waits until chat opens. |
+| `requireNotificationPermission` | `bool` | `true` | Requires notification permission when chat is opened on Android or iOS. It does not block launch-time visitor registration. |
+| `registerVisitorOnAppLaunch` | `bool` | `true` | Registers visitor presence after the first app frame without requesting notification permission. When false, registration waits until chat opens. |
 | `sessionStore` | `WisperBotSessionStore?` | `null` | Optional custom storage for identity-scoped session credentials. |
 | `navigatorKey` | `GlobalKey<NavigatorState>?` | `null` | Enables automatic chat navigation when a push notification is tapped. Use the same key on your `MaterialApp` or `CupertinoApp`. |
 | `onNotificationTapped` | `void Function(Map<String, dynamic>)?` | `null` | Optional callback that intercepts notification taps instead of automatic navigation. |
@@ -336,6 +336,8 @@ punctuation is excluded from the link target. If opening fails, the chat shows
 ---
 
 ### 👤 Authenticated Users
+Identity changes wait for an already-running session request to finish saving in its original guest/account scope, then restore the requested user ID. Await `identify(...)` before opening chat after login. A delayed guest response cannot replace account history, and repeated identification of the same user does not cancel initialization.
+
 To associate chat history with a registered user, call `identify` after
 initialization. Normal integrations send only the stable user ID and mutable
 profile fields:
@@ -446,11 +448,15 @@ prompt when notifications are disabled and the OS permits a request. Chat starts
 only after permission is granted. If another prompt cannot be shown, a snackbar
 says: "Enable notifications from settings to use the support feature."
 After enabling notifications in settings, the user can tap chat again.
+When `registerVisitorOnAppLaunch` is `true`, visitor registration remains eager
+but never requests or requires notification permission. Any existing OneSignal
+subscription ID is attached without showing a prompt. Permission is enforced
+later, when the user opens chat.
 The launcher preloads visual widget configuration for API colors and placement,
-but defers chat initialization and the notification permission prompt until
-tapped when this option is enabled.
-Direct screens, embedded views, and headless controllers enforce the same session
-requirement; custom UI should handle `WisperBotErrorCode.notificationPermission`.
+and defers the notification permission prompt until tapped.
+`WisperBotChat.open` and the built-in launcher enforce this requirement. Advanced
+headless controllers enforce it when `initialize()` starts a session; custom UI
+should handle `WisperBotErrorCode.notificationPermission`.
 The option defaults to `true` and requires OneSignal to be enabled with an app ID. Set it to `false` when notification permission should not gate chat, including web integrations.
 Open chat from a context with a `ScaffoldMessenger` to show the snackbar.
 
