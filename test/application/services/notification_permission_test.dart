@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -6,6 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 import 'package:wisperbot_chat/src/configuration/wisperbot_config.dart';
 import 'package:wisperbot_chat/src/application/services/widget_onesignal_service.dart';
+
+import '../../support/fixtures/widget_api_fixtures.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -110,6 +114,57 @@ void main() {
       requireNotificationPermission: false,
     ));
     expect(requests, 0);
+  });
+
+  testWidgets('launch registration defers required permission until chat opens',
+      (tester) async {
+    final sessionBodies = <Map<String, dynamic>>[];
+    final client = MockClient((request) async {
+      if (request.method == 'POST') {
+        sessionBodies.add(jsonDecode(request.body) as Map<String, dynamic>);
+      }
+      return http.Response(jsonEncode(sessionResponse()), 200);
+    });
+
+    await http.runWithClient(() async {
+      await WisperBotChat.initialize(
+        widgetKey: 'launch-registration',
+        apiBaseUrl: 'https://chat.example.com',
+        oneSignalAppId: 'app-id',
+        registerVisitorOnAppLaunch: true,
+        requireNotificationPermission: true,
+        sessionStore: const _NoopSessionStore(),
+      );
+      await WisperBotChat.identify(
+        const WisperBotUser(name: 'Guest User'),
+      );
+
+      expect(requests, 0);
+      expect(sessionBodies, hasLength(1));
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => WisperBotChat.open(context),
+              child: const Text('Open support'),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open support'));
+      await tester.pumpAndSettle();
+
+      expect(requests, 1);
+      expect(
+        find.text(
+            'Enable notifications from settings to use the support feature.'),
+        findsOneWidget,
+      );
+      expect(find.byType(WisperBotChatScreen), findsNothing);
+      expect(sessionBodies, hasLength(1));
+    }, () => client);
   });
 
   testWidgets('iOS denial offers Settings and opens app settings',
@@ -219,4 +274,17 @@ void main() {
       await tester.pumpAndSettle();
     }, () => client);
   });
+}
+
+final class _NoopSessionStore implements WisperBotSessionStore {
+  const _NoopSessionStore();
+
+  @override
+  Future<void> delete(String namespace) async {}
+
+  @override
+  Future<WisperBotStoredSession?> read(String namespace) async => null;
+
+  @override
+  Future<void> write(String namespace, WisperBotStoredSession session) async {}
 }

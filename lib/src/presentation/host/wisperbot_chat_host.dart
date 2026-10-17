@@ -64,7 +64,9 @@ class _WisperBotChatHostState extends State<WisperBotChatHost> {
     _controller = WisperBotChatController(client: _client);
     _initializeNotifications();
     if (widget.config.registerVisitorOnAppLaunch) {
-      unawaited(_controller.initialize().catchError((_) {}));
+      unawaited(
+        _controller.initializeForLaunchRegistration().catchError((_) {}),
+      );
     }
   }
 

@@ -72,11 +72,13 @@ class WisperBotConfig {
   /// Whether OneSignal push notification device registration is enabled.
   final bool enableOneSignal;
 
-  /// Requires notification permission before chat starts. Requires OneSignal
-  /// to be enabled with an app ID on Android or iOS.
+  /// Requires notification permission when chat is opened. Launch-time visitor
+  /// registration remains permission-neutral. Requires OneSignal to be enabled
+  /// with an app ID on Android or iOS.
   final bool requireNotificationPermission;
 
-  /// Whether the SDK registers visitor presence when the app launches.
+  /// Whether the SDK registers visitor presence when the app launches without
+  /// requesting notification permission.
   ///
   /// Opening chat still creates the visitor session required by the chat API
   /// when this is disabled.

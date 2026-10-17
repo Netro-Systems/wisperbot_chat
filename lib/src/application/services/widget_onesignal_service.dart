@@ -158,7 +158,8 @@ final class WidgetOneSignalService {
     }
 
     try {
-      for (var attempt = 1; attempt <= 8; attempt++) {
+      final maxAttempts = ensureReady ? 8 : 1;
+      for (var attempt = 1; attempt <= maxAttempts; attempt++) {
         final subscriptionId = OneSignal.User.pushSubscription.id;
         if (subscriptionId != null && subscriptionId.isNotEmpty) {
           if (kDebugMode) {
@@ -168,7 +169,9 @@ final class WidgetOneSignalService {
           }
           return subscriptionId;
         }
-        await Future<void>.delayed(const Duration(milliseconds: 350));
+        if (attempt < maxAttempts) {
+          await Future<void>.delayed(const Duration(milliseconds: 350));
+        }
       }
       return null;
     } catch (_) {

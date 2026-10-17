@@ -154,7 +154,9 @@ abstract final class WisperBotChat {
           !config.registerVisitorOnAppLaunch) {
         return;
       }
-      unawaited(controller.initialize().catchError((_) {}));
+      unawaited(
+        controller.initializeForLaunchRegistration().catchError((_) {}),
+      );
     });
   }
 
@@ -164,11 +166,16 @@ abstract final class WisperBotChat {
     final config = _requireDefaultConfig();
     final controller = requireDefaultController();
     _registrationGeneration++;
-    await controller.updateUser(
-      user,
-      startSession: config.registerVisitorOnAppLaunch ||
-          controller.state.phase != WisperBotChatPhase.idle,
-    );
+    final startSession = config.registerVisitorOnAppLaunch ||
+        controller.state.phase != WisperBotChatPhase.idle;
+    if (config.registerVisitorOnAppLaunch) {
+      await controller.updateUserForLaunchRegistration(
+        user,
+        startSession: startSession,
+      );
+    } else {
+      await controller.updateUser(user, startSession: startSession);
+    }
   }
 
   /// Unread agent-message count exposed for fully custom host UI.

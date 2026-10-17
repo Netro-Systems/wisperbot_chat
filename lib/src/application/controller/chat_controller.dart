@@ -107,14 +107,24 @@ class WisperBotChatController with WidgetsBindingObserver {
   /// [WisperBotChatPhase.ready], [WisperBotChatPhase.awaitingPreChat], or
   /// [WisperBotChatPhase.failure]. Throws a typed [WisperBotException] when
   /// configuration, storage, transport, or response validation fails.
-  Future<void> initialize() {
+  Future<void> initialize() => _initialize(requestNotificationPermission: true);
+
+  /// Registers an eager visitor session without prompting for notifications.
+  @internal
+  Future<void> initializeForLaunchRegistration() =>
+      _initialize(requestNotificationPermission: false);
+
+  Future<void> _initialize({required bool requestNotificationPermission}) {
     _ensureNotDisposed();
     if (_state.phase == WisperBotChatPhase.ready) {
       return Future<void>.value();
     }
     final active = _initializing;
     if (active != null) return active;
-    final future = _initializeInternal();
+    final future = _initializeInternal(
+      _sessionRevision,
+      requestNotificationPermission: requestNotificationPermission,
+    );
     _initializing = future;
     return future.whenComplete(() {
       if (identical(_initializing, future)) _initializing = null;
@@ -150,7 +160,10 @@ class WisperBotChatController with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _initializeInternal() async {
+  Future<void> _initializeInternal(
+    int revision, {
+    required bool requestNotificationPermission,
+  }) async {
     final started = DateTime.now();
     _observeLifecycle();
     _emit(
@@ -161,7 +174,9 @@ class WisperBotChatController with WidgetsBindingObserver {
       ),
     );
     try {
-      await _oneSignalService.ensureChatPermission(_runtimeConfig);
+      if (requestNotificationPermission) {
+        await _oneSignalService.ensureChatPermission(_runtimeConfig);
+      }
       final configurationLoading = _configurationLoading;
       if (configurationLoading != null) {
         try {
@@ -180,10 +195,16 @@ class WisperBotChatController with WidgetsBindingObserver {
         if (activeUserId != null && activeUserId.isNotEmpty) {
           await _oneSignalService.login(activeUserId);
         }
-        deviceId = await _oneSignalService.currentPushToken();
+        deviceId = await _oneSignalService.currentPushToken(
+          ensureReady: requestNotificationPermission,
+        );
       }
 
+      if (_disposed || revision != _sessionRevision) return;
       final result = await _client._startSession(deviceId: deviceId);
+      // An identity change waits for this request to persist in its original
+      // scope, but its history must never replace the next identity's state.
+      if (_disposed || revision != _sessionRevision) return;
       _validatePreChatFields(result.widget);
       final preChatSatisfied = result.session.preChatCompleted ||
           _activeUserSatisfiesPreChat(result.widget);
@@ -217,6 +238,7 @@ class WisperBotChatController with WidgetsBindingObserver {
         duration: DateTime.now().difference(started),
       );
     } on Object catch (error) {
+      if (_disposed || revision != _sessionRevision) return;
       final exception = _asWisperBotException(error);
       _emit(
         _state.copyWith(
@@ -235,6 +257,7 @@ class WisperBotChatController with WidgetsBindingObserver {
   }
 
   Future<void> _acceptSession(WidgetSessionResult result) async {
+    final revision = _sessionRevision;
     var messages = _mergeMessages(
       const <WisperBotMessage>[],
       result.messages,
@@ -246,6 +269,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     while (latestBatchLength == 100 && catchUpPages < 50) {
       final previousCursor = _refreshCursor;
       final page = await _client._refresh(_refreshCursor);
+      if (_disposed || revision != _sessionRevision) return;
       messages = _mergeMessages(
         messages,
         page.messages,
@@ -259,6 +283,7 @@ class WisperBotChatController with WidgetsBindingObserver {
       catchUpPages++;
       if (_refreshCursor == previousCursor) break;
     }
+    if (_disposed || revision != _sessionRevision) return;
     _conversationId = result.conversationId;
     _realtimeConfig = result.widget.realtime;
     _emit(
@@ -410,7 +435,10 @@ class WisperBotChatController with WidgetsBindingObserver {
           ),
         );
         await _client._clearSession();
-        await _initializeInternal();
+        await _initializeInternal(
+          _sessionRevision,
+          requestNotificationPermission: true,
+        );
         return;
       }
       _diagnostic(WisperBotDiagnosticKind.refresh, exception: exception);
@@ -638,7 +666,10 @@ class WisperBotChatController with WidgetsBindingObserver {
     );
     try {
       await _client._clearSession();
-      await _initializeInternal();
+      await _initializeInternal(
+        _sessionRevision,
+        requestNotificationPermission: true,
+      );
     } on Object {
       // The state emitted by initialization remains authoritative.
     }
@@ -758,8 +789,33 @@ class WisperBotChatController with WidgetsBindingObserver {
   Future<void> updateUser(
     WisperBotUser user, {
     bool startSession = true,
+  }) =>
+      _updateUser(
+        user,
+        startSession: startSession,
+        requestNotificationPermission: true,
+      );
+
+  /// Switches identity for eager registration without prompting for notifications.
+  @internal
+  Future<void> updateUserForLaunchRegistration(
+    WisperBotUser user, {
+    bool startSession = true,
+  }) =>
+      _updateUser(
+        user,
+        startSession: startSession,
+        requestNotificationPermission: false,
+      );
+
+  Future<void> _updateUser(
+    WisperBotUser user, {
+    required bool startSession,
+    required bool requestNotificationPermission,
   }) async {
     _ensureNotDisposed();
+    validateWisperBotUser(user);
+    if (_client._sessions._sameUser(_client._activeUser, user)) return;
     final previousUserId = _client._activeUser?.userId;
     final switchingFromAccountToGuest =
         previousUserId != null && user.userId == null;
@@ -778,6 +834,17 @@ class WisperBotChatController with WidgetsBindingObserver {
         await _oneSignalService.logout();
       }
     }
+    // Session persistence uses the active namespace. Finish a request already
+    // in flight before changing it, then start a new account/guest request.
+    // The revision guard prevents the old response from restoring visible state.
+    final initializing = _initializing;
+    if (initializing != null) {
+      try {
+        await initializing;
+      } on Object {
+        // A failed old session must not prevent restoring the next identity.
+      }
+    }
     final changed = await _client._switchUser(user);
     if (!changed) return;
     _deferredIncomingMessages.clear();
@@ -792,7 +859,9 @@ class WisperBotChatController with WidgetsBindingObserver {
       phase: WisperBotChatPhase.initializing,
       connection: WisperBotConnectionState.connecting,
     ));
-    await initialize();
+    await _initialize(
+      requestNotificationPermission: requestNotificationPermission,
+    );
   }
 
   /// Deletes active credentials and initializes a fresh session.
