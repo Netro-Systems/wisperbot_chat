@@ -167,21 +167,19 @@ void main() {
     }, () => client);
   });
 
-  testWidgets('iOS denial offers Settings and opens app settings',
+  testWidgets('hard denial offers Settings and opens notification settings',
       (tester) async {
-    const urlChannel = MethodChannel('plugins.flutter.io/url_launcher');
-    final launchedUrls = <String>[];
+    const settingsChannel =
+        MethodChannel('com.spencerccf.app_settings/methods');
+    final settingsCalls = <MethodCall>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(urlChannel, (call) async {
-      if (call.method == 'launch') {
-        launchedUrls.add((call.arguments as Map)['url'] as String);
-        return true;
-      }
+        .setMockMethodCallHandler(settingsChannel, (call) async {
+      settingsCalls.add(call);
       return null;
     });
     addTearDown(() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(urlChannel, null);
+          .setMockMethodCallHandler(settingsChannel, null);
     });
     canRequest = false;
     await WisperBotChat.initialize(
@@ -207,11 +205,19 @@ void main() {
     expect(find.byType(WisperBotChatScreen), findsNothing);
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
-    expect(launchedUrls, ['app-settings:']);
+    expect(settingsCalls, hasLength(1));
+    expect(settingsCalls.single.method, 'openSettings');
+    expect(settingsCalls.single.arguments, {
+      'asAnotherTask': false,
+      'type': 'notification',
+    });
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
-  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+  },
+      variant: const TargetPlatformVariant(
+        <TargetPlatform>{TargetPlatform.android, TargetPlatform.iOS},
+      ));
 
   testWidgets('launcher reports missing app ID without an unhandled exception',
       (tester) async {

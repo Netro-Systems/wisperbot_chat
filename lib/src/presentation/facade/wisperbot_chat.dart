@@ -1,9 +1,9 @@
 import 'dart:async';
 
+import 'package:app_settings/app_settings.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../application/services/widget_onesignal_service.dart';
 import '../../application/wisperbot_runtime.dart';
@@ -451,11 +451,16 @@ abstract final class WisperBotChat {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text(error.message),
-            action: !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
+            action: error.code == WisperBotErrorCode.notificationPermission &&
+                    !kIsWeb &&
+                    (defaultTargetPlatform == TargetPlatform.iOS ||
+                        defaultTargetPlatform == TargetPlatform.android)
                 ? SnackBarAction(
                     label: 'Settings',
                     onPressed: () async {
-                      await launchUrl(Uri.parse('app-settings:'));
+                      await AppSettings.openAppSettings(
+                        type: AppSettingsType.notification,
+                      );
                     },
                   )
                 : null,
