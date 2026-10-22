@@ -1,3 +1,11 @@
+## Unreleased
+
+- Replace SDK OneSignal integration with host-initialized Firebase Cloud Messaging on Android/iOS.
+- Add authenticated token registration, refresh, retry, scoped logout/reset revocation and notification tap routing.
+- Rename `enableOneSignal` to `enablePushNotifications`; remove `oneSignalAppId`.
+- Preserve required notification permission gating and permission-neutral launch registration.
+- Support shared startup message access and host-owned initial notification forwarding.
+
 # Changelog
 
 ## 0.2.4 - 2026-10-17

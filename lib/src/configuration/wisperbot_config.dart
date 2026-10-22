@@ -28,8 +28,7 @@ class WisperBotConfig {
     this.enableTyping = true,
     this.mediaAdapter,
     this.diagnostics,
-    this.oneSignalAppId,
-    this.enableOneSignal = true,
+    this.enablePushNotifications = true,
     this.requireNotificationPermission = true,
     this.registerVisitorOnAppLaunch = true,
     this.sessionStore,
@@ -66,15 +65,11 @@ class WisperBotConfig {
   /// Optional receiver for redacted operational diagnostics.
   final WisperBotDiagnosticsCallback? diagnostics;
 
-  /// Optional OneSignal App ID used for push notifications.
-  final String? oneSignalAppId;
-
-  /// Whether OneSignal push notification device registration is enabled.
-  final bool enableOneSignal;
+  /// Whether FCM push registration uses the host app's initialized Firebase app.
+  final bool enablePushNotifications;
 
   /// Requires notification permission when chat is opened. Launch-time visitor
-  /// registration remains permission-neutral. Requires OneSignal to be enabled
-  /// with an app ID on Android or iOS.
+  /// registration remains permission-neutral. Requires push notifications and an initialized Firebase app on Android or iOS.
   final bool requireNotificationPermission;
 
   /// Whether the SDK registers visitor presence when the app launches without

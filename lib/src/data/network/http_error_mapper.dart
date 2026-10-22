@@ -15,6 +15,7 @@ enum WidgetOperation {
   media,
   typing,
   handoff,
+  push,
 }
 
 /// Converts HTTP failures into safe, operation-aware public exceptions.
@@ -44,7 +45,10 @@ WisperBotException mapWidgetHttpError(
       ),
     403 => WisperBotException(
         code: WisperBotErrorCode.forbidden,
-        message: 'This widget is not allowed for the current application.',
+        message: operation == WidgetOperation.push
+            ? 'Push registration was rejected. Use the SDK key from '
+                'Widget Integrations > Mobile app and ensure SDK access is enabled.'
+            : 'This widget is not allowed for the current application.',
         retryable: false,
         httpStatus: status,
       ),

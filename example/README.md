@@ -16,18 +16,12 @@ and require no separate backend integration. See the package's
 option reference.
 
 1. Copy `.env.example` to `.env`.
-2. Put your public widget key in `WISPERBOT_WIDGET_KEY`. Change `WISPERBOT_API_BASE_URL` only for staging or a self-hosted API.
-   Set `ONESIGNAL_APP_ID` for Android/iOS notification permission gating. The
-   example enables the requirement only when this value is present, so the
-   default empty value also works for web and notification-free testing.
-3. For native runs, use a widget without a browser-domain allowlist; the SDK
-   does not spoof browser origin headers. Required name/email pre-chat is
-   supported by the example and SDK. The production LiteSpeed/ModSecurity
-   configuration must narrowly allow multipart `POST /widget/v1/messages`;
-   otherwise the SDK reports `WisperBotErrorCode.edgeRejected` for the HTML
-   `406` generated before Laravel.
-4. Run `flutter pub get`, then `flutter run` from this directory. Android, iOS,
-   and web runners are included.
+2. Put the SDK key from **Widget Integrations → Mobile app** in `WISPERBOT_WIDGET_KEY`. The website embed key can start chat sessions but cannot register FCM push tokens (HTTP 403). Change `WISPERBOT_API_BASE_URL` only for staging or a self-hosted API.
+   For push, configure native Firebase files for this app, upload the service account
+   to the widget's Firebase settings, and set `FCM_ENABLED=true`. Leave it false to run
+   the example without push. Production hosts normally initialize Firebase using the
+   generated `DefaultFirebaseOptions.currentPlatform` before initializing WisperBot.
+   This example selects Firebase Core 3/Messaging 15 to retain its iOS 13 target.
 
 The Android example includes internet and microphone permissions and uses the
 Flutter tool's supported minimum SDK for audio recording. The iOS example

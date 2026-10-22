@@ -21,8 +21,7 @@ class WisperBotClient {
     bool enableTyping = true,
     WisperBotMediaAdapter? mediaAdapter,
     WisperBotDiagnosticsCallback? diagnostics,
-    String? oneSignalAppId,
-    bool enableOneSignal = true,
+    bool enablePushNotifications = true,
     bool requireNotificationPermission = true,
     bool registerVisitorOnAppLaunch = true,
     http.Client? httpClient,
@@ -40,8 +39,7 @@ class WisperBotClient {
           enableTyping: enableTyping,
           mediaAdapter: mediaAdapter,
           diagnostics: diagnostics,
-          oneSignalAppId: oneSignalAppId,
-          enableOneSignal: enableOneSignal,
+          enablePushNotifications: enablePushNotifications,
           requireNotificationPermission: requireNotificationPermission,
           registerVisitorOnAppLaunch: registerVisitorOnAppLaunch,
           sessionStore: sessionStore,
@@ -97,6 +95,46 @@ class WisperBotClient {
   Future<void> registerVisitorPresence({String? deviceId}) {
     _ensureOpen();
     return _sessions.start(deviceId: deviceId);
+  }
+
+  static Future<String>? _pushInstallation;
+
+  Future<void> _updatePushRegistration(
+    WisperBotStoredSession session, {
+    required String token,
+    bool revoke = false,
+    String? installationId,
+  }) async {
+    final installation = installationId ?? await _currentPushInstallation();
+    await _remoteDataSource.updatePushRegistration(
+      widgetKey: _config.widgetKey,
+      sessionToken: session.token,
+      installationId: installation,
+      pushToken: token,
+      platform: defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android',
+      revoke: revoke,
+    );
+  }
+
+  static Future<String> _currentPushInstallation() async {
+    try {
+      return await (_pushInstallation ??= _loadPushInstallation());
+    } on Object {
+      _pushInstallation = null;
+      rethrow;
+    }
+  }
+
+  static Future<String> _loadPushInstallation() async {
+    final preferences = await SharedPreferences.getInstance();
+    const key = 'wisperbot_chat_push_installation_v1';
+    final existing = preferences.getString(key);
+    if (existing != null) return existing;
+    final random = Random.secure();
+    final created =
+        base64UrlEncode(List.generate(24, (_) => random.nextInt(256)));
+    await preferences.setString(key, created);
+    return created;
   }
 
   Future<WidgetSessionResult> _startSession({String? deviceId}) {

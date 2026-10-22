@@ -97,7 +97,7 @@ void registerComposerHandoffTests(WisperBotConfig config) {
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com',
       mediaAdapter: mediaAdapter,
-      enableOneSignal: false,
+      enablePushNotifications: false,
     );
     var uploadCount = 0;
     final uploadedContentTypes = <String>[];

@@ -7,7 +7,7 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
       requireNotificationPermission: false,
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com',
-      enableOneSignal: false,
+      enablePushNotifications: false,
       lightStatusBarIcons: true,
     );
     final runtime = _runtime(
@@ -134,7 +134,7 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com',
       useApiColors: false,
-      enableOneSignal: false,
+      enablePushNotifications: false,
     );
     final runtime = _runtime(
       brandConfig,
@@ -183,7 +183,7 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com',
       useApiColors: false,
-      enableOneSignal: false,
+      enablePushNotifications: false,
       theme: WisperBotThemeData(primaryColor: Color(0xFF087F5B)),
     );
     final runtime = _runtime(

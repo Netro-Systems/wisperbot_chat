@@ -31,13 +31,6 @@ final class WidgetRequestEncoder {
         if (user?.signature != null) 'user_hash': user!.signature!,
         if (user?.customFields case final fields? when fields.isNotEmpty)
           'custom_fields': fields,
-        if (deviceId != null && deviceId.trim().isNotEmpty) ...<String, Object>{
-          'device_id': deviceId.trim(),
-          'onesignal_id': deviceId.trim(),
-          'push': <String, Object>{
-            'token': deviceId.trim(),
-          },
-        },
       };
 
   /// Encodes a text-send body.

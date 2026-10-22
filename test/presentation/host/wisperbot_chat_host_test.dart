@@ -7,13 +7,13 @@ import 'package:http/testing.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 import 'package:wisperbot_chat/src/configuration/wisperbot_config.dart';
 import 'package:wisperbot_chat/src/presentation/host/wisperbot_chat_host.dart';
-import 'package:wisperbot_chat/src/application/services/widget_onesignal_service.dart';
+import 'package:wisperbot_chat/src/application/services/widget_fcm_service.dart';
 
 import '../../support/fixtures/widget_api_fixtures.dart';
 
 void main() {
-  setUp(WidgetOneSignalService.instance.resetForTesting);
-  tearDown(WidgetOneSignalService.instance.resetForTesting);
+  setUp(WidgetFcmService.instance.resetForTesting);
+  tearDown(WidgetFcmService.instance.resetForTesting);
 
   testWidgets('host eagerly registers an anonymous visitor by default',
       (tester) async {
@@ -28,7 +28,7 @@ void main() {
         requireNotificationPermission: false,
         widgetKey: 'host-widget',
         apiBaseUrl: 'https://chat.example.com',
-        enableOneSignal: false,
+        enablePushNotifications: false,
         sessionStore: _NoopSessionStore(),
       )));
       await tester.pumpAndSettle();
@@ -55,7 +55,7 @@ void main() {
           requireNotificationPermission: false,
           widgetKey: 'host-widget',
           apiBaseUrl: 'https://chat.example.com',
-          enableOneSignal: false,
+          enablePushNotifications: false,
           sessionStore: _NoopSessionStore(),
         ),
         initialUser: const WisperBotUser(
@@ -83,7 +83,7 @@ void main() {
         requireNotificationPermission: false,
         widgetKey: 'host-widget',
         apiBaseUrl: 'https://chat.example.com',
-        enableOneSignal: false,
+        enablePushNotifications: false,
         registerVisitorOnAppLaunch: false,
         sessionStore: _NoopSessionStore(),
       )));
