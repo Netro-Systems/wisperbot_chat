@@ -28,32 +28,25 @@ Future<void> main() async {
     lightStatusBarIcons: true,
   );
 
-  WisperBotException? startupError;
-  try {
-    await WisperBotChat.identify(
-      const WisperBotUser(
-        userId: '48291',
-        name: 'Jane Doe',
-        email: 'jane@example.com',
-      ),
-    );
-  } on WisperBotException catch (error) {
-    if (!error.retryable) rethrow;
-    // The identity is retained; opening chat retries session initialization.
-    startupError = error;
-  }
-
   runApp(const ExampleApp());
-  if (startupError != null) {
-    final message = startupError.message;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final context = navigatorKey.currentContext;
-      if (context == null) return;
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(content: Text('$message Open chat to retry.')),
+  // Let Android foreground the activity before making the session request.
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    try {
+      await WisperBotChat.identify(
+        const WisperBotUser(
+          userId: '48291',
+          name: 'Jane Doe',
+          email: 'jane@example.com',
+        ),
       );
-    });
-  }
+    } on WisperBotException catch (error) {
+      final context = navigatorKey.currentContext;
+      if (context == null || !context.mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text('${error.message} Open chat to retry.')),
+      );
+    }
+  });
 }
 
 class ExampleApp extends StatelessWidget {

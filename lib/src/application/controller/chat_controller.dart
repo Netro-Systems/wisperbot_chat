@@ -57,11 +57,17 @@ class WisperBotChatController with WidgetsBindingObserver {
           token: record['session_token']!,
           savedAt: DateTime.now());
       try {
+        if (kDebugMode) debugPrint('WisperBot push: revocation started');
         await _client._updatePushRegistration(session,
             token: record['push_token']!,
             revoke: true,
             installationId: record['installation_id']);
+        if (kDebugMode) debugPrint('WisperBot push: revocation succeeded');
       } on WisperBotException catch (error) {
+        if (kDebugMode) {
+          debugPrint('WisperBot push: revocation failed '
+              '(HTTP ${error.httpStatus ?? "unavailable"}): ${error.code.name}');
+        }
         if (![401, 403, 404].contains(error.httpStatus)) rethrow;
         // Expired/deleted scope cannot revoke; the next registration replaces it.
       }
@@ -102,10 +108,14 @@ class WisperBotChatController with WidgetsBindingObserver {
       try {
         await _drainPushRevocations();
         final session = _client._sessions._session;
-        if (session == null) return;
+        if (session == null) {
+          if (kDebugMode) debugPrint('WisperBot push: waiting for session');
+          return;
+        }
         final token = _latestPushToken ?? await _fcmService.currentPushToken();
         if (_disposed || revision != _sessionRevision) return;
         if (token == null || token.isEmpty) {
+          if (kDebugMode) debugPrint('WisperBot push: waiting for FCM token');
           _schedulePushRetry();
           return;
         }
@@ -125,7 +135,11 @@ class WisperBotChatController with WidgetsBindingObserver {
           _pushRegistrationCandidates.add(candidate);
         }
         // Track attempts too: the server may commit before an HTTP timeout.
+        if (kDebugMode) {
+          debugPrint('WisperBot push: registration started (/widget/v1/push)');
+        }
         await _client._updatePushRegistration(session, token: token);
+        if (kDebugMode) debugPrint('WisperBot push: registration succeeded');
         _pushRegistrationCandidates
           ..clear()
           ..add(candidate);
@@ -139,7 +153,7 @@ class WisperBotChatController with WidgetsBindingObserver {
         if (kDebugMode) {
           debugPrint('WisperBot push registration failed '
               '(HTTP ${exception.httpStatus ?? "unavailable"}): '
-              '${exception.message}');
+              '${exception.code.name}');
         }
         _schedulePushRetry();
       }
@@ -148,6 +162,7 @@ class WisperBotChatController with WidgetsBindingObserver {
 
   void _schedulePushRetry() {
     if (_disposed || _pushRetry?.isActive == true) return;
+    if (kDebugMode) debugPrint('WisperBot push: retry scheduled in 30 seconds');
     _pushRetry = Timer(const Duration(seconds: 30), () {
       if (_foreground) unawaited(_syncPushRegistration());
     });
@@ -1086,6 +1101,14 @@ class WisperBotChatController with WidgetsBindingObserver {
     _foreground = state == AppLifecycleState.resumed;
     _diagnostic(WisperBotDiagnosticKind.lifecycle);
     if (_foreground) {
+      // Android can deny networking while an activity is backgrounded, including
+      // during startup. Recover the failed session when networking is available
+      // again, without replaying messages or prompting for push permission.
+      if (_state.phase == WisperBotChatPhase.failure &&
+          _state.error?.code == WisperBotErrorCode.network &&
+          (_runtimeConfig.registerVisitorOnAppLaunch || _hasLease)) {
+        unawaited(initializeForLaunchRegistration().catchError((_) {}));
+      }
       unawaited(_syncPushRegistration());
       if (_hasLease && _state.phase == WisperBotChatPhase.ready) {
         unawaited(refresh().catchError((_) {}));

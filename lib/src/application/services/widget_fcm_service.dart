@@ -25,6 +25,10 @@ final class WidgetFcmService {
   String? _tokenOverride;
   int _owners = 0;
 
+  void _log(String stage) {
+    if (kDebugMode) debugPrint('WisperBot push: $stage');
+  }
+
   bool get isSupported =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
@@ -46,15 +50,23 @@ final class WidgetFcmService {
   void retain() {
     validateHost();
     if (!isSupported || _owners++ > 0) return;
+    _log('FCM listeners attached');
     _subscriptions.addAll([
       FirebaseMessaging.onMessage.listen((message) {
+        _log('foreground notification received '
+            '(wisperbot=${message.data['source'] == 'wisperbot'})');
         _foreground.add(payload(message));
       }),
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
+        _log('background notification opened');
         forwardTap(payload(message));
       }),
-      FirebaseMessaging.instance.onTokenRefresh
-          .listen(_tokens.add, onError: (Object _) {}),
+      FirebaseMessaging.instance.onTokenRefresh.listen((token) {
+        _log('FCM token refreshed');
+        _tokens.add(token);
+      }, onError: (Object _) {
+        _log('FCM token refresh failed');
+      }),
     ]);
   }
 
@@ -154,10 +166,16 @@ final class WidgetFcmService {
     try {
       if (defaultTargetPlatform == TargetPlatform.iOS &&
           await FirebaseMessaging.instance.getAPNSToken() == null) {
+        _log('token unavailable: waiting for APNs');
         return null;
       }
-      return await FirebaseMessaging.instance.getToken();
+      final token = await FirebaseMessaging.instance.getToken();
+      _log(token == null || token.isEmpty
+          ? 'FCM token unavailable'
+          : 'FCM token available');
+      return token;
     } on Object {
+      _log('FCM token lookup failed; registration will retry');
       // APNs/FCM can be temporarily unavailable. Registration retries separately.
       return null;
     }

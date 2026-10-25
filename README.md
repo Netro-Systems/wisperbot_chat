@@ -59,6 +59,13 @@ flutter pub add wisperbot_chat
 
 Initialize WisperBot once using your public **Widget Key**:
 
+The SDK includes `https://wisperbot.com` as its default server address. No API URL
+is required for WisperBot hosting; `apiBaseUrl` is an optional self-hosting override.
+A session that fails with a network error is retried when the app resumes, when
+launch registration is enabled or chat is being used. This does not resend messages
+or automatically request notification permission. Android can deny networking
+while an app is backgrounded, even when the device has an internet connection.
+
 ```dart
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -434,8 +441,10 @@ content on dark or strongly colored headers.
 ### 🔔 Push Notifications
 
 Android/iOS push uses the host app's default Firebase app. Configure the app with
-FlutterFire, initialize Firebase yourself, and upload that project's service account
-JSON in **Widget Integrations → Mobile app → Firebase push notifications**.
+FlutterFire and initialize Firebase yourself. Push credentials are configured once
+globally in **Super Admin → Integrations → Firebase Cloud Messaging**.
+The host app must use a Firebase project authorized by that global service account.
+Developers do not upload credentials per workspace.
 The SDK never receives a service account or initializes/replaces a Firebase app.
 
 Use the **Mobile app SDK key**, rather than the website embed key, for

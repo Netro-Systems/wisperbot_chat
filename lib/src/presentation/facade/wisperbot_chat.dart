@@ -461,10 +461,18 @@ abstract final class WisperBotChat {
   }
 
   static void _handleForegroundNotification(Map<String, dynamic> payload) {
-    if (!_belongsToWidget(payload)) return;
+    if (!_belongsToWidget(payload)) {
+      if (kDebugMode) {
+        debugPrint('WisperBot push: ignored other widget payload');
+      }
+      return;
+    }
     final controller = _defaultController;
     if (controller != null && controller.acceptsPushPayload(payload)) {
+      if (kDebugMode) debugPrint('WisperBot push: foreground payload accepted');
       _onForegroundNotification?.call(payload);
+    } else if (kDebugMode) {
+      debugPrint('WisperBot push: ignored inactive visitor payload');
     }
   }
 
