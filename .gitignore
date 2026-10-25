@@ -15,6 +15,7 @@ AGENTS.md
 .env
 .puku-cli/
 test/golden/failures/
+example\android\app\google-services.json
 
 # IntelliJ related
 *.iml
