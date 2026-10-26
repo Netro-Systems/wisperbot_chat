@@ -102,6 +102,39 @@ Future<void> main() async {
 
 ---
 
+## Hosts using Firebase Installation ID messaging
+
+Token registration remains the default and supports Firebase Messaging 15/16.
+If your host uses Firebase Messaging 17 or newer and has opted into FID messaging,
+pass `useFirebaseInstallationId: true` to `WisperBotChat.initialize` (or
+`WisperBotClient`). On Android the host must already configure:
+
+```xml
+<meta-data android:name="firebase_messaging_installation_id_enabled" android:value="true" />
+```
+
+```dart
+await WisperBotChat.initialize(
+  widgetKey: 'YOUR_MOBILE_SDK_KEY',
+  useFirebaseInstallationId: true,
+);
+```
+
+Use the matching Firebase native FID configuration on iOS, plus APNs capabilities
+and credentials. The SDK subscribes to `onRegistered` before calling `register()`
+and sends the confirmed FID through the existing visitor-authenticated
+`POST /widget/v1/push` `push_token` field. It never substitutes an unregistered
+Firebase Installations ID. Firebase's HTTP v1 `message.token` field currently
+accepts registered FIDs as well as legacy tokens, so no backend migration is
+required ([Firebase REST contract](https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages)).
+
+FID changes refresh the SDK association. Host unregistration revokes only the
+WisperBot association; the SDK waits for the host to register again. Identity
+switches never call Firebase `unregister`, `deleteToken`, or change the native
+registration mode. On older Firebase packages, keep this option false.
+
+---
+
 ## Integration Styles
 
 WisperBot provides multiple ready-to-use presentation modes to fit seamlessly into any app workflow:

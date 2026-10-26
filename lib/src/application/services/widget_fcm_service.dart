@@ -15,6 +15,21 @@ final class WidgetFcmService {
   final _clicks = StreamController<Map<String, dynamic>>.broadcast();
   final _foreground = StreamController<Map<String, dynamic>>.broadcast();
   final _tokens = StreamController<String>.broadcast();
+  final _installationIds = StreamController<String?>.broadcast();
+  StreamSubscription<String>? _registeredSubscription;
+  StreamSubscription<String>? _unregisteredSubscription;
+  String? _installationId;
+  bool _explicitlyUnregistered = false;
+  Future<String?>? _registration;
+  Object? _messagingOverride;
+
+  // Dynamic access keeps the default token path compatible with Messaging 15/16.
+  dynamic get _installationMessaging =>
+      _messagingOverride ?? FirebaseMessaging.instance;
+
+  Stream<String?> registrationChanges(
+          {bool useFirebaseInstallationId = false}) =>
+      useFirebaseInstallationId ? _installationIds.stream : tokenChanges;
   Stream<Map<String, dynamic>> get notificationClicks => _clicks.stream;
   Stream<Map<String, dynamic>> get foregroundNotifications =>
       _foreground.stream;
@@ -74,6 +89,12 @@ final class WidgetFcmService {
     if (_owners == 0 || --_owners > 0) return;
     final subscriptions = List.of(_subscriptions);
     _subscriptions.clear();
+    await _registeredSubscription?.cancel();
+    await _unregisteredSubscription?.cancel();
+    _registeredSubscription = null;
+    _unregisteredSubscription = null;
+    _installationId = null;
+    _explicitlyUnregistered = false;
     for (final subscription in subscriptions) {
       await subscription.cancel();
     }
@@ -159,7 +180,8 @@ final class WidgetFcmService {
   }
 
   /// Reads an existing registration without requesting notification permission.
-  Future<String?> currentPushToken() async {
+  Future<String?> currentPushToken(
+      {bool useFirebaseInstallationId = false}) async {
     if (_tokenOverride != null) return _tokenOverride;
     if (!isSupported) return null;
     validateHost();
@@ -169,6 +191,7 @@ final class WidgetFcmService {
         _log('token unavailable: waiting for APNs');
         return null;
       }
+      if (useFirebaseInstallationId) return await _currentInstallationId();
       final token = await FirebaseMessaging.instance.getToken();
       _log(token == null || token.isEmpty
           ? 'FCM token unavailable'
@@ -180,6 +203,63 @@ final class WidgetFcmService {
       return null;
     }
   }
+
+  Future<String?> _currentInstallationId() {
+    if (_explicitlyUnregistered) return Future<String?>.value();
+    final existing = _installationId;
+    if (existing != null) return Future<String?>.value(existing);
+    return _registration ??= _registerInstallation().whenComplete(() {
+      _registration = null;
+    });
+  }
+
+  Future<String?> _registerInstallation() async {
+    final dynamic messaging = _installationMessaging;
+    try {
+      if (_registeredSubscription == null) {
+        final registered = messaging.onRegistered as Stream<String>;
+        final unregistered = messaging.onUnregistered as Stream<String>;
+        _registeredSubscription = registered.listen((fid) {
+          if (fid.isEmpty) return;
+          _installationId = fid;
+          _explicitlyUnregistered = false;
+          _log('FCM installation registered');
+          _installationIds.add(fid);
+        }, onError: (Object _) {
+          _log('FCM installation registration stream failed');
+        });
+        _unregisteredSubscription = unregistered.listen((fid) {
+          if (_installationId != null && _installationId != fid) return;
+          _installationId = null;
+          _explicitlyUnregistered = true;
+          _log('FCM installation unregistered');
+          _installationIds.add(null);
+        }, onError: (Object _) {
+          _log('FCM installation unregistration stream failed');
+        });
+      }
+    } on NoSuchMethodError {
+      _log('FID messaging requires firebase_messaging 17 or newer');
+      return null;
+    }
+    final result = Completer<String?>();
+    final subscription = _installationIds.stream.listen((fid) {
+      if (!result.isCompleted) result.complete(fid);
+    });
+    try {
+      // Subscribe first: register() delivers its ID through onRegistered.
+      await (messaging.register() as Future<void>)
+          .timeout(const Duration(seconds: 10));
+      return await result.future
+          .timeout(const Duration(seconds: 10), onTimeout: () => null);
+    } finally {
+      await subscription.cancel();
+    }
+  }
+
+  @visibleForTesting
+  void setMessagingOverride(Object? messaging) =>
+      _messagingOverride = messaging;
 
   @visibleForTesting
   void setPushTokenOverride(String? token) => _tokenOverride = token;
@@ -193,6 +273,10 @@ final class WidgetFcmService {
   @visibleForTesting
   void resetForTesting() {
     _tokenOverride = null;
+    _messagingOverride = null;
+    _installationId = null;
+    _explicitlyUnregistered = false;
+    _registration = null;
     _pendingClick = null;
     _initialMessage = null;
   }

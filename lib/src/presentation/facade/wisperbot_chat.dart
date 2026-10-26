@@ -60,6 +60,7 @@ abstract final class WisperBotChat {
     WisperBotMediaAdapter? mediaAdapter,
     WisperBotDiagnosticsCallback? diagnostics,
     bool enablePushNotifications = true,
+    bool useFirebaseInstallationId = false,
     bool requireNotificationPermission = true,
     bool registerVisitorOnAppLaunch = true,
     WisperBotSessionStore? sessionStore,
@@ -79,6 +80,7 @@ abstract final class WisperBotChat {
       mediaAdapter: mediaAdapter,
       diagnostics: diagnostics,
       enablePushNotifications: enablePushNotifications,
+      useFirebaseInstallationId: useFirebaseInstallationId,
       requireNotificationPermission: requireNotificationPermission,
       registerVisitorOnAppLaunch: registerVisitorOnAppLaunch,
       sessionStore: sessionStore,
@@ -670,6 +672,7 @@ abstract final class WisperBotChat {
       identical(first.mediaAdapter, second.mediaAdapter) &&
       identical(first.diagnostics, second.diagnostics) &&
       first.enablePushNotifications == second.enablePushNotifications &&
+      first.useFirebaseInstallationId == second.useFirebaseInstallationId &&
       first.requireNotificationPermission ==
           second.requireNotificationPermission &&
       first.registerVisitorOnAppLaunch == second.registerVisitorOnAppLaunch &&

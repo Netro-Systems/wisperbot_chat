@@ -23,9 +23,25 @@ class FakeFirebase extends FirebasePlatform {
 
 class FakeMessaging extends FirebaseMessagingPlatform {
   String? token = 'test-fcm-token';
+  int tokenReads = 0;
   String? apnsToken = 'test-apns-token';
   RemoteMessage? startupMessage;
   int initialReads = 0;
+  final registrations = StreamController<String>.broadcast();
+  final unregistrations = StreamController<String>.broadcast();
+  int registerCalls = 0;
+  // These members also let the same fake exercise the real Messaging 17 facade.
+  // ignore: annotate_overrides
+  Stream<String> get onRegistered => registrations.stream;
+  // ignore: annotate_overrides
+  Stream<String> get onUnregistered => unregistrations.stream;
+  // ignore: annotate_overrides
+  Future<void> register(
+      {String? vapidKey, String? serviceWorkerScriptPath}) async {
+    registerCalls++;
+    registrations.add('platform-confirmed-fid');
+  }
+
   final refreshes = StreamController<String>.broadcast();
   @override
   FirebaseMessagingPlatform delegateFor({required FirebaseApp app}) => this;
@@ -48,7 +64,12 @@ class FakeMessaging extends FirebaseMessagingPlatform {
           bool providesAppNotificationSettings = false}) async =>
       prompt!();
   @override
-  Future<String?> getToken({String? vapidKey}) async => token;
+  Future<String?> getToken(
+      {String? vapidKey, String? serviceWorkerScriptPath}) async {
+    tokenReads++;
+    return token;
+  }
+
   @override
   Future<String?> getAPNSToken() async => apnsToken;
   @override
@@ -69,6 +90,9 @@ void installFakeFirebase() {
   FlutterSecureStorage.setMockInitialValues({});
   fakeFirebase.initialized = true;
   fakeMessaging.token = 'test-fcm-token';
+  fakeMessaging.tokenReads = 0;
+  fakeMessaging.registerCalls = 0;
+  fakeMessaging.apnsToken = 'test-apns-token';
   fakeMessaging.initialReads = 0;
   fakeMessaging.startupMessage = null;
   FirebasePlatform.instance = fakeFirebase;

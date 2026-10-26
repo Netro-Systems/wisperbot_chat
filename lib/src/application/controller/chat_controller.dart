@@ -29,7 +29,7 @@ class WisperBotChatController with WidgetsBindingObserver {
   final ChatStateMachine _stateMachine = ChatStateMachine();
   final WidgetFcmService _fcmService = WidgetFcmService.instance;
   bool _ownsPushService = false;
-  StreamSubscription<String>? _pushSubscription;
+  StreamSubscription<String?>? _pushSubscription;
   Timer? _pushRetry;
   Future<void>? _pushQueue;
   String? _registeredPushToken;
@@ -80,9 +80,20 @@ class WisperBotChatController with WidgetsBindingObserver {
     if (_ownsPushService) return;
     _fcmService.retain();
     _ownsPushService = true;
-    _pushSubscription = _fcmService.tokenChanges.listen((token) {
+    _pushSubscription = _fcmService
+        .registrationChanges(
+      useFirebaseInstallationId: _runtimeConfig.useFirebaseInstallationId,
+    )
+        .listen((token) {
       _latestPushToken = token;
-      unawaited(_syncPushRegistration());
+      if (token == null) {
+        final previous = _pushQueue ?? Future<void>.value();
+        _pushQueue =
+            previous.then((_) => _revokePushRegistration(waitForQueue: false));
+        unawaited(_pushQueue);
+      } else {
+        unawaited(_syncPushRegistration());
+      }
     });
   }
 
@@ -112,7 +123,11 @@ class WisperBotChatController with WidgetsBindingObserver {
           if (kDebugMode) debugPrint('WisperBot push: waiting for session');
           return;
         }
-        final token = _latestPushToken ?? await _fcmService.currentPushToken();
+        final token = _latestPushToken ??
+            await _fcmService.currentPushToken(
+              useFirebaseInstallationId:
+                  _runtimeConfig.useFirebaseInstallationId,
+            );
         if (_disposed || revision != _sessionRevision) return;
         if (token == null || token.isEmpty) {
           if (kDebugMode) debugPrint('WisperBot push: waiting for FCM token');
@@ -168,13 +183,13 @@ class WisperBotChatController with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _revokePushRegistration() async {
+  Future<void> _revokePushRegistration({bool waitForQueue = true}) async {
     if (!_runtimeConfig.enablePushNotifications || !_fcmService.isSupported) {
       return;
     }
     _pushRetry?.cancel();
     final pushQueue = _pushQueue;
-    if (pushQueue != null) await pushQueue;
+    if (waitForQueue && pushQueue != null) await pushQueue;
     try {
       await _loadPushRevocations();
       if (_pushRegistrationCandidates.isNotEmpty) {
@@ -263,7 +278,9 @@ class WisperBotChatController with WidgetsBindingObserver {
 
   /// Resolves the host app's FCM token without changing permissions.
   Future<String?> currentPushToken() => _runtimeConfig.enablePushNotifications
-      ? _fcmService.currentPushToken()
+      ? _fcmService.currentPushToken(
+          useFirebaseInstallationId: _runtimeConfig.useFirebaseInstallationId,
+        )
       : Future<String?>.value();
 
   /// Creates or restores the identity-scoped session.

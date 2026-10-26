@@ -29,6 +29,7 @@ class WisperBotConfig {
     this.mediaAdapter,
     this.diagnostics,
     this.enablePushNotifications = true,
+    this.useFirebaseInstallationId = false,
     this.requireNotificationPermission = true,
     this.registerVisitorOnAppLaunch = true,
     this.sessionStore,
@@ -67,6 +68,13 @@ class WisperBotConfig {
 
   /// Whether FCM push registration uses the host app's initialized Firebase app.
   final bool enablePushNotifications;
+
+  /// Uses Firebase Messaging 17's registered installation ID instead of a token.
+  ///
+  /// Enable only when the host has opted into FID messaging in its native
+  /// configuration. The default preserves token-based hosts and older Firebase
+  /// versions. This never changes the host's native registration mode.
+  final bool useFirebaseInstallationId;
 
   /// Requires notification permission when chat is opened. Launch-time visitor
   /// registration remains permission-neutral. Requires push notifications and an initialized Firebase app on Android or iOS.
