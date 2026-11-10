@@ -1,12 +1,26 @@
-## Unreleased
-
-- Replace SDK OneSignal integration with host-initialized Firebase Cloud Messaging on Android/iOS.
-- Add authenticated token registration, refresh, retry, scoped logout/reset revocation and notification tap routing.
-- Rename `enableOneSignal` to `enablePushNotifications`; remove `oneSignalAppId`.
-- Preserve required notification permission gating and permission-neutral launch registration.
-- Support shared startup message access and host-owned initial notification forwarding.
-
 # Changelog
+
+## 0.2.6 - 2026-11-10
+
+### Fixed
+
+- HTTP(S) Markdown links now render as a slightly larger, bold, tappable label in the prebuilt chat UI, matching the website widget's label-only rendering while retaining raw URL handling.
+
+## 0.2.5 - 2026-10-26
+
+### Added
+
+- Added authenticated Firebase Cloud Messaging token registration, refresh, retry, scoped logout/reset revocation and notification tap routing.
+- Added shared startup message access and host-owned initial notification forwarding.
+
+### Changed
+
+- Replaced the SDK OneSignal integration with host-initialized Firebase Cloud Messaging on Android and iOS.
+- Renamed `enableOneSignal` to `enablePushNotifications` and removed `oneSignalAppId`.
+
+### Fixed
+
+- Preserved required notification-permission gating while keeping launch registration permission-neutral.
 
 ## 0.2.4 - 2026-10-17
 

@@ -33,7 +33,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  wisperbot_chat: ^0.2.4
+  wisperbot_chat: ^0.2.6
 ```
 
 Or run:
@@ -369,10 +369,12 @@ For advanced headless or multi-runtime applications, construct
 ### 🔗 Message Links
 
 The prebuilt chat UI keeps message text selectable and makes `http://`,
-`https://`, and `www.` links tappable. Links are underlined and opened through
-the platform's external URL handler; `www.` addresses use HTTPS. Trailing
-punctuation is excluded from the link target. If opening fails, the chat shows
-"Could not open link."
+`https://`, and `www.` links tappable. Markdown links such as
+`[contact us on WhatsApp](https://wa.me/...)` show only their underlined label,
+slightly larger and bold for emphasis, matching the website widget's clean
+label-only rendering. Links open through the platform's external URL handler;
+`www.` addresses use HTTPS. Trailing punctuation is excluded from raw link
+targets. If opening fails, the chat shows "Could not open link."
 
 ---
 

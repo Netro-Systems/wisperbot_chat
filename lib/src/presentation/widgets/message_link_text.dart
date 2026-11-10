@@ -15,7 +15,7 @@ class MessageLinkText extends StatefulWidget {
 
 class _MessageLinkTextState extends State<MessageLinkText> {
   static final _links = RegExp(
-    r'''\b(?:https?://|www\.)[^\s<>"']+''',
+    r'''\[([^\]\n]+)\]\((https?://[^\s<>"')]+)\)|\b((?:https?://|www\.)[^\s<>"']+)''',
     caseSensitive: false,
   );
   final _recognizers = <TapGestureRecognizer>[];
@@ -30,7 +30,9 @@ class _MessageLinkTextState extends State<MessageLinkText> {
   @override
   void didUpdateWidget(covariant MessageLinkText oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.text != widget.text) _updateSpans();
+    if (oldWidget.text != widget.text || oldWidget.style != widget.style) {
+      _updateSpans();
+    }
   }
 
   void _updateSpans() {
@@ -41,17 +43,20 @@ class _MessageLinkTextState extends State<MessageLinkText> {
     _spans = [];
     var offset = 0;
     for (final match in _links.allMatches(widget.text)) {
-      var link = match.group(0)!;
-      while (link.isNotEmpty) {
-        final last = link[link.length - 1];
-        final opening = {')': '(', ']': '[', '}': '{'}[last];
-        if (',.!?;:'.contains(last) ||
-            (opening != null &&
-                last.allMatches(link).length >
-                    opening.allMatches(link).length)) {
-          link = link.substring(0, link.length - 1);
-        } else {
-          break;
+      final markdownLabel = match.group(1);
+      var link = match.group(2) ?? match.group(3)!;
+      if (markdownLabel == null) {
+        while (link.isNotEmpty) {
+          final last = link[link.length - 1];
+          final opening = {')': '(', ']': '[', '}': '{'}[last];
+          if (',.!?;:'.contains(last) ||
+              (opening != null &&
+                  last.allMatches(link).length >
+                      opening.allMatches(link).length)) {
+            link = link.substring(0, link.length - 1);
+          } else {
+            break;
+          }
         }
       }
       final uri = Uri.tryParse(
@@ -62,11 +67,15 @@ class _MessageLinkTextState extends State<MessageLinkText> {
       final recognizer = TapGestureRecognizer()..onTap = () => _openLink(uri);
       _recognizers.add(recognizer);
       _spans.add(TextSpan(
-        text: link,
-        style: const TextStyle(decoration: TextDecoration.underline),
+        text: markdownLabel ?? link,
+        style: TextStyle(
+          decoration: TextDecoration.underline,
+          fontSize: (widget.style?.fontSize ?? 14) + 1,
+          fontWeight: FontWeight.w700,
+        ),
         recognizer: recognizer,
       ));
-      offset = match.start + link.length;
+      offset = markdownLabel == null ? match.start + link.length : match.end;
     }
     _spans.add(TextSpan(text: widget.text.substring(offset)));
   }
