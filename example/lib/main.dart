@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 
@@ -13,32 +14,39 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
   final widgetKey = dotenv.get('WISPERBOT_WIDGET_KEY').trim();
-  final configuredApiBaseUrl =
-      dotenv.maybeGet('WISPERBOT_API_BASE_URL')?.trim();
-  final oneSignalAppId = dotenv.maybeGet('ONESIGNAL_APP_ID')?.trim();
-  final notificationsConfigured = oneSignalAppId?.isNotEmpty == true;
+
+  // Configure this example's native Firebase files before enabling push.
+  await Firebase.initializeApp();
+
   await WisperBotChat.initialize(
     widgetKey: widgetKey,
-    apiBaseUrl: configuredApiBaseUrl?.isNotEmpty == true
-        ? configuredApiBaseUrl!
-        : 'https://wisperbot.com',
     navigatorKey: navigatorKey,
-    requireNotificationPermission: notificationsConfigured,
+    enablePushNotifications: true,
+    requireNotificationPermission: true,
     registerVisitorOnAppLaunch: true,
     useApiColors: true,
     lightStatusBarIcons: true,
-    oneSignalAppId: notificationsConfigured ? oneSignalAppId : null,
-  );
-
-  await WisperBotChat.identify(
-    const WisperBotUser(
-      userId: '48291',
-      name: 'Jane Doe',
-      email: 'jane@example.com',
-    ),
   );
 
   runApp(const ExampleApp());
+  // Let Android foreground the activity before making the session request.
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    try {
+      await WisperBotChat.identify(
+        const WisperBotUser(
+          userId: '48291',
+          name: 'Jane Doe',
+          email: 'jane@example.com',
+        ),
+      );
+    } on WisperBotException catch (error) {
+      final context = navigatorKey.currentContext;
+      if (context == null || !context.mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text('${error.message} Open chat to retry.')),
+      );
+    }
+  });
 }
 
 class ExampleApp extends StatelessWidget {

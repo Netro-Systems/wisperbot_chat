@@ -1,11 +1,12 @@
 import 'dart:async';
 
+import 'package:app_settings/app_settings.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../../application/services/widget_onesignal_service.dart';
+import '../../application/services/widget_fcm_service.dart';
 import '../../application/wisperbot_runtime.dart';
 import '../../configuration/wisperbot_config.dart';
 import '../../domain/contracts/media_adapter.dart';
@@ -38,6 +39,9 @@ abstract final class WisperBotChat {
   static void Function(Map<String, dynamic> payload)? _onForegroundNotification;
   static Map<String, dynamic>? _pendingNotificationPayload;
   static GlobalKey<NavigatorState>? _navigatorKey;
+  static bool _ownsPushService = false;
+  static bool _handleInitialNotification = true;
+  static final Set<String> _handledPushIds = {};
   static int _lifecycleGeneration = 0;
   static int _registrationGeneration = 0;
 
@@ -55,12 +59,13 @@ abstract final class WisperBotChat {
     bool enableTyping = true,
     WisperBotMediaAdapter? mediaAdapter,
     WisperBotDiagnosticsCallback? diagnostics,
-    String? oneSignalAppId,
-    bool enableOneSignal = true,
+    bool enablePushNotifications = true,
+    bool useFirebaseInstallationId = false,
     bool requireNotificationPermission = true,
     bool registerVisitorOnAppLaunch = true,
     WisperBotSessionStore? sessionStore,
     GlobalKey<NavigatorState>? navigatorKey,
+    bool handleInitialNotification = true,
     void Function(Map<String, dynamic> payload)? onNotificationTapped,
     void Function(Map<String, dynamic> payload)? onForegroundNotification,
   }) {
@@ -74,8 +79,8 @@ abstract final class WisperBotChat {
       enableTyping: enableTyping,
       mediaAdapter: mediaAdapter,
       diagnostics: diagnostics,
-      oneSignalAppId: oneSignalAppId,
-      enableOneSignal: enableOneSignal,
+      enablePushNotifications: enablePushNotifications,
+      useFirebaseInstallationId: useFirebaseInstallationId,
       requireNotificationPermission: requireNotificationPermission,
       registerVisitorOnAppLaunch: registerVisitorOnAppLaunch,
       sessionStore: sessionStore,
@@ -91,6 +96,7 @@ abstract final class WisperBotChat {
       );
     }
 
+    _handleInitialNotification = handleInitialNotification;
     _navigatorKey = navigatorKey ?? _navigatorKey;
     _onNotificationTapped = onNotificationTapped;
     _onForegroundNotification = onForegroundNotification;
@@ -102,6 +108,9 @@ abstract final class WisperBotChat {
       return Future<void>.value();
     }
 
+    if (config.enablePushNotifications) {
+      WidgetFcmService.instance.validateHost();
+    }
     final client = WisperBotClient.fromConfig(config: config);
     _defaultConfig = config;
     _defaultClient = client;
@@ -122,21 +131,32 @@ abstract final class WisperBotChat {
     WisperBotConfig config,
     int generation,
   ) async {
-    final appId = config.oneSignalAppId;
-    if (config.enableOneSignal && appId != null && appId.trim().isNotEmpty) {
-      await WidgetOneSignalService.instance.initialize(appId: appId);
+    if (config.enablePushNotifications &&
+        WidgetFcmService.instance.isSupported) {
+      WidgetFcmService.instance.retain();
+      _ownsPushService = true;
     }
     if (generation != _lifecycleGeneration || _defaultConfig == null) return;
 
     await _notificationClickSubscription?.cancel();
-    _notificationClickSubscription = WidgetOneSignalService
+    _notificationClickSubscription = WidgetFcmService
         .instance.notificationClicks
         .listen(_handleNotificationClick);
     await _foregroundNotificationSubscription?.cancel();
-    _foregroundNotificationSubscription = WidgetOneSignalService
+    _foregroundNotificationSubscription = WidgetFcmService
         .instance.foregroundNotifications
         .listen(_handleForegroundNotification);
 
+    WidgetFcmService.instance.flushPendingTap();
+    if (_ownsPushService && _handleInitialNotification) {
+      try {
+        final message = await getInitialNotification();
+        if (generation != _lifecycleGeneration) return;
+        if (message != null) handleNotificationTap(message);
+      } on Object {
+        // A provider startup-message failure must not prevent chat registration.
+      }
+    }
     if (config.registerVisitorOnAppLaunch) {
       _scheduleLaunchRegistration();
     }
@@ -349,6 +369,10 @@ abstract final class WisperBotChat {
     _onForegroundNotification = null;
     _pendingNotificationPayload = null;
     _activePresentations.clear();
+    if (_ownsPushService) {
+      _ownsPushService = false;
+      await WidgetFcmService.instance.release();
+    }
 
     if (controller != null) await controller.dispose();
     if (client != null) await client.close();
@@ -374,7 +398,52 @@ abstract final class WisperBotChat {
     );
   }
 
+  /// Returns the cached startup message, including messages for the host app.
+  /// Hosts sharing startup routing should use this instead of calling Firebase
+  /// getInitialMessage independently, or disable handleInitialNotification.
+  static Future<RemoteMessage?> getInitialNotification() =>
+      WidgetFcmService.instance.initialMessage();
+
+  /// Forwards a host-owned notification tap; returns false for other payloads.
+  static bool handleNotificationTap(RemoteMessage message) {
+    final payload = WidgetFcmService.instance.payload(message);
+    if (!_belongsToWidget(payload)) return false;
+    _handleNotificationClick(payload);
+    return true;
+  }
+
+  static bool _belongsToWidget(Map<String, dynamic> payload) =>
+      _defaultConfig != null &&
+      payload['source'] == 'wisperbot' &&
+      payload['type'] == 'widget_message' &&
+      payload['widget_key'] == _defaultConfig!.widgetKey;
+
   static void _handleNotificationClick(Map<String, dynamic> payload) {
+    if (!_belongsToWidget(payload)) return;
+    if (WidgetsBinding.instance.rootElement == null ||
+        (_onNotificationTapped == null &&
+            _navigatorKey?.currentContext == null)) {
+      _pendingNotificationPayload = payload;
+      _schedulePendingNotificationOpen();
+      return;
+    }
+    unawaited(_routeNotificationClick(payload).catchError((_) {}));
+  }
+
+  static Future<void> _routeNotificationClick(
+      Map<String, dynamic> payload) async {
+    final controller = _defaultController;
+    if (controller == null) return;
+    await controller.initializeForLaunchRegistration();
+    if (controller != _defaultController ||
+        !controller.acceptsPushPayload(payload)) {
+      return;
+    }
+    final id = payload['notification_id']?.toString();
+    if (id != null && !_handledPushIds.add(id)) return;
+    if (_handledPushIds.length > 100) {
+      _handledPushIds.remove(_handledPushIds.first);
+    }
     final callback = _onNotificationTapped;
     if (callback != null) {
       callback(payload);
@@ -382,7 +451,7 @@ abstract final class WisperBotChat {
     }
     if (_defaultConfig == null) return;
     final context = _navigatorKey?.currentContext;
-    if (context == null) {
+    if (context == null || !context.mounted) {
       _pendingNotificationPayload = payload;
       _schedulePendingNotificationOpen();
       return;
@@ -394,7 +463,19 @@ abstract final class WisperBotChat {
   }
 
   static void _handleForegroundNotification(Map<String, dynamic> payload) {
-    _onForegroundNotification?.call(payload);
+    if (!_belongsToWidget(payload)) {
+      if (kDebugMode) {
+        debugPrint('WisperBot push: ignored other widget payload');
+      }
+      return;
+    }
+    final controller = _defaultController;
+    if (controller != null && controller.acceptsPushPayload(payload)) {
+      if (kDebugMode) debugPrint('WisperBot push: foreground payload accepted');
+      _onForegroundNotification?.call(payload);
+    } else if (kDebugMode) {
+      debugPrint('WisperBot push: ignored inactive visitor payload');
+    }
   }
 
   static void _schedulePendingNotificationOpen() {
@@ -402,12 +483,13 @@ abstract final class WisperBotChat {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final payload = _pendingNotificationPayload;
       final context = _navigatorKey?.currentContext;
-      if (payload == null || context == null || _defaultConfig == null) return;
+      if (payload == null ||
+          _defaultConfig == null ||
+          (_onNotificationTapped == null && context == null)) {
+        return;
+      }
       _pendingNotificationPayload = null;
-      unawaited(
-        openChatboxFromNotification(context: context, payload: payload)
-            .catchError((_) => null),
-      );
+      _handleNotificationClick(payload);
     });
   }
 
@@ -451,11 +533,16 @@ abstract final class WisperBotChat {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text(error.message),
-            action: !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
+            action: error.code == WisperBotErrorCode.notificationPermission &&
+                    !kIsWeb &&
+                    (defaultTargetPlatform == TargetPlatform.iOS ||
+                        defaultTargetPlatform == TargetPlatform.android)
                 ? SnackBarAction(
                     label: 'Settings',
                     onPressed: () async {
-                      await launchUrl(Uri.parse('app-settings:'));
+                      await AppSettings.openAppSettings(
+                        type: AppSettingsType.notification,
+                      );
                     },
                   )
                 : null,
@@ -584,8 +671,8 @@ abstract final class WisperBotChat {
       first.enableTyping == second.enableTyping &&
       identical(first.mediaAdapter, second.mediaAdapter) &&
       identical(first.diagnostics, second.diagnostics) &&
-      first.oneSignalAppId == second.oneSignalAppId &&
-      first.enableOneSignal == second.enableOneSignal &&
+      first.enablePushNotifications == second.enablePushNotifications &&
+      first.useFirebaseInstallationId == second.useFirebaseInstallationId &&
       first.requireNotificationPermission ==
           second.requireNotificationPermission &&
       first.registerVisitorOnAppLaunch == second.registerVisitorOnAppLaunch &&
@@ -605,6 +692,11 @@ abstract final class WisperBotChat {
     } else if (client != null) {
       unawaited(client.close());
     }
+    if (_ownsPushService) {
+      _ownsPushService = false;
+      unawaited(WidgetFcmService.instance.release());
+    }
+    _handledPushIds.clear();
     _defaultConfig = null;
     _defaultClient = null;
     _defaultController = null;

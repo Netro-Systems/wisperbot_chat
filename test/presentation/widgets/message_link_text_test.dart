@@ -27,9 +27,14 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  Future<void> pump(WidgetTester tester, String text) => tester.pumpWidget(
+  Future<void> pump(
+    WidgetTester tester,
+    String text, {
+    TextStyle? style,
+  }) =>
+      tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(body: MessageLinkText(text: text)),
+          home: Scaffold(body: MessageLinkText(text: text, style: style)),
         ),
       );
 
@@ -55,6 +60,33 @@ void main() {
       'https://example.com/a_(b)?x=1&y=2',
       'https://www.example.org',
     ]);
+  });
+
+  testWidgets('renders a Markdown link as its tappable label', (tester) async {
+    const text =
+        'Call us or [contact us on WhatsApp](https://wa.me/message/BHA3NTMHBCD5O1).';
+    await pump(tester, text, style: const TextStyle(fontSize: 14));
+    final parts = spans(tester);
+    expect(
+      parts.map((span) => span.text).join(),
+      'Call us or contact us on WhatsApp.',
+    );
+    final link = parts.singleWhere((span) => span.recognizer != null);
+    expect(link.text, 'contact us on WhatsApp');
+    expect(link.style?.fontSize, 15);
+    expect(link.style?.fontWeight, FontWeight.w700);
+    expect(link.style?.decoration, TextDecoration.underline);
+    (link.recognizer! as TapGestureRecognizer).onTap!();
+    await tester.pump();
+    expect(launched, ['https://wa.me/message/BHA3NTMHBCD5O1']);
+  });
+
+  testWidgets('keeps unsupported Markdown destinations as plain text',
+      (tester) async {
+    const text = '[Open this](javascript:alert(1))';
+    await pump(tester, text);
+    expect(spans(tester).where((span) => span.recognizer != null), isEmpty);
+    expect(spans(tester).map((span) => span.text).join(), text);
   });
 
   testWidgets('updates links and leaves plain text selectable', (tester) async {

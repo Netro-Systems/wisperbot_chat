@@ -172,16 +172,16 @@ final class NetworkCaller {
         message: 'The request timed out. Check the connection and try again.',
         retryable: true,
       );
-    } on http.ClientException {
+    } on http.ClientException catch (error) {
       if (uploadOperation != null) {
         WisperBotDebugUploadLogger.unexpectedFailure(
           uploadOperation,
           http.ClientException('redacted'),
         );
       }
-      throw const WisperBotException(
+      throw WisperBotException(
         code: WisperBotErrorCode.network,
-        message: 'Could not connect to WisperBot.',
+        message: _connectionFailureMessage(error),
         retryable: true,
       );
     } on Object catch (error) {
@@ -197,6 +197,21 @@ final class NetworkCaller {
   }
 
   Uri _endpoint(String path) => ApiEndpoints.resolve(_baseUrl, path);
+
+  String _connectionFailureMessage(http.ClientException error) {
+    final message = error.message.toLowerCase();
+    if (message.contains('failed host lookup') ||
+        message.contains('name or service not known') ||
+        message.contains('unable to resolve host')) {
+      return 'Could not resolve the WisperBot server address. '
+          'Check your network or DNS settings and try again.';
+    }
+    if (message.contains('handshake') || message.contains('certificate')) {
+      return 'Could not establish a secure connection to WisperBot. '
+          'Check your device clock and network settings and try again.';
+    }
+    return 'Could not connect to WisperBot.';
+  }
 
   Map<String, String> _headers({
     String? token,

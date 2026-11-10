@@ -118,6 +118,37 @@ void main() {
     expect(body.toLowerCase(), contains('content-type: image/png'));
   });
 
+  test('reports DNS and TLS failures without exposing transport details',
+      () async {
+    for (final failure in <String, String>{
+      "Failed host lookup: 'private.example.test?token=secret'":
+          'Could not resolve the WisperBot server address.',
+      'HandshakeException: CERTIFICATE_VERIFY_FAILED private.example.test':
+          'Could not establish a secure connection to WisperBot.',
+    }.entries) {
+      final caller = NetworkCaller(
+        baseUrl: Uri.parse('https://private.example.test'),
+        httpClient: _TestClient(
+          (_) => throw http.ClientException(failure.key),
+        ),
+      );
+      await expectLater(
+        caller.get(ApiEndpoints.messages, operation: WidgetOperation.read),
+        throwsA(
+          isA<WisperBotException>()
+              .having((error) => error.code, 'code', WisperBotErrorCode.network)
+              .having((error) => error.retryable, 'retryable', isTrue)
+              .having((error) => error.message, 'message',
+                  startsWith(failure.value))
+              .having((error) => error.toString(), 'safe diagnostics',
+                  isNot(contains('private.example.test')))
+              .having((error) => error.toString(), 'safe credentials',
+                  isNot(contains('secret'))),
+        ),
+      );
+    }
+  });
+
   test('maps HTTP, timeout, and connection failures to typed exceptions',
       () async {
     final rateLimited = NetworkCaller(

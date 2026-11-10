@@ -1,6 +1,62 @@
 part of 'chat_controller_test.dart';
 
 void registerSessionTests(WisperBotConfig config) {
+  test('resuming retries a failed startup session with the active identity',
+      () async {
+    var requests = 0;
+    final completed = Completer<void>();
+    final client = WisperBotClient.fromConfig(
+      config: config,
+      user: const WisperBotUser(userId: 'customer-1'),
+      sessionStore: MemorySessionStore(),
+      httpClient: MockClient((request) async {
+        requests++;
+        expect(jsonDecode(request.body)['user_id'], 'customer-1');
+        if (requests == 1) {
+          throw http.ClientException("Failed host lookup: 'chat.example.com'");
+        }
+        return http.Response(jsonEncode(sessionResponse()), 200);
+      }),
+    );
+    final controller = WisperBotChatController(client: client);
+    final states = controller.states.listen((state) {
+      if (state.phase == WisperBotChatPhase.ready && !completed.isCompleted) {
+        completed.complete();
+      }
+    });
+    await expectLater(controller.initializeForLaunchRegistration(),
+        throwsA(isA<WisperBotException>()));
+    controller.didChangeAppLifecycleState(AppLifecycleState.paused);
+    controller.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await completed.future;
+    expect(requests, 2);
+    expect(controller.state.error, isNull);
+    await states.cancel();
+    await controller.dispose();
+    await client.close();
+  });
+
+  test('resuming does not retry rejected session credentials', () async {
+    var requests = 0;
+    final client = WisperBotClient.fromConfig(
+      config: config,
+      sessionStore: MemorySessionStore(),
+      httpClient: MockClient((_) async {
+        requests++;
+        return http.Response('{}', 403);
+      }),
+    );
+    final controller = WisperBotChatController(client: client);
+    await expectLater(controller.initializeForLaunchRegistration(),
+        throwsA(isA<WisperBotException>()));
+    controller.didChangeAppLifecycleState(AppLifecycleState.paused);
+    controller.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await Future<void>.delayed(Duration.zero);
+    expect(requests, 1);
+    await controller.dispose();
+    await client.close();
+  });
+
   test('parses history, unknown fields, and unknown enum values safely',
       () async {
     final store = MemorySessionStore();

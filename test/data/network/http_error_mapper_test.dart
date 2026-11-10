@@ -6,6 +6,14 @@ import 'package:wisperbot_chat/wisperbot_chat.dart';
 import 'package:wisperbot_chat/src/data/network/http_error_mapper.dart';
 
 void main() {
+  test('rejected push registration explains the SDK key requirement', () {
+    final error = mapWidgetHttpError(http.Response('{}', 403),
+        operation: WidgetOperation.push);
+    expect(error.message, contains('SDK key'));
+    expect(error.httpStatus, 403);
+    expect(error.retryable, isFalse);
+  });
+
   test('maps endpoint-aware status codes and retry-after', () {
     final missingWidget = mapWidgetHttpError(
       http.Response('', 404),

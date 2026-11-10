@@ -24,6 +24,15 @@ abstract interface class WidgetRemoteDataSource {
     String? deviceId,
   });
 
+  Future<void> updatePushRegistration({
+    required String widgetKey,
+    required String sessionToken,
+    required String installationId,
+    required String pushToken,
+    required String platform,
+    bool revoke = false,
+  });
+
   Future<WidgetRefreshResult> refresh({
     required String widgetKey,
     required String token,
@@ -78,6 +87,30 @@ final class HttpWidgetRemoteDataSource implements WidgetRemoteDataSource {
   final NetworkCaller _networkCaller;
   final WidgetRequestEncoder _encoder = const WidgetRequestEncoder();
   final WidgetResponseDecoder _decoder = const WidgetResponseDecoder();
+
+  @override
+  Future<void> updatePushRegistration({
+    required String widgetKey,
+    required String sessionToken,
+    required String installationId,
+    required String pushToken,
+    required String platform,
+    bool revoke = false,
+  }) async {
+    await _networkCaller.postJson(
+      '/widget/v1/push',
+      token: sessionToken,
+      body: _encoder.jsonBody({
+        'key': widgetKey,
+        'provider': 'fcm',
+        'installation_id': installationId,
+        'push_token': pushToken,
+        'platform': platform,
+        'revoke': revoke,
+      }),
+      operation: WidgetOperation.push,
+    );
+  }
 
   @override
   Future<WisperBotWidgetConfig> loadConfiguration({

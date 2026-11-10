@@ -34,7 +34,7 @@ void main() {
     });
   });
 
-  test('session body includes device_id and onesignal_id when provided', () {
+  test('session body never sends FCM tokens into legacy OneSignal fields', () {
     final body = encoder.sessionBody(
       widgetKey: 'widget-key',
       user: const WisperBotUser(
@@ -50,11 +50,6 @@ void main() {
       'active': true,
       'name': 'Visitor',
       'email': 'visitor@example.test',
-      'device_id': 'onesignal-sub-id-123',
-      'onesignal_id': 'onesignal-sub-id-123',
-      'push': <String, Object>{
-        'token': 'onesignal-sub-id-123',
-      },
     });
   });
 

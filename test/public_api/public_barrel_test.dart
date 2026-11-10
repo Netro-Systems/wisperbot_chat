@@ -5,7 +5,6 @@ void main() {
   test('public barrel exposes the supported headless integration', () {
     final client = WisperBotClient(
       widgetKey: 'public-widget-key',
-      oneSignalAppId: 'custom-onesignal-app-id',
       sessionStore: _NoopSessionStore(),
     );
     final controller = WisperBotChatController(client: client);

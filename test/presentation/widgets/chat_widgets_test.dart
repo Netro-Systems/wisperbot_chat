@@ -23,7 +23,7 @@ void main() {
   const config = WisperBotConfig(
     widgetKey: 'test-widget',
     apiBaseUrl: 'https://chat.example.com',
-    enableOneSignal: false,
+    enablePushNotifications: false,
     requireNotificationPermission: false,
   );
 

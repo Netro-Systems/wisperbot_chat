@@ -482,7 +482,7 @@ void registerViewStateTests(WisperBotConfig config) {
       widgetKey: config.widgetKey,
       apiBaseUrl: config.apiBaseUrl,
       mediaAdapter: mediaAdapter,
-      enableOneSignal: false,
+      enablePushNotifications: false,
     );
     final runtime = _runtime(
       mediaConfig,
@@ -572,7 +572,7 @@ void registerViewStateTests(WisperBotConfig config) {
       widgetKey: config.widgetKey,
       apiBaseUrl: config.apiBaseUrl,
       mediaAdapter: mediaAdapter,
-      enableOneSignal: false,
+      enablePushNotifications: false,
     );
     final runtime = _runtime(
       mediaConfig,
@@ -629,7 +629,7 @@ void registerViewStateTests(WisperBotConfig config) {
       widgetKey: config.widgetKey,
       apiBaseUrl: config.apiBaseUrl,
       mediaAdapter: mediaAdapter,
-      enableOneSignal: false,
+      enablePushNotifications: false,
     );
     final runtime = _runtime(
       mediaConfig,
@@ -695,7 +695,7 @@ void registerViewStateTests(WisperBotConfig config) {
       widgetKey: config.widgetKey,
       apiBaseUrl: config.apiBaseUrl,
       mediaAdapter: mediaAdapter,
-      enableOneSignal: false,
+      enablePushNotifications: false,
     );
     final runtime = _runtime(
       mediaConfig,
@@ -886,7 +886,7 @@ void registerViewStateTests(WisperBotConfig config) {
       requireNotificationPermission: false,
       widgetKey: config.widgetKey,
       apiBaseUrl: config.apiBaseUrl,
-      enableOneSignal: false,
+      enablePushNotifications: false,
     );
     final runtime = _runtime(
       partialConfig,

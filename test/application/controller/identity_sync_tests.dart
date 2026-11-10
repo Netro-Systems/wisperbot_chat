@@ -201,7 +201,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       config: const WisperBotConfig(
         widgetKey: 'test-widget',
         apiBaseUrl: 'https://chat.example.com',
-        enableOneSignal: false,
+        enablePushNotifications: false,
         requireNotificationPermission: false,
         registerVisitorOnAppLaunch: false,
       ),
@@ -234,7 +234,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       config: const WisperBotConfig(
         widgetKey: 'test-widget',
         apiBaseUrl: 'https://chat.example.com',
-        enableOneSignal: false,
+        enablePushNotifications: false,
         requireNotificationPermission: false,
       ),
       user: const WisperBotUser(name: 'Unverified display name'),
@@ -251,7 +251,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       config: const WisperBotConfig(
         widgetKey: 'test-widget',
         apiBaseUrl: 'https://chat.example.com',
-        enableOneSignal: false,
+        enablePushNotifications: false,
         requireNotificationPermission: false,
       ),
       user: const WisperBotUser(name: 'Unverified display name'),
@@ -269,7 +269,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     const emptyUserConfig = WisperBotConfig(
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com/base/',
-      enableOneSignal: false,
+      enablePushNotifications: false,
       requireNotificationPermission: false,
     );
     final namespace = sessionNamespace(config: emptyUserConfig, user: null);
@@ -331,7 +331,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     const unsignedConfig = WisperBotConfig(
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com/base/',
-      enableOneSignal: false,
+      enablePushNotifications: false,
       requireNotificationPermission: false,
     );
     const unsignedUser = WisperBotUser(
@@ -405,7 +405,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     const migrationConfig = WisperBotConfig(
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com/base/',
-      enableOneSignal: false,
+      enablePushNotifications: false,
       requireNotificationPermission: false,
     );
     const user = WisperBotUser(userId: 'customer-legacy');
@@ -455,7 +455,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     const profileConfig = WisperBotConfig(
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com/base/',
-      enableOneSignal: false,
+      enablePushNotifications: false,
       requireNotificationPermission: false,
     );
     const original = WisperBotUser(

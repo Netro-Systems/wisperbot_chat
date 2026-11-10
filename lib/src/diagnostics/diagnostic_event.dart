@@ -12,6 +12,7 @@ enum WisperBotDiagnosticKind {
   connection,
   refresh,
   send,
+  push,
 }
 
 /// A redacted operational event that contains no visitor or message content.

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../application/services/widget_onesignal_service.dart';
+import '../../application/services/widget_fcm_service.dart';
 import '../../application/wisperbot_runtime.dart';
 import '../../configuration/wisperbot_config.dart';
 import '../../domain/entities/wisperbot_user.dart';
@@ -23,12 +23,16 @@ class WisperBotChatHost extends StatefulWidget {
     required this.config,
     required this.builder,
     this.initialUser,
+    this.handleInitialNotification = true,
     this.onNotificationTapped,
     this.onForegroundNotification,
   });
 
   /// Static SDK and presentation configuration.
   final WisperBotConfig config;
+
+  /// Whether the SDK reads the startup notification. Disable for host-owned routing.
+  final bool handleInitialNotification;
 
   /// Optional visitor identity available when the application starts.
   final WisperBotUser? initialUser;
@@ -70,28 +74,58 @@ class _WisperBotChatHostState extends State<WisperBotChatHost> {
     }
   }
 
+  bool _ownsPushService = false;
+  final Set<String> _handledPushIds = {};
+
   void _initializeNotifications() {
     final config = widget.config;
-    final appId = config.oneSignalAppId;
-    if (config.enableOneSignal && appId != null && appId.trim().isNotEmpty) {
-      unawaited(WidgetOneSignalService.instance.initialize(appId: appId));
+    if (config.enablePushNotifications &&
+        WidgetFcmService.instance.isSupported) {
+      WidgetFcmService.instance.retain();
+      _ownsPushService = true;
     }
-    _notificationClickSubscription = WidgetOneSignalService
+    _notificationClickSubscription = WidgetFcmService
         .instance.notificationClicks
         .listen(_handleNotificationClick);
-    _foregroundSubscription = WidgetOneSignalService
-        .instance.foregroundNotifications
-        .listen((payload) => widget.onForegroundNotification?.call(payload));
+    _foregroundSubscription =
+        WidgetFcmService.instance.foregroundNotifications.listen((payload) {
+      if (_controller.acceptsPushPayload(payload)) {
+        widget.onForegroundNotification?.call(payload);
+      }
+    });
+    WidgetFcmService.instance.flushPendingTap();
+    if (_ownsPushService && widget.handleInitialNotification) {
+      unawaited(WidgetFcmService.instance.initialMessage().then((message) {
+        if (mounted && message != null) {
+          _handleNotificationClick(WidgetFcmService.instance.payload(message));
+        }
+      }).catchError((_) {}));
+    }
   }
 
   void _handleNotificationClick(Map<String, dynamic> payload) {
+    unawaited(_routeNotification(payload).catchError((_) {}));
+  }
+
+  Future<void> _routeNotification(Map<String, dynamic> payload) async {
+    if (payload['widget_key'] != widget.config.widgetKey ||
+        payload['source'] != 'wisperbot') {
+      return;
+    }
+    await _controller.initializeForLaunchRegistration();
+    if (!mounted || !_controller.acceptsPushPayload(payload)) return;
+    final id = payload['notification_id']?.toString();
+    if (id != null && !_handledPushIds.add(id)) return;
+    if (_handledPushIds.length > 100) {
+      _handledPushIds.remove(_handledPushIds.first);
+    }
     final callback = widget.onNotificationTapped;
     if (callback != null) {
       callback(payload);
       return;
     }
     final context = _navigatorKey.currentContext;
-    if (context == null) {
+    if (context == null || !context.mounted) {
       _pendingNotificationPayload = payload;
       _schedulePendingNotificationOpen();
       return;
@@ -104,7 +138,11 @@ class _WisperBotChatHostState extends State<WisperBotChatHost> {
       if (!mounted) return;
       final payload = _pendingNotificationPayload;
       final context = _navigatorKey.currentContext;
-      if (payload == null || context == null) return;
+      if (payload == null ||
+          context == null ||
+          !_controller.acceptsPushPayload(payload)) {
+        return;
+      }
       _pendingNotificationPayload = null;
       _openNotification(context, payload);
     });
@@ -135,6 +173,7 @@ class _WisperBotChatHostState extends State<WisperBotChatHost> {
   void dispose() {
     unawaited(_notificationClickSubscription?.cancel());
     unawaited(_foregroundSubscription?.cancel());
+    if (_ownsPushService) unawaited(WidgetFcmService.instance.release());
     unawaited(_controller.dispose().whenComplete(_client.close));
     super.dispose();
   }
