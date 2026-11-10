@@ -33,7 +33,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  wisperbot_chat: ^0.2.6
+  wisperbot_chat: ^0.2.5
 ```
 
 Or run:
