@@ -60,6 +60,64 @@ void main() {
         isFalse);
   });
 
+  test('lookup images decode in history, refresh, and realtime messages', () {
+    const imageUrl = 'https://cdn.example.com/plan?id=42';
+    const body = 'See [Malaysia plans](https://example.com/malaysia).';
+    final reply = message(id: 7, body: body)
+      ..['lookup_images'] = [
+        {'image_url': imageUrl, 'label': 'Malaysia'},
+        {'image_url': 'https://cdn.example.com/second.png'},
+        {'image_url': 'https://cdn.example.com/third.png'},
+        {'image_url': 'https://cdn.example.com/extra.png'},
+      ];
+
+    final history = decoder.session(
+      http.Response(jsonEncode(sessionResponse(messages: [reply])), 200),
+      preChatCompleted: false,
+    );
+    final refresh = decoder.refresh(
+      http.Response(jsonEncode(pollResponse(messages: [reply])), 200),
+    );
+    for (final parsed in [
+      history.messages.single,
+      refresh.messages.single,
+      decoder.realtimeMessage({'message': reply})!,
+    ]) {
+      expect(parsed.body, body);
+      expect(parsed.type, WisperBotMessageType.text);
+      expect(parsed.attachment, isNull);
+      expect(parsed.lookupImages, hasLength(3));
+      expect(parsed.lookupImages.first.url, Uri.parse(imageUrl));
+      expect(parsed.lookupImages.first.label, 'Malaysia');
+      expect(parsed.copyWith(status: WisperBotMessageStatus.read).lookupImages,
+          parsed.lookupImages);
+    }
+  });
+
+  test('ignores missing and unusable lookup images', () {
+    final reply = message(id: 8);
+    expect(decoder.realtimeMessage({'message': reply})!.lookupImages, isEmpty);
+    for (final images in <Object?>[
+      null,
+      [],
+      {'image_url': 'https://cdn.example.com/photo.png'},
+      [
+        null,
+        'invalid',
+        {'image_url': ''}
+      ],
+      [
+        {'image_url': '/photo.png'},
+        {'image_url': 'http://cdn.example.com/photo.png'},
+        {'image_url': 'https://user@cdn.example.com/photo.png'},
+      ],
+    ]) {
+      reply['lookup_images'] = images;
+      expect(
+          decoder.realtimeMessage({'message': reply})!.lookupImages, isEmpty);
+    }
+  });
+
   test('session decoder ignores unknown fields and maps known values', () {
     final result = decoder.session(
       http.Response(

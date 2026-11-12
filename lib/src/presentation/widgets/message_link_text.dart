@@ -4,9 +4,15 @@ import 'package:url_launcher/url_launcher.dart';
 
 /// Selectable message text with tappable web links.
 class MessageLinkText extends StatefulWidget {
-  const MessageLinkText({super.key, required this.text, this.style});
+  const MessageLinkText({
+    super.key,
+    required this.text,
+    required this.linkColor,
+    this.style,
+  });
 
   final String text;
+  final Color linkColor;
   final TextStyle? style;
 
   @override
@@ -30,7 +36,9 @@ class _MessageLinkTextState extends State<MessageLinkText> {
   @override
   void didUpdateWidget(covariant MessageLinkText oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.text != widget.text || oldWidget.style != widget.style) {
+    if (oldWidget.text != widget.text ||
+        oldWidget.style != widget.style ||
+        oldWidget.linkColor != widget.linkColor) {
       _updateSpans();
     }
   }
@@ -69,6 +77,7 @@ class _MessageLinkTextState extends State<MessageLinkText> {
       _spans.add(TextSpan(
         text: markdownLabel ?? link,
         style: TextStyle(
+          color: widget.linkColor,
           decoration: TextDecoration.underline,
           fontSize: (widget.style?.fontSize ?? 14) + 1,
           fontWeight: FontWeight.w700,

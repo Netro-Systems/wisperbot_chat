@@ -16,6 +16,7 @@ class WisperBotRemoteImage extends StatelessWidget {
     this.fit = BoxFit.contain,
     this.alignment = Alignment.center,
     this.semanticLabel,
+    this.imageBuilder,
   });
 
   final Uri url;
@@ -25,11 +26,13 @@ class WisperBotRemoteImage extends StatelessWidget {
   final BoxFit fit;
   final AlignmentGeometry alignment;
   final String? semanticLabel;
+  final Widget Function(BuildContext context, Widget image)? imageBuilder;
 
   @override
   Widget build(BuildContext context) {
     if (_isSvgUrl(url)) return _buildSvg(context);
 
+    final builder = imageBuilder;
     return Image.network(
       url.toString(),
       width: width,
@@ -37,6 +40,10 @@ class WisperBotRemoteImage extends StatelessWidget {
       fit: fit,
       alignment: alignment,
       semanticLabel: semanticLabel,
+      frameBuilder: builder == null
+          ? null
+          : (context, image, frame, _) =>
+              frame == null ? const SizedBox.shrink() : builder(context, image),
       errorBuilder: (context, _, __) => _hasKnownRasterExtension(url)
           ? errorBuilder(context)
           : _buildSvg(context),
@@ -50,6 +57,9 @@ class WisperBotRemoteImage extends StatelessWidget {
         fit: fit,
         alignment: alignment,
         semanticsLabel: semanticLabel,
+        placeholderBuilder:
+            imageBuilder == null ? null : (_) => const SizedBox.shrink(),
+        imageBuilder: imageBuilder,
         errorBuilder: (context, _, __) => errorBuilder(context),
       );
 }

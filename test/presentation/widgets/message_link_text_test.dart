@@ -30,11 +30,15 @@ void main() {
   Future<void> pump(
     WidgetTester tester,
     String text, {
+    Color linkColor = Colors.blue,
     TextStyle? style,
   }) =>
       tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(body: MessageLinkText(text: text, style: style)),
+          home: Scaffold(
+            body:
+                MessageLinkText(text: text, linkColor: linkColor, style: style),
+          ),
         ),
       );
 
@@ -53,6 +57,7 @@ void main() {
     final links = parts.where((span) => span.recognizer != null).toList();
     expect(links.length, 2);
     for (final link in links) {
+      expect(link.style?.color, Colors.blue);
       (link.recognizer! as TapGestureRecognizer).onTap!();
       await tester.pump();
     }
@@ -73,6 +78,7 @@ void main() {
     );
     final link = parts.singleWhere((span) => span.recognizer != null);
     expect(link.text, 'contact us on WhatsApp');
+    expect(link.style?.color, Colors.blue);
     expect(link.style?.fontSize, 15);
     expect(link.style?.fontWeight, FontWeight.w700);
     expect(link.style?.decoration, TextDecoration.underline);
@@ -91,6 +97,10 @@ void main() {
 
   testWidgets('updates links and leaves plain text selectable', (tester) async {
     await pump(tester, 'https://example.com');
+    await pump(tester, 'https://example.com',
+        linkColor: Colors.lightBlueAccent);
+    final link = spans(tester).singleWhere((span) => span.recognizer != null);
+    expect(link.style?.color, Colors.lightBlueAccent);
     await pump(tester, 'Plain text javascript:alert(1)');
     expect(spans(tester).where((span) => span.recognizer != null), isEmpty);
     expect(spans(tester).single.text, 'Plain text javascript:alert(1)');
