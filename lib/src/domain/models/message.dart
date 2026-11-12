@@ -22,6 +22,18 @@ enum WisperBotMessageStatus {
 /// Backend-reported sender category.
 enum WisperBotSenderKind { visitor, bot, human, automation, broadcast, unknown }
 
+/// Optional image supplied alongside a lookup reply.
+final class WisperBotLookupImage {
+  /// Creates a lookup image with an optional accessible label.
+  const WisperBotLookupImage({required this.url, this.label = ''});
+
+  /// Remote image URL.
+  final Uri url;
+
+  /// Server-supplied description of the image.
+  final String label;
+}
+
 /// Immutable chat message visible to headless and prebuilt integrations.
 class WisperBotMessage {
   /// Creates a message with local and optional server identity.
@@ -34,6 +46,7 @@ class WisperBotMessage {
     required this.createdAt,
     this.serverId,
     this.attachment,
+    this.lookupImages = const <WisperBotLookupImage>[],
     this.localUpload,
     this.senderName,
     this.isActivity = false,
@@ -64,6 +77,9 @@ class WisperBotMessage {
 
   /// Optional attachment metadata.
   final WisperBotAttachment? attachment;
+
+  /// Images supplied by the backend for this lookup reply.
+  final List<WisperBotLookupImage> lookupImages;
 
   /// Optional in-memory upload used for local pending media previews.
   final WisperBotUpload? localUpload;
@@ -99,6 +115,7 @@ class WisperBotMessage {
     WisperBotMessageStatus? status,
     DateTime? createdAt,
     WisperBotAttachment? attachment,
+    List<WisperBotLookupImage>? lookupImages,
     WisperBotUpload? localUpload,
     String? senderName,
     bool? isActivity,
@@ -115,6 +132,7 @@ class WisperBotMessage {
         status: status ?? this.status,
         createdAt: createdAt ?? this.createdAt,
         attachment: attachment ?? this.attachment,
+        lookupImages: lookupImages ?? this.lookupImages,
         localUpload: localUpload ?? this.localUpload,
         senderName: senderName ?? this.senderName,
         isActivity: isActivity ?? this.isActivity,

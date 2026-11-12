@@ -1,6 +1,99 @@
 part of 'chat_widgets_test.dart';
 
 void registerViewStateTests(WisperBotConfig config) {
+  testWidgets('sizes lookup images, adds a gap, and hides broken images',
+      (tester) async {
+    const imageUrl = 'https://cdn.example.com/lookup.png';
+    const brokenUrl = 'https://cdn.example.com/unavailable.png';
+    const imageProvider = NetworkImage(imageUrl);
+    final recorder = ui.PictureRecorder();
+    ui.Canvas(recorder).drawColor(Colors.blue, ui.BlendMode.src);
+    final picture = recorder.endRecording();
+    final image = picture.toImageSync(130, 200);
+    picture.dispose();
+    final cache = PaintingBinding.instance.imageCache;
+    cache.putIfAbsent(
+      imageProvider,
+      () => OneFrameImageStreamCompleter(Future.value(ImageInfo(image: image))),
+    );
+    addTearDown(() => cache.evict(imageProvider));
+
+    final replies = [
+      message(id: 1, body: '[Malaysia plans](https://example.com/malaysia)')
+        ..['lookup_images'] = [
+          {'image_url': imageUrl, 'label': 'Malaysia'}
+        ],
+      message(id: 2, body: 'Thailand plans'),
+      message(id: 3, body: 'Singapore plans')
+        ..['lookup_images'] = [
+          {'image_url': brokenUrl}
+        ],
+    ];
+    final runtime = _runtime(
+      config,
+      MockClient((request) async => http.Response(
+            jsonEncode(request.url.path.endsWith('/session')
+                ? sessionResponse(messages: replies)
+                : pollResponse()),
+            200,
+          )),
+    );
+    await tester.pumpWidget(_app(
+      WisperBotChatView(controller: runtime.controller),
+    ));
+    await tester.pumpAndSettle();
+
+    final thumbnail = find.byWidgetPredicate((widget) =>
+        widget is WisperBotRemoteImage && widget.url.toString() == imageUrl);
+    final broken = find.byWidgetPredicate((widget) =>
+        widget is WisperBotRemoteImage && widget.url.toString() == brokenUrl);
+    final renderedImage =
+        find.descendant(of: thumbnail, matching: find.byType(RawImage));
+    expect(tester.widget<WisperBotRemoteImage>(thumbnail).semanticLabel,
+        'Malaysia');
+    final thumbnailSize = tester.getSize(renderedImage);
+    expect(thumbnailSize.width, 220);
+    expect(thumbnailSize.aspectRatio, closeTo(288 / 158, 0.001));
+    expect(tester.widget<RawImage>(renderedImage).fit, BoxFit.cover);
+    final reply = find.text('Malaysia plans');
+    final replyText = find.ancestor(
+      of: reply,
+      matching: find.byType(SelectableText),
+    );
+    final link = tester
+        .widget<SelectableText>(replyText)
+        .textSpan!
+        .children!
+        .whereType<TextSpan>()
+        .singleWhere((span) => span.recognizer != null);
+    expect(link.style?.color, const Color(0xFF1300E6));
+    expect(
+      tester.getTopLeft(reply).dy - tester.getBottomLeft(renderedImage).dy,
+      closeTo(8, 0.01),
+    );
+    expect(tester.getSize(broken), Size.zero);
+    expect(find.text('Singapore plans'), findsOneWidget);
+    final textOnly = find.byKey(
+      const ValueKey<String>('wisperbot-message-bubble-server-2'),
+    );
+    expect(find.text('Thailand plans'), findsOneWidget);
+    expect(
+      find.descendant(
+          of: textOnly, matching: find.byType(WisperBotRemoteImage)),
+      findsNothing,
+    );
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(320, 650));
+    await tester.pumpAndSettle();
+    final narrowThumbnailSize = tester.getSize(renderedImage);
+    expect(narrowThumbnailSize.width, lessThan(220));
+    expect(narrowThumbnailSize.aspectRatio, closeTo(288 / 158, 0.001));
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
   testWidgets('shows resolved activity in the message list', (tester) async {
     final resolved = message(id: 1, type: 'event', body: 'Resolved by Rahim')
       ..addAll({

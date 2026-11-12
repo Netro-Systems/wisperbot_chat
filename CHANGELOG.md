@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.6 - 2026-11-12
+
+### Added
+
+- Display available lookup images above bot replies in the prebuilt chat UI. Thumbnails use a 288:158 aspect ratio and resize to fit the bubble. Missing or failed images leave the reply text visible without a placeholder.
+- Expose lookup images through `WisperBotMessage.lookupImages` and `WisperBotLookupImage` for custom chat UIs. The SDK reads them from message history, refreshes, and realtime updates.
+
+### Changed
+
+- Style tappable message links with `#1300E6`.
+
 ## 0.2.5 - 2026-11-10
 
 ### Added
