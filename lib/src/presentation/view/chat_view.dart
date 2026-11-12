@@ -171,11 +171,15 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text(next.error!.message),
-            action: !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
+            action: !kIsWeb &&
+                    (defaultTargetPlatform == TargetPlatform.iOS ||
+                        defaultTargetPlatform == TargetPlatform.android)
                 ? SnackBarAction(
                     label: 'Settings',
                     onPressed: () async {
-                      await launchUrl(Uri.parse('app-settings:'));
+                      await AppSettings.openAppSettings(
+                        type: AppSettingsType.notification,
+                      );
                     },
                   )
                 : null,

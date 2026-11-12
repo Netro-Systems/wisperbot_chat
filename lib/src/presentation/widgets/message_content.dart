@@ -14,9 +14,8 @@ class _MessageContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textColor = message.role == WisperBotMessageRole.visitor
-        ? colors.onVisitorBubble
-        : colors.onAgentBubble;
+    final visitor = message.role == WisperBotMessageRole.visitor;
+    final textColor = visitor ? colors.onVisitorBubble : colors.onAgentBubble;
     final attachment = message.attachment;
     final localUpload = message.localUpload;
     final hasMedia = attachment != null || localUpload != null;
@@ -44,6 +43,26 @@ class _MessageContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
+        for (final image in message.lookupImages)
+          WisperBotRemoteImage(
+            url: image.url,
+            fit: BoxFit.cover,
+            semanticLabel: image.label.isEmpty ? null : image.label,
+            errorBuilder: (_) => const SizedBox.shrink(),
+            imageBuilder: (_, child) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: SizedBox(
+                width: 220,
+                child: AspectRatio(
+                  aspectRatio: 288 / 158,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: child,
+                  ),
+                ),
+              ),
+            ),
+          ),
         if (isImage && hasMedia)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -60,7 +79,7 @@ class _MessageContent extends StatelessWidget {
               attachment: attachment,
               localUpload: localUpload,
               colors: colors,
-              visitor: message.role == WisperBotMessageRole.visitor,
+              visitor: visitor,
               loadAttachmentBytes: controller.loadAttachmentBytes,
             ),
           ),
@@ -75,6 +94,7 @@ class _MessageContent extends StatelessWidget {
         if (_visibleMessageBody(message).isNotEmpty)
           MessageLinkText(
             text: _visibleMessageBody(message),
+            linkColor: const Color(0xFF1300E6),
             style: Theme.of(context)
                 .textTheme
                 .bodyMedium

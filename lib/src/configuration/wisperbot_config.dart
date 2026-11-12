@@ -28,8 +28,8 @@ class WisperBotConfig {
     this.enableTyping = true,
     this.mediaAdapter,
     this.diagnostics,
-    this.oneSignalAppId,
-    this.enableOneSignal = true,
+    this.enablePushNotifications = true,
+    this.useFirebaseInstallationId = false,
     this.requireNotificationPermission = true,
     this.registerVisitorOnAppLaunch = true,
     this.sessionStore,
@@ -66,17 +66,22 @@ class WisperBotConfig {
   /// Optional receiver for redacted operational diagnostics.
   final WisperBotDiagnosticsCallback? diagnostics;
 
-  /// Optional OneSignal App ID used for push notifications.
-  final String? oneSignalAppId;
+  /// Whether FCM push registration uses the host app's initialized Firebase app.
+  final bool enablePushNotifications;
 
-  /// Whether OneSignal push notification device registration is enabled.
-  final bool enableOneSignal;
+  /// Uses Firebase Messaging 17's registered installation ID instead of a token.
+  ///
+  /// Enable only when the host has opted into FID messaging in its native
+  /// configuration. The default preserves token-based hosts and older Firebase
+  /// versions. This never changes the host's native registration mode.
+  final bool useFirebaseInstallationId;
 
-  /// Requires notification permission before chat starts. Requires OneSignal
-  /// to be enabled with an app ID on Android or iOS.
+  /// Requires notification permission when chat is opened. Launch-time visitor
+  /// registration remains permission-neutral. Requires push notifications and an initialized Firebase app on Android or iOS.
   final bool requireNotificationPermission;
 
-  /// Whether the SDK registers visitor presence when the app launches.
+  /// Whether the SDK registers visitor presence when the app launches without
+  /// requesting notification permission.
   ///
   /// Opening chat still creates the visitor session required by the chat API
   /// when this is disabled.

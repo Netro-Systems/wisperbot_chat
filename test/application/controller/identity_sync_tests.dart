@@ -1,6 +1,93 @@
 part of 'chat_controller_test.dart';
 
 void registerIdentitySyncTests(WisperBotConfig config) {
+  test('login during guest initialization restores account history', () async {
+    final store = MemorySessionStore();
+    final guestStarted = Completer<void>();
+    final guestResponse = Completer<http.Response>();
+    final client = WisperBotClient.fromConfig(
+      config: config,
+      sessionStore: store,
+      httpClient: MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        if (body['user_id'] == 'customer-1') {
+          return http.Response(
+              jsonEncode(sessionResponse(
+                visitorId: 'account-visitor',
+                token: 'account-token',
+                messages: [message(id: 20, body: 'Account history')],
+              )),
+              200);
+        }
+        if (!guestStarted.isCompleted) guestStarted.complete();
+        return guestResponse.future;
+      }),
+    );
+    final controller = WisperBotChatController(client: client);
+    final initializing = controller.initialize();
+    await guestStarted.future;
+    final login = controller.updateUser(
+      const WisperBotUser(userId: 'customer-1'),
+    );
+    await Future<void>.delayed(Duration.zero);
+    guestResponse.complete(http.Response(
+        jsonEncode(sessionResponse(
+          visitorId: 'guest-visitor',
+          token: 'guest-token',
+          messages: [message(id: 10, body: 'Guest history')],
+        )),
+        200));
+    await Future.wait([initializing, login]);
+
+    expect(controller.user?.userId, 'customer-1');
+    expect(controller.state.messages.single.body, 'Account history');
+    expect(store.values[sessionNamespace(config: config, user: null)]?.token,
+        'guest-token');
+    expect(
+        store
+            .values[sessionNamespace(
+                config: config,
+                user: const WisperBotUser(userId: 'customer-1'))]
+            ?.token,
+        'account-token');
+    await controller.updateUser(const WisperBotUser());
+    expect(controller.state.messages.single.body, 'Guest history');
+    await controller.updateUser(const WisperBotUser(userId: 'customer-1'));
+    expect(controller.state.messages.single.body, 'Account history');
+    await controller.dispose();
+    await client.close();
+  });
+
+  test('identifying the same account during initialization keeps history',
+      () async {
+    final started = Completer<void>();
+    final response = Completer<http.Response>();
+    const user = WisperBotUser(userId: 'customer-1');
+    final client = WisperBotClient.fromConfig(
+      config: config,
+      user: user,
+      sessionStore: MemorySessionStore(),
+      httpClient: MockClient((_) async {
+        started.complete();
+        return response.future;
+      }),
+    );
+    final controller = WisperBotChatController(client: client);
+    final initializing = controller.initialize();
+    await started.future;
+    await controller.updateUser(user);
+    response.complete(http.Response(
+        jsonEncode(sessionResponse(
+          messages: [message(id: 20, body: 'Account history')],
+        )),
+        200));
+    await initializing;
+    expect(controller.state.phase, WisperBotChatPhase.ready);
+    expect(controller.state.messages.single.body, 'Account history');
+    await controller.dispose();
+    await client.close();
+  });
+
   test('account and guest switches restore their isolated sessions', () async {
     final headers = <String?>[];
     final bodies = <Map<String, dynamic>>[];
@@ -114,7 +201,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       config: const WisperBotConfig(
         widgetKey: 'test-widget',
         apiBaseUrl: 'https://chat.example.com',
-        enableOneSignal: false,
+        enablePushNotifications: false,
         requireNotificationPermission: false,
         registerVisitorOnAppLaunch: false,
       ),
@@ -147,7 +234,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       config: const WisperBotConfig(
         widgetKey: 'test-widget',
         apiBaseUrl: 'https://chat.example.com',
-        enableOneSignal: false,
+        enablePushNotifications: false,
         requireNotificationPermission: false,
       ),
       user: const WisperBotUser(name: 'Unverified display name'),
@@ -164,7 +251,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
       config: const WisperBotConfig(
         widgetKey: 'test-widget',
         apiBaseUrl: 'https://chat.example.com',
-        enableOneSignal: false,
+        enablePushNotifications: false,
         requireNotificationPermission: false,
       ),
       user: const WisperBotUser(name: 'Unverified display name'),
@@ -182,7 +269,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     const emptyUserConfig = WisperBotConfig(
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com/base/',
-      enableOneSignal: false,
+      enablePushNotifications: false,
       requireNotificationPermission: false,
     );
     final namespace = sessionNamespace(config: emptyUserConfig, user: null);
@@ -244,7 +331,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     const unsignedConfig = WisperBotConfig(
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com/base/',
-      enableOneSignal: false,
+      enablePushNotifications: false,
       requireNotificationPermission: false,
     );
     const unsignedUser = WisperBotUser(
@@ -318,7 +405,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     const migrationConfig = WisperBotConfig(
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com/base/',
-      enableOneSignal: false,
+      enablePushNotifications: false,
       requireNotificationPermission: false,
     );
     const user = WisperBotUser(userId: 'customer-legacy');
@@ -368,7 +455,7 @@ void registerIdentitySyncTests(WisperBotConfig config) {
     const profileConfig = WisperBotConfig(
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com/base/',
-      enableOneSignal: false,
+      enablePushNotifications: false,
       requireNotificationPermission: false,
     );
     const original = WisperBotUser(

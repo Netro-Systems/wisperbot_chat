@@ -27,8 +27,186 @@ class WisperBotChatController with WidgetsBindingObserver {
   late final StreamController<WisperBotChatState> _statesController;
   late final StreamController<WisperBotChatEvent> _eventsController;
   final ChatStateMachine _stateMachine = ChatStateMachine();
-  final WidgetOneSignalService _oneSignalService =
-      WidgetOneSignalService.instance;
+  final WidgetFcmService _fcmService = WidgetFcmService.instance;
+  bool _ownsPushService = false;
+  StreamSubscription<String?>? _pushSubscription;
+  Timer? _pushRetry;
+  Future<void>? _pushQueue;
+  String? _registeredPushToken;
+  String? _registeredSessionToken;
+  String? _latestPushToken;
+  final List<Map<String, String>> _pushRegistrationCandidates = [];
+  final List<Map<String, String>> _pendingPushRevocations = [];
+  late final _pushRevocationStore = PushRevocationStore(
+      validateAndCanonicalizeBaseUrl(_runtimeConfig.apiBaseUrl).toString(),
+      _runtimeConfig.widgetKey);
+  bool _pushRevocationsLoaded = false;
+
+  Future<void> _loadPushRevocations() async {
+    if (_pushRevocationsLoaded) return;
+    _pendingPushRevocations.addAll(await _pushRevocationStore.read());
+    _pushRevocationsLoaded = true;
+  }
+
+  Future<void> _drainPushRevocations() async {
+    await _loadPushRevocations();
+    while (_pendingPushRevocations.isNotEmpty) {
+      final record = _pendingPushRevocations.first;
+      final session = WisperBotStoredSession(
+          visitorId: record['visitor_id']!,
+          token: record['session_token']!,
+          savedAt: DateTime.now());
+      try {
+        if (kDebugMode) debugPrint('WisperBot push: revocation started');
+        await _client._updatePushRegistration(session,
+            token: record['push_token']!,
+            revoke: true,
+            installationId: record['installation_id']);
+        if (kDebugMode) debugPrint('WisperBot push: revocation succeeded');
+      } on WisperBotException catch (error) {
+        if (kDebugMode) {
+          debugPrint('WisperBot push: revocation failed '
+              '(HTTP ${error.httpStatus ?? "unavailable"}): ${error.code.name}');
+        }
+        if (![401, 403, 404].contains(error.httpStatus)) rethrow;
+        // Expired/deleted scope cannot revoke; the next registration replaces it.
+      }
+      _pendingPushRevocations.removeAt(0);
+      await _pushRevocationStore.write(_pendingPushRevocations);
+    }
+  }
+
+  void _retainPushService() {
+    if (_ownsPushService) return;
+    _fcmService.retain();
+    _ownsPushService = true;
+    _pushSubscription = _fcmService
+        .registrationChanges(
+      useFirebaseInstallationId: _runtimeConfig.useFirebaseInstallationId,
+    )
+        .listen((token) {
+      _latestPushToken = token;
+      if (token == null) {
+        final previous = _pushQueue ?? Future<void>.value();
+        _pushQueue =
+            previous.then((_) => _revokePushRegistration(waitForQueue: false));
+        unawaited(_pushQueue);
+      } else {
+        unawaited(_syncPushRegistration());
+      }
+    });
+  }
+
+  /// Checks notification scope against the currently authenticated visitor.
+  bool acceptsPushPayload(Map<String, dynamic> payload) {
+    final session = _client._sessions._session;
+    return session != null &&
+        payload['source'] == 'wisperbot' &&
+        payload['type'] == 'widget_message' &&
+        payload['widget_key'] == _runtimeConfig.widgetKey &&
+        payload['visitor_id'] == session.visitorId;
+  }
+
+  Future<void> _syncPushRegistration() {
+    if (_disposed ||
+        !_runtimeConfig.enablePushNotifications ||
+        !_fcmService.isSupported) {
+      return Future<void>.value();
+    }
+    final revision = _sessionRevision;
+    return _pushQueue = (_pushQueue ?? Future<void>.value()).then((_) async {
+      if (_disposed || revision != _sessionRevision) return;
+      try {
+        await _drainPushRevocations();
+        final session = _client._sessions._session;
+        if (session == null) {
+          if (kDebugMode) debugPrint('WisperBot push: waiting for session');
+          return;
+        }
+        final token = _latestPushToken ??
+            await _fcmService.currentPushToken(
+              useFirebaseInstallationId:
+                  _runtimeConfig.useFirebaseInstallationId,
+            );
+        if (_disposed || revision != _sessionRevision) return;
+        if (token == null || token.isEmpty) {
+          if (kDebugMode) debugPrint('WisperBot push: waiting for FCM token');
+          _schedulePushRetry();
+          return;
+        }
+        if (_registeredPushToken == token &&
+            _registeredSessionToken == session.token) {
+          return;
+        }
+        final candidate = {
+          'visitor_id': session.visitorId,
+          'session_token': session.token,
+          'push_token': token,
+          'installation_id': await WisperBotClient._currentPushInstallation(),
+        };
+        if (!_pushRegistrationCandidates.any((entry) =>
+            entry['push_token'] == token &&
+            entry['session_token'] == session.token)) {
+          _pushRegistrationCandidates.add(candidate);
+        }
+        // Track attempts too: the server may commit before an HTTP timeout.
+        if (kDebugMode) {
+          debugPrint('WisperBot push: registration started (/widget/v1/push)');
+        }
+        await _client._updatePushRegistration(session, token: token);
+        if (kDebugMode) debugPrint('WisperBot push: registration succeeded');
+        _pushRegistrationCandidates
+          ..clear()
+          ..add(candidate);
+        _registeredPushToken = token;
+        _registeredSessionToken = session.token;
+        _pushRetry?.cancel();
+        _diagnostic(WisperBotDiagnosticKind.push);
+      } on Object catch (error) {
+        final exception = _asWisperBotException(error);
+        _diagnostic(WisperBotDiagnosticKind.push, exception: exception);
+        if (kDebugMode) {
+          debugPrint('WisperBot push registration failed '
+              '(HTTP ${exception.httpStatus ?? "unavailable"}): '
+              '${exception.code.name}');
+        }
+        _schedulePushRetry();
+      }
+    });
+  }
+
+  void _schedulePushRetry() {
+    if (_disposed || _pushRetry?.isActive == true) return;
+    if (kDebugMode) debugPrint('WisperBot push: retry scheduled in 30 seconds');
+    _pushRetry = Timer(const Duration(seconds: 30), () {
+      if (_foreground) unawaited(_syncPushRegistration());
+    });
+  }
+
+  Future<void> _revokePushRegistration({bool waitForQueue = true}) async {
+    if (!_runtimeConfig.enablePushNotifications || !_fcmService.isSupported) {
+      return;
+    }
+    _pushRetry?.cancel();
+    final pushQueue = _pushQueue;
+    if (waitForQueue && pushQueue != null) await pushQueue;
+    try {
+      await _loadPushRevocations();
+      if (_pushRegistrationCandidates.isNotEmpty) {
+        _pendingPushRevocations.addAll(_pushRegistrationCandidates);
+        // Persist before attempting the network, so an offline logout survives restart.
+        await _pushRevocationStore.write(_pendingPushRevocations);
+        _pushRegistrationCandidates.clear();
+      }
+      await _drainPushRevocations();
+    } on Object {
+      _schedulePushRetry();
+    } finally {
+      _registeredPushToken = null;
+      _registeredSessionToken = null;
+    }
+  }
+
   Future<void>? _initializing;
   Future<void>? _configurationLoading;
   Future<void>? _refreshInFlight;
@@ -93,13 +271,17 @@ class WisperBotChatController with WidgetsBindingObserver {
 
   @internal
   Future<void> ensureRuntimeChatPermission() =>
-      _oneSignalService.ensureChatPermission(_client._config);
+      _fcmService.ensureChatPermission(_client._config);
 
   /// Visitor identity currently owned by this runtime.
   WisperBotUser? get user => _client._activeUser;
 
-  /// Resolves the current OneSignal Push Subscription ID if enabled.
-  Future<String?> currentPushToken() => _oneSignalService.currentPushToken();
+  /// Resolves the host app's FCM token without changing permissions.
+  Future<String?> currentPushToken() => _runtimeConfig.enablePushNotifications
+      ? _fcmService.currentPushToken(
+          useFirebaseInstallationId: _runtimeConfig.useFirebaseInstallationId,
+        )
+      : Future<String?>.value();
 
   /// Creates or restores the identity-scoped session.
   ///
@@ -107,14 +289,24 @@ class WisperBotChatController with WidgetsBindingObserver {
   /// [WisperBotChatPhase.ready], [WisperBotChatPhase.awaitingPreChat], or
   /// [WisperBotChatPhase.failure]. Throws a typed [WisperBotException] when
   /// configuration, storage, transport, or response validation fails.
-  Future<void> initialize() {
+  Future<void> initialize() => _initialize(requestNotificationPermission: true);
+
+  /// Registers an eager visitor session without prompting for notifications.
+  @internal
+  Future<void> initializeForLaunchRegistration() =>
+      _initialize(requestNotificationPermission: false);
+
+  Future<void> _initialize({required bool requestNotificationPermission}) {
     _ensureNotDisposed();
     if (_state.phase == WisperBotChatPhase.ready) {
       return Future<void>.value();
     }
     final active = _initializing;
     if (active != null) return active;
-    final future = _initializeInternal();
+    final future = _initializeInternal(
+      _sessionRevision,
+      requestNotificationPermission: requestNotificationPermission,
+    );
     _initializing = future;
     return future.whenComplete(() {
       if (identical(_initializing, future)) _initializing = null;
@@ -150,7 +342,10 @@ class WisperBotChatController with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _initializeInternal() async {
+  Future<void> _initializeInternal(
+    int revision, {
+    required bool requestNotificationPermission,
+  }) async {
     final started = DateTime.now();
     _observeLifecycle();
     _emit(
@@ -161,7 +356,9 @@ class WisperBotChatController with WidgetsBindingObserver {
       ),
     );
     try {
-      await _oneSignalService.ensureChatPermission(_runtimeConfig);
+      if (requestNotificationPermission) {
+        await _fcmService.ensureChatPermission(_runtimeConfig);
+      }
       final configurationLoading = _configurationLoading;
       if (configurationLoading != null) {
         try {
@@ -170,20 +367,16 @@ class WisperBotChatController with WidgetsBindingObserver {
           // Initialization retries the session request below.
         }
       }
-      String? deviceId;
-      final oneSignalAppId = _runtimeConfig.oneSignalAppId;
-      if (_runtimeConfig.enableOneSignal &&
-          oneSignalAppId != null &&
-          oneSignalAppId.isNotEmpty) {
-        await _oneSignalService.initialize(appId: oneSignalAppId);
-        final activeUserId = _client._activeUser?.userId;
-        if (activeUserId != null && activeUserId.isNotEmpty) {
-          await _oneSignalService.login(activeUserId);
-        }
-        deviceId = await _oneSignalService.currentPushToken();
+      if (_runtimeConfig.enablePushNotifications && _fcmService.isSupported) {
+        _retainPushService();
       }
 
-      final result = await _client._startSession(deviceId: deviceId);
+      if (_disposed || revision != _sessionRevision) return;
+      final result = await _client._startSession();
+      // An identity change waits for this request to persist in its original
+      // scope, but its history must never replace the next identity's state.
+      if (_disposed || revision != _sessionRevision) return;
+      await _syncPushRegistration();
       _validatePreChatFields(result.widget);
       final preChatSatisfied = result.session.preChatCompleted ||
           _activeUserSatisfiesPreChat(result.widget);
@@ -217,6 +410,7 @@ class WisperBotChatController with WidgetsBindingObserver {
         duration: DateTime.now().difference(started),
       );
     } on Object catch (error) {
+      if (_disposed || revision != _sessionRevision) return;
       final exception = _asWisperBotException(error);
       _emit(
         _state.copyWith(
@@ -235,6 +429,7 @@ class WisperBotChatController with WidgetsBindingObserver {
   }
 
   Future<void> _acceptSession(WidgetSessionResult result) async {
+    final revision = _sessionRevision;
     var messages = _mergeMessages(
       const <WisperBotMessage>[],
       result.messages,
@@ -246,6 +441,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     while (latestBatchLength == 100 && catchUpPages < 50) {
       final previousCursor = _refreshCursor;
       final page = await _client._refresh(_refreshCursor);
+      if (_disposed || revision != _sessionRevision) return;
       messages = _mergeMessages(
         messages,
         page.messages,
@@ -259,6 +455,7 @@ class WisperBotChatController with WidgetsBindingObserver {
       catchUpPages++;
       if (_refreshCursor == previousCursor) break;
     }
+    if (_disposed || revision != _sessionRevision) return;
     _conversationId = result.conversationId;
     _realtimeConfig = result.widget.realtime;
     _emit(
@@ -298,19 +495,11 @@ class WisperBotChatController with WidgetsBindingObserver {
     _validatePreChatSubmission(widget, data);
     _emit(_state.copyWith(connection: WisperBotConnectionState.connecting));
     try {
-      String? deviceId;
-      final oneSignalAppId = _runtimeConfig.oneSignalAppId;
-      if (_runtimeConfig.enableOneSignal &&
-          oneSignalAppId != null &&
-          oneSignalAppId.isNotEmpty) {
-        deviceId = await _oneSignalService.currentPushToken();
-      }
       final result = await _client._submitPreChat(
         WisperBotPreChatData(
           name: data.name?.trim(),
           email: data.email?.trim(),
         ),
-        deviceId: deviceId,
       );
       _validatePreChatFields(result.widget);
       await _acceptSession(result);
@@ -410,7 +599,10 @@ class WisperBotChatController with WidgetsBindingObserver {
           ),
         );
         await _client._clearSession();
-        await _initializeInternal();
+        await _initializeInternal(
+          _sessionRevision,
+          requestNotificationPermission: true,
+        );
         return;
       }
       _diagnostic(WisperBotDiagnosticKind.refresh, exception: exception);
@@ -638,7 +830,10 @@ class WisperBotChatController with WidgetsBindingObserver {
     );
     try {
       await _client._clearSession();
-      await _initializeInternal();
+      await _initializeInternal(
+        _sessionRevision,
+        requestNotificationPermission: true,
+      );
     } on Object {
       // The state emitted by initialization remains authoritative.
     }
@@ -758,8 +953,33 @@ class WisperBotChatController with WidgetsBindingObserver {
   Future<void> updateUser(
     WisperBotUser user, {
     bool startSession = true,
+  }) =>
+      _updateUser(
+        user,
+        startSession: startSession,
+        requestNotificationPermission: true,
+      );
+
+  /// Switches identity for eager registration without prompting for notifications.
+  @internal
+  Future<void> updateUserForLaunchRegistration(
+    WisperBotUser user, {
+    bool startSession = true,
+  }) =>
+      _updateUser(
+        user,
+        startSession: startSession,
+        requestNotificationPermission: false,
+      );
+
+  Future<void> _updateUser(
+    WisperBotUser user, {
+    required bool startSession,
+    required bool requestNotificationPermission,
   }) async {
     _ensureNotDisposed();
+    validateWisperBotUser(user);
+    if (_client._sessions._sameUser(_client._activeUser, user)) return;
     final previousUserId = _client._activeUser?.userId;
     final switchingFromAccountToGuest =
         previousUserId != null && user.userId == null;
@@ -774,10 +994,19 @@ class WisperBotChatController with WidgetsBindingObserver {
     _sessionRevision++;
     if (switchingFromAccountToGuest) {
       await _stopTypingBestEffort();
-      if (_runtimeConfig.enableOneSignal) {
-        await _oneSignalService.logout();
+    }
+    // Session persistence uses the active namespace. Finish a request already
+    // in flight before changing it, then start a new account/guest request.
+    // The revision guard prevents the old response from restoring visible state.
+    final initializing = _initializing;
+    if (initializing != null) {
+      try {
+        await initializing;
+      } on Object {
+        // A failed old session must not prevent restoring the next identity.
       }
     }
+    await _revokePushRegistration();
     final changed = await _client._switchUser(user);
     if (!changed) return;
     _deferredIncomingMessages.clear();
@@ -792,7 +1021,9 @@ class WisperBotChatController with WidgetsBindingObserver {
       phase: WisperBotChatPhase.initializing,
       connection: WisperBotConnectionState.connecting,
     ));
-    await initialize();
+    await _initialize(
+      requestNotificationPermission: requestNotificationPermission,
+    );
   }
 
   /// Deletes active credentials and initializes a fresh session.
@@ -803,9 +1034,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     _ensureNotDisposed();
     _sessionRevision++;
     await _stopTypingBestEffort();
-    if (_runtimeConfig.enableOneSignal) {
-      await _oneSignalService.logout();
-    }
+    await _revokePushRegistration();
     await _client._stopRealtime();
     _realtimeActive = false;
     await _client._clearSession();
@@ -889,6 +1118,15 @@ class WisperBotChatController with WidgetsBindingObserver {
     _foreground = state == AppLifecycleState.resumed;
     _diagnostic(WisperBotDiagnosticKind.lifecycle);
     if (_foreground) {
+      // Android can deny networking while an activity is backgrounded, including
+      // during startup. Recover the failed session when networking is available
+      // again, without replaying messages or prompting for push permission.
+      if (_state.phase == WisperBotChatPhase.failure &&
+          _state.error?.code == WisperBotErrorCode.network &&
+          (_runtimeConfig.registerVisitorOnAppLaunch || _hasLease)) {
+        unawaited(initializeForLaunchRegistration().catchError((_) {}));
+      }
+      unawaited(_syncPushRegistration());
       if (_hasLease && _state.phase == WisperBotChatPhase.ready) {
         unawaited(refresh().catchError((_) {}));
         unawaited(_syncRealtime().catchError((_) {}));
@@ -908,6 +1146,11 @@ class WisperBotChatController with WidgetsBindingObserver {
     _typingIdleTimer?.cancel();
     _agentTypingTimer?.cancel();
     _realtimeRetryTimer?.cancel();
+    await _pushSubscription?.cancel();
+    _pushRetry?.cancel();
+    final pushQueue = _pushQueue;
+    if (pushQueue != null) await pushQueue;
+    if (_ownsPushService) await _fcmService.release();
     await _client._stopRealtime();
     _deferredIncomingMessages.clear();
     _deferredMessageStatuses.clear();

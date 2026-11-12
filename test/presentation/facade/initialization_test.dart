@@ -15,13 +15,13 @@ void main() {
   test('same-option initialization is idempotent', () async {
     await WisperBotChat.initialize(
       widgetKey: 'same-config',
-      enableOneSignal: false,
+      enablePushNotifications: false,
       requireNotificationPermission: false,
       registerVisitorOnAppLaunch: false,
     );
     await WisperBotChat.initialize(
       widgetKey: 'same-config',
-      enableOneSignal: false,
+      enablePushNotifications: false,
       requireNotificationPermission: false,
       registerVisitorOnAppLaunch: false,
     );
@@ -29,7 +29,7 @@ void main() {
     expect(
       () => WisperBotChat.initialize(
         widgetKey: 'different-config',
-        enableOneSignal: false,
+        enablePushNotifications: false,
         requireNotificationPermission: false,
         registerVisitorOnAppLaunch: false,
       ),
@@ -39,15 +39,16 @@ void main() {
 
   testWidgets('default startup registration runs exactly once', (tester) async {
     final bodies = <Map<String, dynamic>>[];
+    Uri? requestedUrl;
     final client = MockClient((request) async {
+      requestedUrl = request.url;
       bodies.add(jsonDecode(request.body) as Map<String, dynamic>);
       return http.Response(jsonEncode(sessionResponse()), 200);
     });
     await http.runWithClient(() async {
       await WisperBotChat.initialize(
         widgetKey: 'startup-registration',
-        apiBaseUrl: 'https://chat.example.com',
-        enableOneSignal: false,
+        enablePushNotifications: false,
         requireNotificationPermission: false,
         sessionStore: const _NoopSessionStore(),
       );
@@ -56,6 +57,7 @@ void main() {
       await tester.pump();
     }, () => client);
 
+    expect(requestedUrl, Uri.parse('https://wisperbot.com/widget/v1/session'));
     expect(bodies, hasLength(1));
     expect(bodies.single['key'], 'startup-registration');
   });
@@ -71,7 +73,7 @@ void main() {
       await WisperBotChat.initialize(
         widgetKey: 'deferred-registration',
         apiBaseUrl: 'https://chat.example.com',
-        enableOneSignal: false,
+        enablePushNotifications: false,
         requireNotificationPermission: false,
         registerVisitorOnAppLaunch: false,
         sessionStore: const _NoopSessionStore(),
@@ -104,7 +106,7 @@ void main() {
       await WisperBotChat.initialize(
         widgetKey: 'identified-registration',
         apiBaseUrl: 'https://chat.example.com',
-        enableOneSignal: false,
+        enablePushNotifications: false,
         requireNotificationPermission: false,
         sessionStore: const _NoopSessionStore(),
       );
@@ -146,7 +148,7 @@ void main() {
   test('headless client accepts configuration directly', () async {
     final client = WisperBotClient(
       widgetKey: 'headless-runtime',
-      enableOneSignal: false,
+      enablePushNotifications: false,
       requireNotificationPermission: false,
       registerVisitorOnAppLaunch: false,
       sessionStore: const _NoopSessionStore(),
@@ -170,7 +172,7 @@ void main() {
       await WisperBotChat.initialize(
         widgetKey: 'shared-controller',
         apiBaseUrl: 'https://chat.example.com',
-        enableOneSignal: false,
+        enablePushNotifications: false,
         requireNotificationPermission: false,
         registerVisitorOnAppLaunch: false,
         sessionStore: const _NoopSessionStore(),

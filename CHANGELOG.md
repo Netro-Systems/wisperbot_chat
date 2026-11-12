@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.2.6 - 2026-11-12
+
+### Added
+
+- Display available lookup images above bot replies in the prebuilt chat UI. Thumbnails use a 288:158 aspect ratio and resize to fit the bubble. Missing or failed images leave the reply text visible without a placeholder.
+- Expose lookup images through `WisperBotMessage.lookupImages` and `WisperBotLookupImage` for custom chat UIs. The SDK reads them from message history, refreshes, and realtime updates.
+
+### Changed
+
+- Style tappable message links with `#1300E6`.
+
+## 0.2.5 - 2026-11-10
+
+### Added
+
+- Added authenticated Firebase Cloud Messaging token registration, refresh, retry, scoped logout/reset revocation and notification tap routing.
+- Added shared startup message access and host-owned initial notification forwarding.
+
+### Changed
+
+- Replaced the SDK OneSignal integration with host-initialized Firebase Cloud Messaging on Android and iOS.
+- Renamed `enableOneSignal` to `enablePushNotifications` and removed `oneSignalAppId`.
+
+### Fixed
+
+- HTTP(S) Markdown links now render as a slightly larger, bold, tappable label in the prebuilt chat UI, matching the website widget's label-only rendering while retaining raw URL handling.
+- Preserved required notification-permission gating while keeping launch registration permission-neutral.
+
+## 0.2.4 - 2026-10-17
+
+### Fixed
+
+- Login during an in-flight guest session now fetches account history after the guest request finishes persisting in its own scope. Delayed old session responses no longer overwrite account state or save guest credentials under an account namespace.
+- Identifying the same user during initialization preserves the pending history request.
+- Launch-time visitor registration no longer requests or requires notification permission. When permission is mandatory, it is deferred until the user opens chat, where denial is handled by the existing chat-opening UI.
+- Launch registration reads an existing OneSignal subscription without opting in, prompting, or waiting for subscription retries.
+
 ## 0.2.3 - 2026-10-14
 
 ### Removed

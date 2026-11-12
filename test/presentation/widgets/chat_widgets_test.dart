@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -23,7 +24,7 @@ void main() {
   const config = WisperBotConfig(
     widgetKey: 'test-widget',
     apiBaseUrl: 'https://chat.example.com',
-    enableOneSignal: false,
+    enablePushNotifications: false,
     requireNotificationPermission: false,
   );
 

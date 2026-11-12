@@ -3,11 +3,13 @@
 /ios/
 /build/
 **/build/
+/doc/api/
 .dart_tool/
 .idea/
 *.iml
 **/GeneratedPluginRegistrant.*
 **/local.properties
+/example/android/app/**/google-services.json
 **/Flutter/ephemeral/
 **/Flutter/flutter_export_environment.sh
 **/Flutter/Generated.xcconfig

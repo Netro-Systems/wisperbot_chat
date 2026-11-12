@@ -38,7 +38,7 @@ void registerLauncherTests(WisperBotConfig config) {
     const gatedConfig = WisperBotConfig(
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com',
-      enableOneSignal: false,
+      enablePushNotifications: false,
       requireNotificationPermission: true,
     );
     final response = Completer<http.Response>();
@@ -76,7 +76,7 @@ void registerLauncherTests(WisperBotConfig config) {
     const deferredConfig = WisperBotConfig(
       widgetKey: 'test-widget',
       apiBaseUrl: 'https://chat.example.com',
-      enableOneSignal: false,
+      enablePushNotifications: false,
       requireNotificationPermission: false,
       registerVisitorOnAppLaunch: false,
     );

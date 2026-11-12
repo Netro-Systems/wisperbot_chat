@@ -285,6 +285,7 @@ final class WidgetResponseDecoder {
       'agent' => WisperBotMessageRole.agent,
       _ => WisperBotMessageRole.unknown,
     };
+    final isActivity = json['kind'] == 'activity';
 
     final attachmentData =
         json['attachment'] ?? json['media'] ?? json['payload'];
@@ -339,7 +340,7 @@ final class WidgetResponseDecoder {
 
     return WisperBotMessage(
       localId: 'server-$id',
-      isActivity: json['kind'] == 'activity',
+      isActivity: isActivity,
       serverId: id,
       role: role,
       type: type,
@@ -353,11 +354,35 @@ final class WidgetResponseDecoder {
               filename: filename,
               mimeType: mimeType,
             ),
+      lookupImages: role == WisperBotMessageRole.agent && !isActivity
+          ? _parseLookupImages(json['lookup_images'])
+          : const <WisperBotLookupImage>[],
       senderName: role == WisperBotMessageRole.agent
           ? _stringOrNull(json['agent_name'])
           : null,
       sentBy: sentBy,
     );
+  }
+
+  List<WisperBotLookupImage> _parseLookupImages(Object? value) {
+    if (value is! List<dynamic>) return const <WisperBotLookupImage>[];
+
+    final images = <WisperBotLookupImage>[];
+    for (final item in value.take(3).whereType<Map<String, dynamic>>()) {
+      final url = _safeRemoteUri(item['image_url']);
+      if (url == null ||
+          url.scheme != 'https' ||
+          url.host.isEmpty ||
+          url.port != 443 ||
+          url.userInfo.isNotEmpty) {
+        continue;
+      }
+      images.add(WisperBotLookupImage(
+        url: url,
+        label: _stringOrNull(item['label'])?.trim() ?? '',
+      ));
+    }
+    return List.unmodifiable(images);
   }
 
   WisperBotMessageType _inferWisperBotMessageType({

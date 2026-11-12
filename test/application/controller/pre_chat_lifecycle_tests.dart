@@ -99,7 +99,7 @@ void registerPreChatLifecycleTests(WisperBotConfig config) {
     final userConfig = WisperBotConfig(
       widgetKey: config.widgetKey,
       apiBaseUrl: config.apiBaseUrl,
-      enableOneSignal: false,
+      enablePushNotifications: false,
       requireNotificationPermission: false,
     );
     final responseClient = MockClient(
