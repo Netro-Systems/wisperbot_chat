@@ -368,21 +368,19 @@ For advanced headless or multi-runtime applications, construct
 
 ### 🔗 Message Links
 
-The prebuilt chat UI keeps message text selectable and makes `http://`,
-`https://`, and `www.` links tappable. Markdown links such as
-`[contact us on WhatsApp](https://wa.me/...)` show only their underlined label,
-slightly larger and bold for emphasis. Tappable links use `#1300E6` and open
-through the platform's external URL handler.
-`www.` addresses use HTTPS. Trailing punctuation is excluded from raw link
-targets. If opening fails, the chat shows "Could not open link."
+The prebuilt chat UI keeps message text selectable and displays buttons for
+`http://`, `https://`, `www.`, and Markdown links. WhatsApp links show
+**Call now**, URLs with a `package` or `packages` path segment show
+**See package**, and other web links show **See more**. Links open through the
+platform's external URL handler. `www.` addresses use HTTPS. Trailing
+punctuation is excluded from raw link targets. If opening fails, the chat shows
+"Could not open link."
 
 ### Lookup Images
 
-When a bot reply includes lookup images, the prebuilt chat shows them above the
-reply at a 288:158 aspect ratio. A missing or failed image leaves the reply text
-visible without a placeholder. Custom chat UIs can read the image URLs and
-labels from `WisperBotMessage.lookupImages`. The lookup image contract is
-documented in `doc/API.md`.
+When a bot reply includes lookup images, they fill the chat bubble's content
+width above the reply at a 288:158 aspect ratio. Custom chat UIs can read the
+images through `WisperBotMessage.lookupImages`. See the [lookup image contract](doc/API.md).
 
 ---
 

@@ -308,10 +308,17 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    final reply = message(
+      id: 1,
+      body: 'https://www.telzen.net/packages/plan-id\n'
+          'https://wa.me/1234567890\n'
+          'https://example.com/help',
+    );
     final runtime = _runtime(
       config,
       MockClient(
-        (_) async => http.Response(jsonEncode(sessionResponse()), 200),
+        (_) async =>
+            http.Response(jsonEncode(sessionResponse(messages: [reply])), 200),
       ),
     );
 
@@ -334,6 +341,19 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
     expect(tester.takeException(), isNull);
     expect(find.text('Test support'), findsOneWidget);
     expect(find.text('Powered by WisperBot'), findsOneWidget);
+    final bubble =
+        find.byKey(const ValueKey('wisperbot-message-bubble-server-1'));
+    final bubbleRect = tester.getRect(bubble);
+    for (final label in ['See package', 'Call now', 'See more']) {
+      final button = find.descendant(
+        of: bubble,
+        matching: find.widgetWithText(OutlinedButton, label),
+      );
+      expect(button.hitTestable(), findsOneWidget);
+      final buttonRect = tester.getRect(button);
+      expect(buttonRect.left, greaterThanOrEqualTo(bubbleRect.left));
+      expect(buttonRect.right, lessThanOrEqualTo(bubbleRect.right));
+    }
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();

@@ -14,15 +14,17 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
   final widgetKey = dotenv.get('WISPERBOT_WIDGET_KEY').trim();
+  final fcmEnabled = dotenv.getBool('FCM_ENABLED', fallback: false);
 
-  // Configure this example's native Firebase files before enabling push.
-  await Firebase.initializeApp();
+  if (fcmEnabled) {
+    await Firebase.initializeApp();
+  }
 
   await WisperBotChat.initialize(
     widgetKey: widgetKey,
     navigatorKey: navigatorKey,
-    enablePushNotifications: true,
-    requireNotificationPermission: true,
+    enablePushNotifications: fcmEnabled,
+    requireNotificationPermission: fcmEnabled,
     registerVisitorOnAppLaunch: true,
     useApiColors: true,
     lightStatusBarIcons: true,

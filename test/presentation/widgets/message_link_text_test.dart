@@ -1,4 +1,3 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -30,80 +29,90 @@ void main() {
   Future<void> pump(
     WidgetTester tester,
     String text, {
-    Color linkColor = Colors.blue,
     TextStyle? style,
   }) =>
       tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(
-            body:
-                MessageLinkText(text: text, linkColor: linkColor, style: style),
-          ),
+          home: Scaffold(body: MessageLinkText(text: text, style: style)),
         ),
       );
 
-  List<TextSpan> spans(WidgetTester tester) => tester
-      .widget<SelectableText>(find.byType(SelectableText))
-      .textSpan!
-      .children!
-      .cast<TextSpan>();
+  Finder button(String label) => find.widgetWithText(OutlinedButton, label);
 
-  testWidgets('preserves text and opens each web link without punctuation',
+  testWidgets('opens each web link button without trailing punctuation',
       (tester) async {
-    const text = 'See https://example.com/a_(b)?x=1&y=2, (www.example.org).';
+    const text =
+        'See https://example.com/a_(b)?x=1&y=2, (www.example.org/a%FF).';
     await pump(tester, text);
-    final parts = spans(tester);
-    expect(parts.map((span) => span.text).join(), text);
-    final links = parts.where((span) => span.recognizer != null).toList();
-    expect(links.length, 2);
-    for (final link in links) {
-      expect(link.style?.color, Colors.blue);
-      (link.recognizer! as TapGestureRecognizer).onTap!();
-      await tester.pump();
-    }
+    expect(button('See more'), findsNWidgets(2));
+    expect(
+        find.text('See \uFFFC, (\uFFFC).', findRichText: true), findsOneWidget);
+    await tester.tap(button('See more').first);
+    await tester.tap(button('See more').last);
+    await tester.pump();
     expect(launched, [
       'https://example.com/a_(b)?x=1&y=2',
-      'https://www.example.org',
+      'https://www.example.org/a%FF',
     ]);
   });
 
-  testWidgets('renders a Markdown link as its tappable label', (tester) async {
+  testWidgets('keeps the Markdown caption and opens a WhatsApp link',
+      (tester) async {
     const text =
         'Call us or [contact us on WhatsApp](https://wa.me/message/BHA3NTMHBCD5O1).';
     await pump(tester, text, style: const TextStyle(fontSize: 14));
-    final parts = spans(tester);
     expect(
-      parts.map((span) => span.text).join(),
-      'Call us or contact us on WhatsApp.',
+      find.text('Call us or contact us on WhatsApp \uFFFC.',
+          findRichText: true),
+      findsOneWidget,
     );
-    final link = parts.singleWhere((span) => span.recognizer != null);
-    expect(link.text, 'contact us on WhatsApp');
-    expect(link.style?.color, Colors.blue);
-    expect(link.style?.fontSize, 15);
-    expect(link.style?.fontWeight, FontWeight.w700);
-    expect(link.style?.decoration, TextDecoration.underline);
-    (link.recognizer! as TapGestureRecognizer).onTap!();
+    await tester.tap(button('Call now'));
     await tester.pump();
     expect(launched, ['https://wa.me/message/BHA3NTMHBCD5O1']);
+  });
+
+  testWidgets('opens a package button with the original query parameters',
+      (tester) async {
+    const url = 'https://www.telzen.net/packages/plan-id';
+    await pump(
+      tester,
+      '[$url?countryname=Dominica&plan_type=esim]'
+      r'(https://www.telzen.net/packages/plan-id?countryname=Dominica\&plan_type=esim)',
+    );
+    expect(find.text('\uFFFC', findRichText: true), findsOneWidget);
+    await tester.tap(button('See package'));
+    await tester.pump();
+    expect(launched, ['$url?countryname=Dominica&plan_type=esim']);
+  });
+
+  testWidgets('recognizes WhatsApp hostnames without matching lookalikes',
+      (tester) async {
+    await pump(
+      tester,
+      'https://api.whatsapp.com/send?phone=1234567890 '
+      'https://wa.me.example.com/packages-guide',
+    );
+    expect(button('Call now'), findsOneWidget);
+    expect(button('See more'), findsOneWidget);
   });
 
   testWidgets('keeps unsupported Markdown destinations as plain text',
       (tester) async {
     const text = '[Open this](javascript:alert(1))';
     await pump(tester, text);
-    expect(spans(tester).where((span) => span.recognizer != null), isEmpty);
-    expect(spans(tester).map((span) => span.text).join(), text);
+    expect(find.byType(OutlinedButton), findsNothing);
+    expect(find.text(text), findsOneWidget);
   });
 
   testWidgets('updates links and leaves plain text selectable', (tester) async {
     await pump(tester, 'https://example.com');
-    await pump(tester, 'https://example.com',
-        linkColor: Colors.lightBlueAccent);
-    final link = spans(tester).singleWhere((span) => span.recognizer != null);
-    expect(link.style?.color, Colors.lightBlueAccent);
+    expect(button('See more'), findsOneWidget);
     await pump(tester, 'Plain text javascript:alert(1)');
-    expect(spans(tester).where((span) => span.recognizer != null), isEmpty);
-    expect(spans(tester).single.text, 'Plain text javascript:alert(1)');
+    expect(find.byType(OutlinedButton), findsNothing);
+    expect(
+      tester.widget<SelectableText>(find.byType(SelectableText)).data,
+      'Plain text javascript:alert(1)',
+    );
     await tester.pumpWidget(const SizedBox());
     expect(tester.takeException(), isNull);
   });
@@ -111,8 +120,7 @@ void main() {
   testWidgets('shows feedback when a link cannot open', (tester) async {
     succeeds = false;
     await pump(tester, 'http://example.com');
-    final link = spans(tester).firstWhere((span) => span.recognizer != null);
-    (link.recognizer! as TapGestureRecognizer).onTap!();
+    await tester.tap(button('See more'));
     await tester.pumpAndSettle();
     expect(find.text('Could not open link.'), findsOneWidget);
   });

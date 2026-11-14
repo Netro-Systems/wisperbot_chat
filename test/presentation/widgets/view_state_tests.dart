@@ -1,7 +1,7 @@
 part of 'chat_widgets_test.dart';
 
 void registerViewStateTests(WisperBotConfig config) {
-  testWidgets('sizes lookup images, adds a gap, and hides broken images',
+  testWidgets('fills the bubble with lookup images above package buttons',
       (tester) async {
     const imageUrl = 'https://cdn.example.com/lookup.png';
     const brokenUrl = 'https://cdn.example.com/unavailable.png';
@@ -19,8 +19,10 @@ void registerViewStateTests(WisperBotConfig config) {
     addTearDown(() => cache.evict(imageProvider));
 
     final replies = [
-      message(id: 1, body: '[Malaysia plans](https://example.com/malaysia)')
-        ..['lookup_images'] = [
+      message(
+        id: 1,
+        body: '[Malaysia plans](https://www.telzen.net/packages/plan-id)',
+      )..['lookup_images'] = [
           {'image_url': imageUrl, 'label': 'Malaysia'}
         ],
       message(id: 2, body: 'Thailand plans'),
@@ -43,8 +45,14 @@ void registerViewStateTests(WisperBotConfig config) {
     ));
     await tester.pumpAndSettle();
 
-    final thumbnail = find.byWidgetPredicate((widget) =>
-        widget is WisperBotRemoteImage && widget.url.toString() == imageUrl);
+    final packageBubble = find.byKey(
+      const ValueKey<String>('wisperbot-message-bubble-server-1'),
+    );
+    final thumbnail = find.descendant(
+      of: packageBubble,
+      matching: find.byWidgetPredicate((widget) =>
+          widget is WisperBotRemoteImage && widget.url.toString() == imageUrl),
+    );
     final broken = find.byWidgetPredicate((widget) =>
         widget is WisperBotRemoteImage && widget.url.toString() == brokenUrl);
     final renderedImage =
@@ -52,21 +60,17 @@ void registerViewStateTests(WisperBotConfig config) {
     expect(tester.widget<WisperBotRemoteImage>(thumbnail).semanticLabel,
         'Malaysia');
     final thumbnailSize = tester.getSize(renderedImage);
-    expect(thumbnailSize.width, 220);
+    expect(thumbnailSize.width, greaterThan(220));
+    expect(thumbnailSize.width,
+        closeTo(tester.getSize(packageBubble).width - 26, 0.01));
     expect(thumbnailSize.aspectRatio, closeTo(288 / 158, 0.001));
     expect(tester.widget<RawImage>(renderedImage).fit, BoxFit.cover);
-    final reply = find.text('Malaysia plans');
-    final replyText = find.ancestor(
-      of: reply,
-      matching: find.byType(SelectableText),
+    final button = find.descendant(
+      of: packageBubble,
+      matching: find.widgetWithText(OutlinedButton, 'See package'),
     );
-    final link = tester
-        .widget<SelectableText>(replyText)
-        .textSpan!
-        .children!
-        .whereType<TextSpan>()
-        .singleWhere((span) => span.recognizer != null);
-    expect(link.style?.color, const Color(0xFF1300E6));
+    expect(button.hitTestable(), findsOneWidget);
+    final reply = find.text('Malaysia plans \uFFFC', findRichText: true);
     expect(
       tester.getTopLeft(reply).dy - tester.getBottomLeft(renderedImage).dy,
       closeTo(8, 0.01),
@@ -86,8 +90,11 @@ void registerViewStateTests(WisperBotConfig config) {
     await tester.binding.setSurfaceSize(const Size(320, 650));
     await tester.pumpAndSettle();
     final narrowThumbnailSize = tester.getSize(renderedImage);
-    expect(narrowThumbnailSize.width, lessThan(220));
+    expect(narrowThumbnailSize.width, lessThan(thumbnailSize.width));
+    expect(narrowThumbnailSize.width,
+        closeTo(tester.getSize(packageBubble).width - 26, 0.01));
     expect(narrowThumbnailSize.aspectRatio, closeTo(288 / 158, 0.001));
+    expect(button.hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());

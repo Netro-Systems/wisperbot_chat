@@ -51,14 +51,11 @@ class _MessageContent extends StatelessWidget {
             errorBuilder: (_) => const SizedBox.shrink(),
             imageBuilder: (_, child) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: SizedBox(
-                width: 220,
-                child: AspectRatio(
-                  aspectRatio: 288 / 158,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: child,
-                  ),
+              child: AspectRatio(
+                aspectRatio: 288 / 158,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: child,
                 ),
               ),
             ),
@@ -94,7 +91,6 @@ class _MessageContent extends StatelessWidget {
         if (_visibleMessageBody(message).isNotEmpty)
           MessageLinkText(
             text: _visibleMessageBody(message),
-            linkColor: const Color(0xFF1300E6),
             style: Theme.of(context)
                 .textTheme
                 .bodyMedium
