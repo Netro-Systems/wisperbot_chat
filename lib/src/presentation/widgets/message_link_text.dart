@@ -34,6 +34,19 @@ class _MessageLinkTextState extends State<MessageLinkText> {
   );
   static final _afterLinkSeparator = RegExp(r'^[ \t,.!?;:()\[\]{}]*');
   static final _trailingHorizontalSpace = RegExp(r'[ \t]+$');
+  static const _buttonGreen = Color(0xFF015C49);
+  static final _buttonStyle = OutlinedButton.styleFrom(
+    foregroundColor: _buttonGreen,
+    backgroundColor: const Color(0xFFE1EEEB),
+    side: const BorderSide(color: _buttonGreen),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(Radius.circular(8)),
+    ),
+    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+    minimumSize: const Size(44, 34),
+    tapTargetSize: MaterialTapTargetSize.padded,
+  );
   static final _markdownEscape = RegExp(r'\\([\\`*_{}\[\]()#+\-.!&=?:/])');
   final _linkRecognizers = <TapGestureRecognizer>[];
   List<InlineSpan> _spans = [];
@@ -47,22 +60,13 @@ class _MessageLinkTextState extends State<MessageLinkText> {
   @override
   void didUpdateWidget(covariant MessageLinkText oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.text != widget.text || oldWidget.style != widget.style) {
-      _updateSpans();
-    }
+    if (oldWidget.text != widget.text) _updateSpans();
   }
 
   void _updateSpans() {
     _disposeLinkRecognizers();
     final spans = <InlineSpan>[];
     final text = widget.text;
-    final color = widget.style?.color;
-    final buttonStyle = OutlinedButton.styleFrom(
-      foregroundColor: color,
-      side: color == null ? null : BorderSide(color: color),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      minimumSize: const Size(44, 32),
-    );
     var offset = 0;
     for (final match in _links.allMatches(text)) {
       final markdownLabel = match.group(1) ?? match.group(3);
@@ -109,7 +113,7 @@ class _MessageLinkTextState extends State<MessageLinkText> {
         spans.add(WidgetSpan(
           alignment: PlaceholderAlignment.middle,
           child: OutlinedButton(
-            style: buttonStyle,
+            style: _buttonStyle,
             onPressed: () => _openLink(uri),
             child: Text(
               label,
