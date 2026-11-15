@@ -368,13 +368,13 @@ For advanced headless or multi-runtime applications, construct
 
 ### 🔗 Message Links
 
-The prebuilt chat UI keeps message text selectable and displays buttons for
-`http://`, `https://`, `www.`, and Markdown links. WhatsApp links show
-**Call now**, URLs with a `package` or `packages` path segment show
-**See package**, and other web links show **See more**. Links open through the
-platform's external URL handler. `www.` addresses use HTTPS. Trailing
-punctuation is excluded from raw link targets. If opening fails, the chat shows
-"Could not open link."
+The prebuilt chat UI keeps message text selectable. Markdown links such as
+`[View plans](https://example.com/plans)` use the bracketed label as button
+text. Unlabeled `http://`, `https://`, and `www.` links appear as tappable URLs.
+Each button and URL appears on its own line. Links open through the platform's
+external URL handler.
+`www.` addresses use HTTPS, and trailing punctuation is excluded from raw link
+targets. If opening fails, the chat shows "Could not open link."
 
 ### Lookup Images
 

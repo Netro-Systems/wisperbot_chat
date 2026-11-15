@@ -67,10 +67,10 @@ void registerViewStateTests(WisperBotConfig config) {
     expect(tester.widget<RawImage>(renderedImage).fit, BoxFit.cover);
     final button = find.descendant(
       of: packageBubble,
-      matching: find.widgetWithText(OutlinedButton, 'See package'),
+      matching: find.widgetWithText(OutlinedButton, 'Malaysia plans'),
     );
     expect(button.hitTestable(), findsOneWidget);
-    final reply = find.text('Malaysia plans \uFFFC', findRichText: true);
+    final reply = find.text('\uFFFC', findRichText: true);
     expect(
       tester.getTopLeft(reply).dy - tester.getBottomLeft(renderedImage).dy,
       closeTo(8, 0.01),

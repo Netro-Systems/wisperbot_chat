@@ -310,8 +310,8 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
     addTearDown(tester.view.resetDevicePixelRatio);
     final reply = message(
       id: 1,
-      body: 'https://www.telzen.net/packages/plan-id\n'
-          'https://wa.me/1234567890\n'
+      body: '[View plans](https://www.telzen.net/packages/plan-id)\n'
+          '[WhatsApp](https://wa.me/1234567890)\n'
           'https://example.com/help',
     );
     final runtime = _runtime(
@@ -344,7 +344,7 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
     final bubble =
         find.byKey(const ValueKey('wisperbot-message-bubble-server-1'));
     final bubbleRect = tester.getRect(bubble);
-    for (final label in ['See package', 'Call now', 'See more']) {
+    for (final label in ['View plans', 'WhatsApp']) {
       final button = find.descendant(
         of: bubble,
         matching: find.widgetWithText(OutlinedButton, label),
@@ -354,6 +354,16 @@ void registerPresentationLayoutTests(WisperBotConfig config) {
       expect(buttonRect.left, greaterThanOrEqualTo(bubbleRect.left));
       expect(buttonRect.right, lessThanOrEqualTo(bubbleRect.right));
     }
+    expect(
+      find.descendant(
+        of: bubble,
+        matching: find.text(
+          '\uFFFC\n\uFFFC\nhttps://example.com/help',
+          findRichText: true,
+        ),
+      ),
+      findsOneWidget,
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();
