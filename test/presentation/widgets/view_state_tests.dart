@@ -786,6 +786,97 @@ void registerViewStateTests(WisperBotConfig config) {
     await runtime.dispose();
   });
 
+  testWidgets(
+      'photo group shows four square tiles and lets visitors swipe to the rest',
+      (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const groupId = '3658b63b-e944-4f66-8810-58992790eeef';
+    final runtime = _runtime(
+      config,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          return http.Response(
+            jsonEncode(sessionResponse(
+              messages: <Map<String, Object?>>[
+                for (var id = 1; id <= 5; id++)
+                  <String, Object?>{
+                    ...message(
+                      id: id,
+                      role: 'agent',
+                      type: 'image',
+                      body: id == 1 ? 'Product photos' : '',
+                      attachmentUrl: 'https://cdn.example.com/photo-$id.png',
+                      filename: 'photo-$id.png',
+                      mimeType: 'image/png',
+                    ),
+                    'photo_group_id': groupId,
+                  },
+              ],
+            )),
+            200,
+          );
+        }
+        return http.Response(jsonEncode(pollResponse()), 200);
+      }),
+    );
+
+    await tester
+        .pumpWidget(_app(WisperBotChatView(controller: runtime.controller)));
+    await tester.pump();
+    await tester.pump();
+
+    final bubble =
+        find.byKey(const ValueKey<String>('wisperbot-message-bubble-server-1'));
+    final photos = find.descendant(
+      of: bubble,
+      matching:
+          find.byKey(const ValueKey<String>('wisperbot-remote-image-preview')),
+    );
+    expect(photos, findsNWidgets(4));
+    final tiles = [
+      for (var index = 0; index < 4; index++) tester.getRect(photos.at(index))
+    ];
+    for (final tile in tiles) {
+      expect(tile.width, closeTo(tile.height, 0.1));
+    }
+    expect(tiles[0].top, closeTo(tiles[1].top, 0.1));
+    expect(tiles[2].top, closeTo(tiles[3].top, 0.1));
+    expect(tiles[2].top, greaterThan(tiles[0].top));
+    expect(tiles[0].left, closeTo(tiles[2].left, 0.1));
+    expect(tiles[1].left, closeTo(tiles[3].left, 0.1));
+    expect(tiles[1].left, greaterThan(tiles[0].left));
+    expect(find.text('Product photos'), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey<String>('wisperbot-message-bubble-server-2')),
+        findsNothing);
+
+    final overflow = find.descendant(of: bubble, matching: find.text('+1'));
+    expect(overflow, findsOneWidget);
+    expect(tiles.last.contains(tester.getCenter(overflow)), isTrue);
+
+    final viewerTitle = find.descendant(
+      of: find.byType(AppBar),
+      matching: find.text('photo-4.png'),
+    );
+    await tester.tap(overflow);
+    await tester.pumpAndSettle();
+    expect(find.byType(InteractiveViewer), findsWidgets);
+    expect(viewerTitle, findsOneWidget);
+
+    await tester.drag(find.byType(PageView), const Offset(-300, 0));
+    await tester.pumpAndSettle();
+    expect(
+        find.descendant(
+            of: find.byType(AppBar), matching: find.text('photo-5.png')),
+        findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
   testWidgets('pending audio upload renders local timeline preview',
       (tester) async {
     final sendResponse = Completer<http.Response>();

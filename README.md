@@ -575,6 +575,14 @@ The app must provide the platform permission declarations for the media features
 it uses, including iOS photo-library and microphone usage descriptions. See the
 [example](example) app for platform setup.
 
+On platforms with multi-photo picking, customers can select up to six photos in
+the built-in Gallery, remove individual photos from the draft, and send the
+selection together. The timeline groups adjacent photos from the same send.
+It shows up to four thumbnails, with the number of extra photos on the last
+tile. Tap any thumbnail to open the viewer and swipe through the group.
+Camera capture and host-supplied media adapters select one photo at a time. See
+the [photo upload contract](doc/API.md#photo-uploads).
+
 `mediaAdapter` is an optional override for apps that need custom picker or recording
 behavior. Most integrations should leave it unset.
 

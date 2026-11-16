@@ -1,5 +1,16 @@
 # WisperBot Chat API
 
+## Photo uploads
+
+`POST /widget/v1/messages` accepts one multipart `attachment` per request.
+The prebuilt composer sends a multi-photo selection in order with a shared
+`photo_group_id` and puts its caption on the first photo.
+
+Host apps with a custom composer can call `WisperBotChatController.sendImage`
+once per photo with the same UUID in the optional `photoGroupId` argument.
+Each photo has its own message and delivery status. Custom message renderers can
+read the group from `WisperBotMessage.photoGroupId`.
+
 ## Lookup images
 
 The visitor API can include an optional `lookup_images` array on a bot reply.

@@ -347,6 +347,9 @@ final class WidgetResponseDecoder {
       body: json['body'] as String,
       status: _parseDeliveryStatus(json),
       createdAt: createdAt.toLocal(),
+      photoGroupId: type == WisperBotMessageType.image
+          ? _stringOrNull(json['photo_group_id'])
+          : null,
       attachment: attachmentUri == null
           ? null
           : WisperBotAttachment(

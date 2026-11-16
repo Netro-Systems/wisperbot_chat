@@ -2,6 +2,7 @@ part of '../view/chat_view.dart';
 
 class _Composer extends StatefulWidget {
   const _Composer({
+    super.key,
     required this.controller,
     required this.colors,
     required this.mediaAdapter,
@@ -24,15 +25,23 @@ class _ComposerState extends State<_Composer> {
 
   final TextEditingController _textController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  late final int _sessionRevision;
   _DefaultMediaAdapter? _ownedMediaAdapter;
   Timer? _recordingTimer;
   Duration _recordingElapsed = Duration.zero;
   bool _hasText = false;
   bool _mediaBusy = false;
   bool _isRecording = false;
-  WisperBotUpload? _pendingImage;
+  final List<WisperBotUpload> _pendingImages = <WisperBotUpload>[];
+  String? _pendingPhotoGroupId;
   WisperBotUpload? _pendingFile;
   WisperBotUpload? _pendingAudio;
+
+  @override
+  void initState() {
+    super.initState();
+    _sessionRevision = widget.controller.runtimeSessionRevision;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,12 +55,14 @@ class _ComposerState extends State<_Composer> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            if (_pendingImage != null)
+            if (_pendingImages.isNotEmpty)
               _ImagePreview(
-                upload: _pendingImage!,
+                uploads: List<WisperBotUpload>.unmodifiable(_pendingImages),
                 colors: widget.colors,
                 sending: _mediaBusy,
-                onDiscard: _discardPendingImage,
+                onDiscard: (upload) {
+                  if (!_mediaBusy) _removePendingImage(upload);
+                },
               ),
             if (_pendingFile != null)
               _FilePreview(
@@ -83,12 +94,11 @@ class _ComposerState extends State<_Composer> {
                 showImage: widget.imagesEnabled,
                 showAudio: widget.audioEnabled,
                 mediaBusy: _mediaBusy,
-                pendingImage: _pendingImage != null,
+                pendingImage: _pendingImages.isNotEmpty,
                 pendingFile: _pendingFile != null,
                 pendingAudio: _pendingAudio != null,
                 canSend: _canSend,
                 onAttachment: _openAttachmentPicker,
-                onPickImage: _pickImage,
                 onToggleRecording: _toggleRecording,
                 onTextChanged: _onTextChanged,
                 onSend: _send,
@@ -160,12 +170,14 @@ class _ComposerState extends State<_Composer> {
       !_mediaBusy &&
       !_isRecording &&
       (_hasText ||
-          _pendingImage != null ||
+          _pendingImages.isNotEmpty ||
           _pendingFile != null ||
           _pendingAudio != null);
 
   Future<void> _openAttachmentPicker() async {
     if (_mediaBusy || _isRecording) return;
+    final controller = widget.controller;
+    if (!_isCurrentSession(controller)) return;
     final option = await showModalBottomSheet<AttachmentOption>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -178,13 +190,13 @@ class _ComposerState extends State<_Composer> {
       ),
     );
 
-    if (option == null || !mounted) return;
+    if (option == null || !_isCurrentSession(controller)) return;
 
     switch (option) {
       case AttachmentOption.camera:
-        await _pickImage(source: ImageSource.camera);
+        await _pickImages(ImageSource.camera);
       case AttachmentOption.gallery:
-        await _pickImage(source: ImageSource.gallery);
+        await _pickImages(ImageSource.gallery);
       case AttachmentOption.audio:
         await _toggleRecording();
       case AttachmentOption.document:
@@ -252,65 +264,130 @@ class _ComposerState extends State<_Composer> {
 
   void _discardPendingFile() => setState(() => _pendingFile = null);
 
-  Future<void> _pickImage({ImageSource source = ImageSource.gallery}) async {
+  Future<void> _pickImages(ImageSource source) async {
+    final controller = widget.controller;
     final adapter = _mediaAdapter;
     WisperBotDebugUploadLogger.selectionStarted();
     setState(() => _mediaBusy = true);
     try {
-      final upload = adapter is _DefaultMediaAdapter
-          ? await adapter.pickImage(source: source)
-          : await adapter.pickImage();
-      if (!mounted) return;
-      if (upload == null) {
+      final List<WisperBotUpload> uploads;
+      if (source == ImageSource.gallery && adapter is _DefaultMediaAdapter) {
+        uploads = await adapter.pickGalleryImages();
+      } else {
+        final upload = adapter is _DefaultMediaAdapter
+            ? await adapter.pickCameraImage()
+            : await adapter.pickImage();
+        uploads = <WisperBotUpload>[if (upload != null) upload];
+      }
+      if (!_isCurrentSession(controller)) return;
+      if (uploads.isEmpty) {
         WisperBotDebugUploadLogger.selectionCancelled();
       } else {
-        WisperBotDebugUploadLogger.selectionReady(
-          sizeBytes: upload.bytes.length,
-          mimeType: upload.mimeType,
-        );
-        setState(() => _pendingImage = upload);
+        for (final upload in uploads) {
+          WisperBotDebugUploadLogger.selectionReady(
+            sizeBytes: upload.bytes.length,
+            mimeType: upload.mimeType,
+          );
+        }
+        setState(() {
+          _pendingImages
+            ..clear()
+            ..addAll(uploads);
+          _pendingPhotoGroupId = null;
+        });
       }
     } on Object catch (error) {
       WisperBotDebugUploadLogger.selectionFailed(error);
-      if (mounted) _showMediaError(error, 'The image could not be selected.');
+      if (_isCurrentSession(controller)) {
+        _showMediaError(error, 'The image could not be selected.');
+      }
     } finally {
       if (mounted) setState(() => _mediaBusy = false);
     }
   }
 
-  Future<void> _sendPendingImage() async {
-    final upload = _pendingImage;
-    if (upload == null) return;
-    WisperBotDebugUploadLogger.sendRequested(
-      sizeBytes: upload.bytes.length,
-      mimeType: upload.mimeType,
-    );
-    final caption = _textController.text.trim();
-    _textController.clear();
-    setState(() {
-      _mediaBusy = true;
+  Future<void> _sendPendingImages() async {
+    final controller = widget.controller;
+    if (_mediaBusy || !_canSendImages(controller)) return;
+
+    var caption = '';
+    if (_pendingPhotoGroupId == null) {
+      caption = _textController.text.trim();
+      _textController.clear();
       _hasText = false;
-      _pendingImage = null;
-    });
+      if (_pendingImages.length > 1) _pendingPhotoGroupId = _newPhotoGroupId();
+    }
+    final photoGroupId = _pendingPhotoGroupId;
+    setState(() => _mediaBusy = true);
     try {
-      await widget.controller.sendImage(
-        upload,
-        caption: caption.isEmpty ? null : caption,
-      );
-      WisperBotDebugUploadLogger.sendConfirmed();
+      while (_pendingImages.isNotEmpty && _canSendImages(controller)) {
+        final upload = _pendingImages.first;
+        _removePendingImage(upload);
+        WisperBotDebugUploadLogger.sendRequested(
+          sizeBytes: upload.bytes.length,
+          mimeType: upload.mimeType,
+        );
+        await controller.sendImage(
+          upload,
+          caption: caption.isEmpty ? null : caption,
+          photoGroupId: photoGroupId,
+        );
+        caption = '';
+        WisperBotDebugUploadLogger.sendConfirmed();
+      }
     } on Object catch (error) {
       if (error is WisperBotException) {
         WisperBotDebugUploadLogger.failed('image_upload', error);
       } else {
         WisperBotDebugUploadLogger.unexpectedFailure('image_upload', error);
       }
-      if (mounted) _showMediaError(error, 'The image could not be sent.');
+      if (_isCurrentSession(controller)) {
+        _showMediaError(
+          error,
+          'The image could not be sent.',
+          action: _pendingImages.isNotEmpty && _canSendImages(controller)
+              ? SnackBarAction(
+                  label: 'Send remaining',
+                  onPressed: () {
+                    if (!mounted || _pendingPhotoGroupId != photoGroupId) {
+                      return;
+                    }
+                    unawaited(_sendPendingImages());
+                  },
+                )
+              : null,
+        );
+      }
     } finally {
       if (mounted) setState(() => _mediaBusy = false);
     }
   }
 
-  void _discardPendingImage() => setState(() => _pendingImage = null);
+  void _removePendingImage(WisperBotUpload upload) => setState(() {
+        _pendingImages.remove(upload);
+        if (_pendingImages.isEmpty) _pendingPhotoGroupId = null;
+      });
+
+  bool _isCurrentSession(WisperBotChatController controller) =>
+      mounted &&
+      identical(widget.controller, controller) &&
+      controller.runtimeSessionRevision == _sessionRevision;
+
+  bool _canSendImages(WisperBotChatController controller) =>
+      _isCurrentSession(controller) &&
+      (controller.state.phase == WisperBotChatPhase.ready ||
+          controller.state.phase == WisperBotChatPhase.reconnecting);
+
+  String _newPhotoGroupId() {
+    final random = math.Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex =
+        bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+        '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+  }
 
   Future<void> _toggleRecording() async {
     final adapter = _mediaAdapter;
@@ -396,38 +473,40 @@ class _ComposerState extends State<_Composer> {
     }
   }
 
-  void _showMediaError(Object error, String fallback) {
+  void _showMediaError(Object error, String fallback,
+      {SnackBarAction? action}) {
     final message = error is WisperBotException ? error.message : fallback;
+    var snackBarAction = action;
+    if (snackBarAction == null &&
+        error is _MicrophonePermissionException &&
+        !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.android)) {
+      snackBarAction = SnackBarAction(
+        label: 'Settings',
+        onPressed: () async {
+          try {
+            await AppSettings.openAppSettings();
+          } on Object {
+            if (mounted) {
+              _showMediaError(
+                StateError('Could not open settings'),
+                'Could not open Settings. Please open app settings manually.',
+              );
+            }
+          }
+        },
+      );
+    }
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(
-        content: Text(message),
-        action: error is _MicrophonePermissionException &&
-                !kIsWeb &&
-                (defaultTargetPlatform == TargetPlatform.iOS ||
-                    defaultTargetPlatform == TargetPlatform.android)
-            ? SnackBarAction(
-                label: 'Settings',
-                onPressed: () async {
-                  try {
-                    await AppSettings.openAppSettings();
-                  } on Object {
-                    if (mounted) {
-                      _showMediaError(
-                        StateError('Could not open settings'),
-                        'Could not open Settings. Please open app settings manually.',
-                      );
-                    }
-                  }
-                },
-              )
-            : null,
-      ),
+      SnackBar(content: Text(message), action: snackBarAction),
     );
   }
 
   void _send() {
-    if (_pendingImage != null) {
-      unawaited(_sendPendingImage());
+    if (!_canSend) return;
+    if (_pendingImages.isNotEmpty) {
+      unawaited(_sendPendingImages());
       return;
     }
     if (_pendingFile != null) {
@@ -489,7 +568,6 @@ class _TextComposer extends StatelessWidget {
     required this.pendingAudio,
     required this.canSend,
     required this.onAttachment,
-    required this.onPickImage,
     required this.onToggleRecording,
     required this.onTextChanged,
     required this.onSend,
@@ -506,7 +584,6 @@ class _TextComposer extends StatelessWidget {
   final bool pendingAudio;
   final bool canSend;
   final VoidCallback onAttachment;
-  final VoidCallback onPickImage;
   final VoidCallback onToggleRecording;
   final ValueChanged<String> onTextChanged;
   final VoidCallback onSend;

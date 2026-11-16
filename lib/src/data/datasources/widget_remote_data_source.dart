@@ -51,6 +51,7 @@ abstract interface class WidgetRemoteDataSource {
     required WisperBotUpload upload,
     required WisperBotMessageType type,
     String? caption,
+    String? photoGroupId,
   });
 
   Future<Uint8List> loadAttachmentBytes({
@@ -204,12 +205,14 @@ final class HttpWidgetRemoteDataSource implements WidgetRemoteDataSource {
     required WisperBotUpload upload,
     required WisperBotMessageType type,
     String? caption,
+    String? photoGroupId,
   }) async {
     final fields = _encoder.uploadFields(
       widgetKey: widgetKey,
       upload: upload,
       type: type,
       caption: caption,
+      photoGroupId: photoGroupId,
     );
     final response = await _networkCaller.upload(
       ApiEndpoints.messages,

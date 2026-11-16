@@ -1,6 +1,90 @@
 part of 'chat_widgets_test.dart';
 
 void registerComposerHandoffTests(WisperBotConfig config) {
+  testWidgets('gallery sends removable drafts in one photo group',
+      (tester) async {
+    final previousPicker = ImagePickerPlatform.instance;
+    final gallery = _GalleryTestPicker();
+    ImagePickerPlatform.instance = gallery;
+    addTearDown(() => ImagePickerPlatform.instance = previousPicker);
+
+    final uploads = <String>[];
+    final runtime = _runtime(
+      config,
+      MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          return http.Response(jsonEncode(sessionResponse()), 200);
+        }
+        if (request.method == 'POST' &&
+            request.url.path.endsWith('/messages')) {
+          final body = utf8.decode(request.bodyBytes, allowMalformed: true);
+          uploads.add(body);
+          if (uploads.length == 2) throw http.ClientException('Lost response');
+          return http.Response(
+            jsonEncode(<String, Object?>{
+              'message': message(
+                id: uploads.length,
+                role: 'visitor',
+                type: 'image',
+                body: uploads.length == 1 ? 'See these photos' : '',
+              ),
+              'handoff': <String, Object?>{
+                'enabled': true,
+                'eligible': false,
+                'status': 'bot',
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode(pollResponse()), 200);
+      }),
+    );
+
+    await tester
+        .pumpWidget(_app(WisperBotChatView(controller: runtime.controller)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Attach file'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Gallery'));
+    await tester.pumpAndSettle();
+    expect(gallery.limit, 6);
+    expect(find.byTooltip('Discard image 4'), findsOneWidget);
+    await tester.tap(find.byTooltip('Discard image 2'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Discard image 4'), findsNothing);
+
+    await tester.enterText(find.byType(TextField), 'See these photos');
+    await tester.tap(find.byTooltip('Send message'));
+    await tester.pumpAndSettle();
+    expect(uploads, hasLength(2));
+    expect(uploads[0], contains('filename="first.png"'));
+    expect(uploads[1], contains('filename="unconfirmed.png"'));
+    expect(find.text('last.png'), findsOneWidget);
+    expect(runtime.controller.state.messages.last.status,
+        WisperBotMessageStatus.unconfirmed);
+
+    await tester.tap(find.text('Send remaining'));
+    await tester.pumpAndSettle();
+    expect(uploads, hasLength(3));
+    expect(uploads[2], contains('filename="last.png"'));
+    final groupField = RegExp(r'name="photo_group_id"\r\n\r\n([\w-]+)');
+    final groupIds =
+        uploads.map((body) => groupField.firstMatch(body)?.group(1));
+    expect(
+        groupIds.first,
+        matches(
+            r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$'));
+    expect(groupIds, everyElement(groupIds.first));
+    expect(uploads.where((body) => body.contains('See these photos')),
+        hasLength(1));
+    expect(find.byKey(const ValueKey<String>('wisperbot-image-preview')),
+        findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await runtime.dispose();
+  });
+
   for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
     for (final presentation in WisperBotPresentation.values) {
       testWidgets(
@@ -361,4 +445,22 @@ void registerComposerHandoffTests(WisperBotConfig config) {
     await tester.pumpWidget(const SizedBox.shrink());
     await runtime.dispose();
   });
+}
+
+class _GalleryTestPicker extends ImagePickerPlatform {
+  int? limit;
+
+  @override
+  Future<List<XFile>> getMultiImageWithOptions({
+    MultiImagePickerOptions options = const MultiImagePickerOptions(),
+  }) async {
+    limit = options.limit;
+    final png = base64Decode(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=',
+    );
+    return <XFile>[
+      for (final name in ['first', 'discarded', 'unconfirmed', 'last'])
+        XFile.fromData(png, path: '/$name.png', name: '$name.png'),
+    ];
+  }
 }

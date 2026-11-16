@@ -68,6 +68,7 @@ final class WidgetRequestEncoder {
     required WisperBotUpload upload,
     required WisperBotMessageType type,
     required String? caption,
+    String? photoGroupId,
   }) {
     _validateUpload(upload, type);
     final normalizedCaption = caption?.trim() ?? '';
@@ -90,6 +91,8 @@ final class WidgetRequestEncoder {
       // empty caption, and always including the field avoids a multipart
       // request-shape difference between web and native clients.
       'message': normalizedCaption,
+      if (type == WisperBotMessageType.image && photoGroupId != null)
+        'photo_group_id': photoGroupId,
     };
     return fields;
   }

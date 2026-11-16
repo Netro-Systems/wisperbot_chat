@@ -94,6 +94,34 @@ void main() {
     }
   });
 
+  test('photo group IDs decode across history, refresh, and realtime', () {
+    const photoGroupId = '3658b63b-e944-4f66-8810-58992790eeef';
+    final photo = message(
+      id: 7,
+      type: 'image',
+      attachmentUrl: 'https://cdn.example.com/photo.png',
+    )..['photo_group_id'] = photoGroupId;
+    final history = decoder.session(
+      http.Response(jsonEncode(sessionResponse(messages: [photo])), 200),
+      preChatCompleted: false,
+    );
+    final refresh = decoder.refresh(
+      http.Response(jsonEncode(pollResponse(messages: [photo])), 200),
+    );
+
+    for (final parsed in [
+      history.messages.single,
+      refresh.messages.single,
+      decoder.realtimeMessage({'message': photo})!,
+    ]) {
+      expect(parsed.photoGroupId, photoGroupId);
+      expect(parsed.copyWith(status: WisperBotMessageStatus.read).photoGroupId,
+          photoGroupId);
+    }
+    photo.remove('photo_group_id');
+    expect(decoder.realtimeMessage({'message': photo})!.photoGroupId, isNull);
+  });
+
   test('ignores missing and unusable lookup images', () {
     final reply = message(id: 8);
     expect(decoder.realtimeMessage({'message': reply})!.lookupImages, isEmpty);

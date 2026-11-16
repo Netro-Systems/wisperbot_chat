@@ -33,6 +33,7 @@ final class MessageReconciler {
         messages[existingIndex] = message.copyWith(
           localId: existingMessage.localId,
           localUpload: existingMessage.localUpload,
+          photoGroupId: message.photoGroupId ?? existingMessage.photoGroupId,
           status: _mostAdvancedStatus(
             existingMessage.status,
             message.status,
