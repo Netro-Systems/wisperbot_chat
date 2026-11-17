@@ -68,17 +68,30 @@ class _ImagePreview extends StatelessWidget {
                       PositionedDirectional(
                         top: 0,
                         end: 0,
+                        width: kMinInteractiveDimension,
+                        height: kMinInteractiveDimension,
                         child: IconButton(
                           tooltip: 'Discard image ${index + 1}',
                           onPressed:
                               sending ? null : () => onDiscard(uploads[index]),
-                          icon: const Icon(Icons.cancel, size: 20),
-                          style: IconButton.styleFrom(
-                            foregroundColor: colors.onSurface,
-                            disabledForegroundColor: colors.onSurfaceMuted,
-                            backgroundColor: colors.surface,
-                            minimumSize: const Size.square(36),
-                            padding: EdgeInsets.zero,
+                          alignment: AlignmentDirectional.topEnd,
+                          padding:
+                              const EdgeInsetsDirectional.only(top: 4, end: 4),
+                          color: colors.onSurface,
+                          disabledColor: colors.onSurfaceMuted,
+                          style: const ButtonStyle(
+                            backgroundColor:
+                                WidgetStatePropertyAll(Colors.transparent),
+                          ),
+                          icon: Container(
+                            width: 24,
+                            height: 24,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: colors.surface,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.cancel, size: 16),
                           ),
                         ),
                       ),
