@@ -33,7 +33,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  wisperbot_chat: ^0.2.6
+  wisperbot_chat: ^0.2.7
 ```
 
 Or run:
@@ -577,13 +577,16 @@ it uses, including iOS photo-library and microphone usage descriptions. See the
 
 On platforms with multi-photo picking, customers can select up to six photos in
 the built-in Gallery, remove individual photos from the draft, and send the
-selection together. When grouped photo messages are enabled for the session,
-the timeline displays the selection as one message with one caption. The SDK
-also displays legacy adjacent photos from the same send together.
-It shows up to four thumbnails, with the number of extra photos on the last
-tile. Tap any thumbnail to open the viewer and swipe through the group.
-Camera capture and host-supplied media adapters select one photo at a time. See
-the [photo upload contract](doc/API.md#photo-uploads).
+selection together. When the session supports grouped photo messages, a
+multi-photo selection is delivered as one message with one optional caption.
+Other sessions deliver separate photo messages and display adjacent photos from
+the same send together. The album shows up to four thumbnails, with the number
+of additional photos on the last tile. Tap a thumbnail to open the viewer and
+swipe through the group.
+
+Single photos, including camera captures and photos selected through a
+host-supplied media adapter, use the single-image upload flow. See the
+[photo upload contract](doc/API.md#photo-uploads) for custom chat UIs.
 
 `mediaAdapter` is an optional override for apps that need custom picker or recording
 behavior. Most integrations should leave it unset.

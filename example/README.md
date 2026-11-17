@@ -1,10 +1,14 @@
 # WisperBot Chat SDK example
 
 This app demonstrates the full-screen facade, floating launcher, embedded view,
-bottom sheet, dialog, image/document upload, and microphone recording. The SDK
+bottom sheet, dialog, photo and document uploads, and microphone recording. The SDK
 handles media with its built-in adapter; the app does not create a custom adapter.
 One `WisperBotChat.initialize` call owns notifications, visitor registration,
 navigation, and the controller shared by every chat integration.
+
+In chat, open **Gallery** from the attachment menu and select up to six photos
+on a supported platform. Remove any unwanted photos from the preview, add an
+optional caption, and tap Send. Tap an album thumbnail to swipe through the photos.
 
 For push troubleshooting, filter Android Studio/Flutter debug output for
 `WisperBot push`. Logs report FCM token availability, registration start/success,
@@ -25,7 +29,7 @@ and require no separate backend integration. See the package's
 option reference.
 
 1. Copy `.env.example` to `.env`.
-2. Put the SDK key from **Widget Integrations → Mobile app** in `WISPERBOT_WIDGET_KEY`. The website embed key can start chat sessions but cannot register FCM push tokens (HTTP 403). Change `WISPERBOT_API_BASE_URL` only for staging or a self-hosted API.
+2. Put the SDK key from **Widget Integrations → Mobile app** in `WISPERBOT_WIDGET_KEY`. The website embed key can start chat sessions but cannot register FCM push tokens (HTTP 403).
    For push, configure native Firebase files using the project authorized by the global
    **Super Admin → Integrations → Firebase Cloud Messaging** configuration, and set
    `FCM_ENABLED=true`. On Android, place the `google-services.json` for
