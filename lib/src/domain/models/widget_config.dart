@@ -70,6 +70,7 @@ class WisperBotWidgetConfig {
     required this.footerCompanyName,
     required List<WisperBotTeamMember> teamMembers,
     required this.aiEnabled,
+    this.photoMessagesEnabled = false,
     required this.requiresPreChat,
     required List<WisperBotPreChatField> preChatFields,
     List<WisperBotStarterQuestion> starterQuestions = const [],
@@ -94,6 +95,9 @@ class WisperBotWidgetConfig {
 
   /// Generic support name configured for the widget.
   final String agentName;
+
+  /// Whether the visitor can send several photos as one message.
+  final bool photoMessagesEnabled;
 
   /// Optional header avatar URL.
   final Uri? avatarUrl;

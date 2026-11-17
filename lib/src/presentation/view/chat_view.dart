@@ -435,6 +435,7 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
 
   bool _isGroupablePhoto(WisperBotMessage message) =>
       message.type == WisperBotMessageType.image &&
+      message.attachments.isEmpty &&
       message.photoGroupId != null &&
       (message.attachment != null || message.localUpload != null) &&
       message.lookupImages.isEmpty &&

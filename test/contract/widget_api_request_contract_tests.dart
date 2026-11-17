@@ -51,6 +51,32 @@ void _registerRequestContractTests() {
       });
     });
 
+    test('renews a committed photo with the active widget token', () async {
+      final url = Uri.parse('https://chat.example.com/photo?expires=1234');
+      late http.BaseRequest recorded;
+      final api = _remoteDataSource(
+        baseUrl: Uri.parse('https://chat.example.com/base'),
+        httpClient: _RecordingClient((request) async {
+          recorded = request;
+          return _jsonResponse({'url': url.toString()});
+        }),
+      );
+
+      final renewed = await api.renewPhotoLink(
+        widgetKey: 'test-widget',
+        token: 'token-1',
+        messageId: 42,
+        photoId: 'test-photo',
+      );
+
+      expect(renewed, url);
+      expect(recorded.method, 'GET');
+      expect(recorded.url.path,
+          '/base/widget/v1/messages/42/photos/test-photo/link');
+      expect(recorded.url.queryParameters, {'key': 'test-widget'});
+      expect(recorded.headers['x-widget-token'], 'token-1');
+    });
+
     test('text, typing, and handoff match backend wire shapes', () async {
       final requests = <http.BaseRequest>[];
       final bodies = <Map<String, dynamic>>[];

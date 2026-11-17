@@ -3,7 +3,13 @@ part of 'models.dart';
 /// Attachment metadata returned with a message.
 class WisperBotAttachment {
   /// Creates attachment metadata.
-  const WisperBotAttachment({required this.url, this.filename, this.mimeType});
+  const WisperBotAttachment({
+    required this.url,
+    this.filename,
+    this.mimeType,
+    this.id,
+    this.sizeBytes,
+  });
 
   /// Server attachment URL.
   final Uri url;
@@ -13,6 +19,12 @@ class WisperBotAttachment {
 
   /// MIME type when supplied by the backend.
   final String? mimeType;
+
+  /// Server photo ID when the attachment was staged for a grouped message.
+  final String? id;
+
+  /// File size reported by the server, in bytes.
+  final int? sizeBytes;
 }
 
 /// In-memory media selected by the host for upload.

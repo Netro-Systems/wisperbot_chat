@@ -122,6 +122,34 @@ void main() {
     expect(decoder.realtimeMessage({'message': photo})!.photoGroupId, isNull);
   });
 
+  test('keeps ordered attachments on one photo message in all receive paths',
+      () {
+    final photo = message(id: 7, type: 'image', body: 'One caption')
+      ..['attachments'] = [
+        for (final id in ['three', 'one', 'two'])
+          {'id': id, 'url': 'https://cdn.example.com/$id.png', 'file_size': 42},
+      ];
+    final history = decoder.session(
+      http.Response(jsonEncode(sessionResponse(messages: [photo])), 200),
+      preChatCompleted: false,
+    );
+    final refresh = decoder.refresh(
+      http.Response(jsonEncode(pollResponse(messages: [photo])), 200),
+    );
+    for (final parsed in [
+      history.messages.single,
+      refresh.messages.single,
+      decoder.realtimeMessage({'message': photo})!,
+    ]) {
+      expect(parsed.serverId, 7);
+      expect(parsed.body, 'One caption');
+      expect(parsed.attachments.map((attachment) => attachment.id),
+          ['three', 'one', 'two']);
+      expect(parsed.copyWith(status: WisperBotMessageStatus.read).attachments,
+          hasLength(3));
+    }
+  });
+
   test('ignores missing and unusable lookup images', () {
     final reply = message(id: 8);
     expect(decoder.realtimeMessage({'message': reply})!.lookupImages, isEmpty);

@@ -693,6 +693,80 @@ class WisperBotChatController with WidgetsBindingObserver {
     retryable: false,
   );
 
+  /// Stages one [photo] for a photo message without delivering it.
+  ///
+  /// Reuse the same UUIDs when retrying this file. [requestId] identifies the
+  /// complete send and [uploadId] identifies this file within it.
+  Future<String> stagePhoto(
+    WisperBotUpload photo, {
+    required String requestId,
+    required String uploadId,
+  }) async {
+    _ensureReady();
+    final revision = _sessionRevision;
+    final session = _client._requireSession();
+    try {
+      final id = await _client._remoteDataSource.stagePhoto(
+        widgetKey: _client._config.widgetKey,
+        token: session.token,
+        requestId: requestId,
+        uploadId: uploadId,
+        photo: photo,
+      );
+      if (_disposed ||
+          _sessionRevision != revision ||
+          !identical(session, _client._sessions._session)) {
+        throw _expiredPhotoUpload;
+      }
+      return id;
+    } on Object catch (error) {
+      throw _asWisperBotException(error);
+    }
+  }
+
+  /// Delivers staged photos as one message in the order of [attachmentIds].
+  ///
+  /// Retry an unconfirmed send with the same [requestId], photos, and caption.
+  Future<WisperBotMessage> sendPhotoMessage({
+    required String requestId,
+    required List<String> attachmentIds,
+    String caption = '',
+  }) {
+    final revision = _sessionRevision;
+    final session = _client._requireSession();
+    final ids = List<String>.unmodifiable(attachmentIds);
+    bool isSessionCurrent() =>
+        !_disposed &&
+        _sessionRevision == revision &&
+        identical(session, _client._sessions._session);
+
+    return _enqueueSend(() {
+      if (!isSessionCurrent()) throw _expiredPhotoUpload;
+      _ensureReady();
+      final pending = WisperBotMessage(
+        localId: 'photo-$requestId',
+        role: WisperBotMessageRole.visitor,
+        type: WisperBotMessageType.image,
+        body: caption.trim(),
+        status: WisperBotMessageStatus.pending,
+        createdAt: DateTime.now(),
+        sentBy: WisperBotSenderKind.visitor,
+      );
+      _upsertLocal(pending);
+      return _performSend(
+        pending,
+        () => _client._remoteDataSource.sendPhotoMessage(
+          widgetKey: _client._config.widgetKey,
+          token: session.token,
+          requestId: requestId,
+          attachmentIds: ids,
+          caption: caption.trim(),
+        ),
+        isSessionCurrent: isSessionCurrent,
+      );
+    });
+  }
+
   /// Uploads audio with an optional text [caption].
   ///
   /// Throws [WisperBotException] when the controller is not ready or the
@@ -729,6 +803,22 @@ class WisperBotChatController with WidgetsBindingObserver {
   Future<Uint8List> loadAttachmentBytes(WisperBotAttachment attachment) {
     _ensureReady();
     return _client._loadAttachmentBytes(attachment);
+  }
+
+  /// Renews a photo link using the active visitor session.
+  /// Gets a fresh signed URL for a committed photo in the active chat.
+  Future<Uri> renewPhotoLink(int messageId, String photoId) async {
+    final session = _client._requireSession();
+    final url = await _client._remoteDataSource.renewPhotoLink(
+      widgetKey: _client._config.widgetKey,
+      token: session.token,
+      messageId: messageId,
+      photoId: photoId,
+    );
+    if (_disposed || !identical(session, _client._sessions._session)) {
+      throw _expiredPhotoUpload;
+    }
+    return url;
   }
 
   Future<WisperBotMessage> _sendUploadInternal(

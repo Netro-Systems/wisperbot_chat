@@ -577,7 +577,9 @@ it uses, including iOS photo-library and microphone usage descriptions. See the
 
 On platforms with multi-photo picking, customers can select up to six photos in
 the built-in Gallery, remove individual photos from the draft, and send the
-selection together. The timeline groups adjacent photos from the same send.
+selection together. When grouped photo messages are enabled for the session,
+the timeline displays the selection as one message with one caption. The SDK
+also displays legacy adjacent photos from the same send together.
 It shows up to four thumbnails, with the number of extra photos on the last
 tile. Tap any thumbnail to open the viewer and swipe through the group.
 Camera capture and host-supplied media adapters select one photo at a time. See

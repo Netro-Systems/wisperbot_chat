@@ -34,6 +34,10 @@ class _ComposerState extends State<_Composer> {
   bool _isRecording = false;
   final List<WisperBotUpload> _pendingImages = <WisperBotUpload>[];
   String? _pendingPhotoGroupId;
+  final _photoUploadIds = <WisperBotUpload, String>{};
+  final _stagedPhotos = <WisperBotUpload, String>{};
+  String? _photoCaption;
+  bool _committingPhotos = false;
   WisperBotUpload? _pendingFile;
   WisperBotUpload? _pendingAudio;
 
@@ -61,7 +65,9 @@ class _ComposerState extends State<_Composer> {
                 colors: widget.colors,
                 sending: _mediaBusy,
                 onDiscard: (upload) {
-                  if (!_mediaBusy) _removePendingImage(upload);
+                  if (!_mediaBusy && !_committingPhotos) {
+                    _removePendingImage(upload);
+                  }
                 },
               ),
             if (_pendingFile != null)
@@ -294,6 +300,7 @@ class _ComposerState extends State<_Composer> {
             ..clear()
             ..addAll(uploads);
           _pendingPhotoGroupId = null;
+          _resetPhotoDraft();
         });
       }
     } on Object catch (error) {
@@ -309,6 +316,12 @@ class _ComposerState extends State<_Composer> {
   Future<void> _sendPendingImages() async {
     final controller = widget.controller;
     if (_mediaBusy || !_canSendImages(controller)) return;
+    if (_photoCaption != null ||
+        (_pendingImages.length > 1 &&
+            controller.state.widget?.photoMessagesEnabled == true)) {
+      await _sendPhotoMessage(controller);
+      return;
+    }
 
     var caption = '';
     if (_pendingPhotoGroupId == null) {
@@ -363,9 +376,63 @@ class _ComposerState extends State<_Composer> {
     }
   }
 
+  Future<void> _sendPhotoMessage(WisperBotChatController controller) async {
+    final requestId = _pendingPhotoGroupId ??= _newPhotoGroupId();
+    final caption = _photoCaption ??= _textController.text.trim();
+    setState(() => _mediaBusy = true);
+    try {
+      for (final photo in _pendingImages) {
+        if (!_canSendImages(controller)) return;
+        if (_stagedPhotos.containsKey(photo)) continue;
+        _stagedPhotos[photo] = await controller.stagePhoto(
+          photo,
+          requestId: requestId,
+          uploadId: _photoUploadIds.putIfAbsent(photo, _newPhotoGroupId),
+        );
+      }
+      if (!_canSendImages(controller)) return;
+      _committingPhotos = true;
+      await controller.sendPhotoMessage(
+        requestId: requestId,
+        attachmentIds:
+            _pendingImages.map((photo) => _stagedPhotos[photo]!).toList(),
+        caption: caption,
+      );
+      if (!_isCurrentSession(controller)) return;
+      setState(() {
+        _pendingImages.clear();
+        _pendingPhotoGroupId = null;
+        _resetPhotoDraft();
+        if (_textController.text.trim() == caption) {
+          _textController.clear();
+          _hasText = false;
+        }
+      });
+    } on Object catch (error) {
+      if (_isCurrentSession(controller)) {
+        _showMediaError(
+            error, 'The photo message could not be sent. Tap Send to retry.');
+      }
+    } finally {
+      if (mounted) setState(() => _mediaBusy = false);
+    }
+  }
+
+  void _resetPhotoDraft() {
+    _photoUploadIds.clear();
+    _stagedPhotos.clear();
+    _photoCaption = null;
+    _committingPhotos = false;
+  }
+
   void _removePendingImage(WisperBotUpload upload) => setState(() {
         _pendingImages.remove(upload);
-        if (_pendingImages.isEmpty) _pendingPhotoGroupId = null;
+        _photoUploadIds.remove(upload);
+        _stagedPhotos.remove(upload);
+        if (_pendingImages.isEmpty) {
+          _pendingPhotoGroupId = null;
+          _resetPhotoDraft();
+        }
       });
 
   bool _isCurrentSession(WisperBotChatController controller) =>

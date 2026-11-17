@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import '../../domain/contracts/session_store.dart';
@@ -57,6 +58,29 @@ abstract interface class WidgetRemoteDataSource {
   Future<Uint8List> loadAttachmentBytes({
     required String token,
     required WisperBotAttachment attachment,
+  });
+
+  Future<Uri> renewPhotoLink({
+    required String widgetKey,
+    required String token,
+    required int messageId,
+    required String photoId,
+  });
+
+  Future<String> stagePhoto({
+    required String widgetKey,
+    required String token,
+    required String requestId,
+    required String uploadId,
+    required WisperBotUpload photo,
+  });
+
+  Future<WidgetSendResult> sendPhotoMessage({
+    required String widgetKey,
+    required String token,
+    required String requestId,
+    required List<String> attachmentIds,
+    required String caption,
   });
 
   Future<void> setTyping({
@@ -241,6 +265,90 @@ final class HttpWidgetRemoteDataSource implements WidgetRemoteDataSource {
           : '*/*',
     );
     return response.bodyBytes;
+  }
+
+  @override
+  Future<String> stagePhoto({
+    required String widgetKey,
+    required String token,
+    required String requestId,
+    required String uploadId,
+    required WisperBotUpload photo,
+  }) async {
+    _encoder.uploadFields(
+      widgetKey: widgetKey,
+      upload: photo,
+      type: WisperBotMessageType.image,
+      caption: null,
+    );
+    final response = await _networkCaller.upload(
+      ApiEndpoints.photoUploads,
+      token: token,
+      fields: {
+        'key': widgetKey,
+        'request_id': requestId,
+        'upload_id': uploadId
+      },
+      fileField: 'attachment',
+      fileBytes: photo.bytes,
+      filename: photo.filename,
+      mimeType: photo.mimeType,
+      operation: WidgetOperation.sendMedia,
+    );
+    final payload = jsonDecode(response.body);
+    final attachmentId =
+        payload is Map<String, dynamic> ? payload['attachment_id'] : null;
+    if (attachmentId is! String || attachmentId.isEmpty) {
+      throw const FormatException('Missing staged photo ID.');
+    }
+    return attachmentId;
+  }
+
+  @override
+  Future<Uri> renewPhotoLink({
+    required String widgetKey,
+    required String token,
+    required int messageId,
+    required String photoId,
+  }) async {
+    final response = await _networkCaller.get(
+      '${ApiEndpoints.messages}/$messageId/photos/${Uri.encodeComponent(photoId)}/link',
+      token: token,
+      query: {'key': widgetKey},
+      operation: WidgetOperation.media,
+    );
+    final payload = jsonDecode(response.body);
+    final value = payload is Map<String, dynamic> ? payload['url'] : null;
+    final url = value is String ? Uri.tryParse(value) : null;
+    if (url == null ||
+        !url.hasAuthority ||
+        !['https', 'http'].contains(url.scheme)) {
+      throw const FormatException('Missing renewed photo URL.');
+    }
+    return url;
+  }
+
+  @override
+  Future<WidgetSendResult> sendPhotoMessage({
+    required String widgetKey,
+    required String token,
+    required String requestId,
+    required List<String> attachmentIds,
+    required String caption,
+  }) async {
+    final response = await _networkCaller.postJson(
+      ApiEndpoints.messages,
+      body: _encoder.jsonBody({
+        'key': widgetKey,
+        'type': 'image',
+        'client_message_id': requestId,
+        'message': caption,
+        'attachment_ids': attachmentIds,
+      }),
+      token: token,
+      operation: WidgetOperation.sendMedia,
+    );
+    return _decoder.send(response);
   }
 
   @override

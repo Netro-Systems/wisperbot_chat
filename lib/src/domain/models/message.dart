@@ -46,6 +46,7 @@ class WisperBotMessage {
     required this.createdAt,
     this.serverId,
     this.attachment,
+    this.attachments = const <WisperBotAttachment>[],
     this.photoGroupId,
     this.lookupImages = const <WisperBotLookupImage>[],
     this.localUpload,
@@ -78,6 +79,9 @@ class WisperBotMessage {
 
   /// Optional attachment metadata.
   final WisperBotAttachment? attachment;
+
+  /// Photos in send order when this message contains a grouped upload.
+  final List<WisperBotAttachment> attachments;
 
   /// Shared identifier for photos sent together as separate messages.
   final String? photoGroupId;
@@ -119,6 +123,7 @@ class WisperBotMessage {
     WisperBotMessageStatus? status,
     DateTime? createdAt,
     WisperBotAttachment? attachment,
+    List<WisperBotAttachment>? attachments,
     String? photoGroupId,
     List<WisperBotLookupImage>? lookupImages,
     WisperBotUpload? localUpload,
@@ -137,6 +142,7 @@ class WisperBotMessage {
         status: status ?? this.status,
         createdAt: createdAt ?? this.createdAt,
         attachment: attachment ?? this.attachment,
+        attachments: attachments ?? this.attachments,
         photoGroupId: photoGroupId ?? this.photoGroupId,
         lookupImages: lookupImages ?? this.lookupImages,
         localUpload: localUpload ?? this.localUpload,

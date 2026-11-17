@@ -88,6 +88,7 @@ class _MessageBubble extends StatelessWidget {
                   )
                 else
                   _PhotoGroupContent(
+                    controller: controller,
                     photos: groupedPhotos,
                     borderRadius: colors.borderRadius,
                     textColor:
