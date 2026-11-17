@@ -8,8 +8,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-// Use image_picker's test seam without adding a runtime dependency.
-// ignore: depend_on_referenced_packages
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:wisperbot_chat/wisperbot_chat.dart';
 import 'package:wisperbot_chat/src/configuration/wisperbot_config.dart';
