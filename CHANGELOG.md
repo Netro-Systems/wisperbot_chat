@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.7 - 2026-11-17
+
+### Added
+
+- Select up to six photos in the built-in Gallery on supported platforms and remove individual photos from the draft before sending.
+- Send multiple photos as one ordered message with a shared caption when the session supports grouped photo messages. Other sessions send separate photos with a shared group ID and put the caption on the first photo.
+- Display photo groups with up to four thumbnails, an overflow count, and a swipeable full-screen viewer. Renew expired signed links for committed photos.
+- Expose staged photo uploads, grouped sends, and signed link renewal through `WisperBotChatController` for custom chat UIs.
+
+### Changed
+
+- Render labeled Markdown links as buttons and plain web URLs as tappable links, each on its own line.
+- Fit lookup images to the available width of the chat bubble above the reply text.
+- Make FCM opt-in for the example app so chat can run without Firebase configuration.
+
 ## 0.2.6 - 2026-11-12
 
 ### Added

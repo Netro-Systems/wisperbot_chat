@@ -170,8 +170,9 @@ class WisperBotClient {
   Future<WidgetSendResult> _sendUpload(
     WisperBotUpload upload,
     WisperBotMessageType type,
-    String? caption,
-  ) {
+    String? caption, {
+    String? photoGroupId,
+  }) {
     final session = _requireSession();
     return _remoteDataSource.sendUpload(
       widgetKey: _config.widgetKey,
@@ -179,6 +180,7 @@ class WisperBotClient {
       upload: upload,
       type: type,
       caption: caption,
+      photoGroupId: photoGroupId,
     );
   }
 

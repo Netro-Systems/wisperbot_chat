@@ -2,17 +2,11 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// Selectable message text with tappable web links.
+/// Selectable message text with buttons and web links on separate lines.
 class MessageLinkText extends StatefulWidget {
-  const MessageLinkText({
-    super.key,
-    required this.text,
-    required this.linkColor,
-    this.style,
-  });
+  const MessageLinkText({super.key, required this.text, this.style});
 
   final String text;
-  final Color linkColor;
   final TextStyle? style;
 
   @override
@@ -20,11 +14,41 @@ class MessageLinkText extends StatefulWidget {
 }
 
 class _MessageLinkTextState extends State<MessageLinkText> {
+  static const _urlStart = r'(?:https?\\?://|www\.)';
+  static const _label = r'\[([^\]\n]*)\]\\?\(';
+  static const _target = '($_urlStart' r'''[^\s<>"')]+?)\\?\)''';
   static final _links = RegExp(
-    r'''\[([^\]\n]+)\]\((https?://[^\s<>"')]+)\)|\b((?:https?://|www\.)[^\s<>"']+)''',
+    // Match [label]\([url](url)) before its inner link.
+    '$_label\\[$_urlStart'
+    r'[^\s<>]+?\]\\?\('
+    '$_target'
+    r'\\?\)'
+    '|$_label$_target'
+    '|\\b($_urlStart'
+    r'''[^\s<>"']+)''',
     caseSensitive: false,
   );
-  final _recognizers = <TapGestureRecognizer>[];
+  static final _rawLinkLabel = RegExp(
+    r'^(?:https?://|www\.)\S+$',
+    caseSensitive: false,
+  );
+  static final _afterLinkSeparator = RegExp(r'^[ \t,.!?;:()\[\]{}]*');
+  static final _trailingHorizontalSpace = RegExp(r'[ \t]+$');
+  static const _buttonGreen = Color(0xFF015C49);
+  static final _buttonStyle = OutlinedButton.styleFrom(
+    foregroundColor: _buttonGreen,
+    backgroundColor: const Color(0xFFE1EEEB),
+    side: const BorderSide(color: _buttonGreen),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(Radius.circular(8)),
+    ),
+    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+    minimumSize: const Size(44, 34),
+    tapTargetSize: MaterialTapTargetSize.padded,
+  );
+  static final _markdownEscape = RegExp(r'\\([\\`*_{}\[\]()#+\-.!&=?:/])');
+  final _linkRecognizers = <TapGestureRecognizer>[];
   List<InlineSpan> _spans = [];
 
   @override
@@ -36,24 +60,19 @@ class _MessageLinkTextState extends State<MessageLinkText> {
   @override
   void didUpdateWidget(covariant MessageLinkText oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.text != widget.text ||
-        oldWidget.style != widget.style ||
-        oldWidget.linkColor != widget.linkColor) {
-      _updateSpans();
-    }
+    if (oldWidget.text != widget.text) _updateSpans();
   }
 
   void _updateSpans() {
-    for (final recognizer in _recognizers) {
-      recognizer.dispose();
-    }
-    _recognizers.clear();
-    _spans = [];
+    _disposeLinkRecognizers();
+    final spans = <InlineSpan>[];
+    final text = widget.text;
     var offset = 0;
-    for (final match in _links.allMatches(widget.text)) {
-      final markdownLabel = match.group(1);
-      var link = match.group(2) ?? match.group(3)!;
-      if (markdownLabel == null) {
+    for (final match in _links.allMatches(text)) {
+      final markdownLabel = match.group(1) ?? match.group(3);
+      final markdownTarget = match.group(2) ?? match.group(4);
+      var link = markdownTarget ?? match.group(5)!;
+      if (markdownTarget == null) {
         while (link.isNotEmpty) {
           final last = link[link.length - 1];
           final opening = {')': '(', ']': '[', '}': '{'}[last];
@@ -67,26 +86,88 @@ class _MessageLinkTextState extends State<MessageLinkText> {
           }
         }
       }
-      final uri = Uri.tryParse(
-        link.toLowerCase().startsWith('www.') ? 'https://$link' : link,
-      );
+      final destination = _unescape(link);
+      final uri = Uri.tryParse(destination.toLowerCase().startsWith('www.')
+          ? 'https://$destination'
+          : destination);
       if (uri == null || uri.host.isEmpty) continue;
-      _spans.add(TextSpan(text: widget.text.substring(offset, match.start)));
-      final recognizer = TapGestureRecognizer()..onTap = () => _openLink(uri);
-      _recognizers.add(recognizer);
-      _spans.add(TextSpan(
-        text: markdownLabel ?? link,
-        style: TextStyle(
-          color: widget.linkColor,
-          decoration: TextDecoration.underline,
-          fontSize: (widget.style?.fontSize ?? 14) + 1,
-          fontWeight: FontWeight.w700,
-        ),
-        recognizer: recognizer,
-      ));
-      offset = markdownLabel == null ? match.start + link.length : match.end;
+      final precedingText = text.substring(offset, match.start);
+      final gap = (spans.isEmpty
+              ? precedingText
+              : _startTextAfterLinkOnNewLine(precedingText))
+          .replaceFirst(_trailingHorizontalSpace, '');
+      final needsLineBreak = (spans.isNotEmpty || gap.isNotEmpty) &&
+          !gap.endsWith('\n') &&
+          !gap.endsWith('\r');
+      spans.add(TextSpan(text: needsLineBreak ? '$gap\n' : gap));
+      final label = _unescape(markdownLabel ?? '').trim();
+      if (label.isEmpty || _rawLinkLabel.hasMatch(label)) {
+        final recognizer = TapGestureRecognizer()..onTap = () => _openLink(uri);
+        _linkRecognizers.add(recognizer);
+        spans.add(TextSpan(
+          text: destination,
+          style: const TextStyle(decoration: TextDecoration.underline),
+          recognizer: recognizer,
+        ));
+      } else {
+        spans.add(WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: OutlinedButton(
+            style: _buttonStyle,
+            onPressed: () => _openLink(uri),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              // WidgetSpan already scales the entire button with the text.
+              textScaler: TextScaler.noScaling,
+            ),
+          ),
+        ));
+      }
+      offset = markdownTarget == null ? match.start + link.length : match.end;
     }
-    _spans.add(TextSpan(text: widget.text.substring(offset)));
+    if (spans.isNotEmpty) {
+      spans.add(TextSpan(
+        text: _startTextAfterLinkOnNewLine(text.substring(offset)),
+      ));
+    }
+    _spans = spans;
+  }
+
+  String _startTextAfterLinkOnNewLine(String text) {
+    // Keep punctuation with the link and move following prose to a new line.
+    final separatorEnd = _afterLinkSeparator.matchAsPrefix(text)!.end;
+    if (separatorEnd == text.length || '\r\n'.contains(text[separatorEnd])) {
+      return text;
+    }
+    final punctuation = text
+        .substring(0, separatorEnd)
+        .replaceFirst(_trailingHorizontalSpace, '');
+    return '$punctuation\n${text.substring(separatorEnd)}';
+  }
+
+  String _unescape(String value) =>
+      value.replaceAllMapped(_markdownEscape, (match) => match.group(1)!);
+
+  void _disposeLinkRecognizers() {
+    for (final recognizer in _linkRecognizers) {
+      recognizer.dispose();
+    }
+    _linkRecognizers.clear();
+  }
+
+  @override
+  void dispose() {
+    _disposeLinkRecognizers();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_spans.isEmpty) return SelectableText(widget.text, style: widget.style);
+    return SelectionArea(
+      child: Text.rich(TextSpan(children: _spans), style: widget.style),
+    );
   }
 
   Future<void> _openLink(Uri uri) async {
@@ -100,18 +181,4 @@ class _MessageLinkTextState extends State<MessageLinkText> {
       const SnackBar(content: Text('Could not open link.')),
     );
   }
-
-  @override
-  void dispose() {
-    for (final recognizer in _recognizers) {
-      recognizer.dispose();
-    }
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => SelectableText.rich(
-        TextSpan(children: _spans),
-        style: widget.style,
-      );
 }

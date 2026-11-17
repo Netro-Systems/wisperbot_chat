@@ -1,5 +1,5 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wisperbot_chat/src/presentation/widgets/message_link_text.dart';
@@ -30,80 +30,153 @@ void main() {
   Future<void> pump(
     WidgetTester tester,
     String text, {
-    Color linkColor = Colors.blue,
     TextStyle? style,
   }) =>
       tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(
-            body:
-                MessageLinkText(text: text, linkColor: linkColor, style: style),
-          ),
+          home: Scaffold(body: MessageLinkText(text: text, style: style)),
         ),
       );
 
-  List<TextSpan> spans(WidgetTester tester) => tester
-      .widget<SelectableText>(find.byType(SelectableText))
-      .textSpan!
-      .children!
-      .cast<TextSpan>();
+  Finder button(String label) => find.widgetWithText(OutlinedButton, label);
 
-  testWidgets('preserves text and opens each web link without punctuation',
+  Future<void> tapInlineLink(
+    WidgetTester tester,
+    String renderedText,
+    String url,
+  ) async {
+    final paragraph = tester.renderObject<RenderParagraph>(
+      find.text(renderedText, findRichText: true),
+    );
+    final offset = renderedText.indexOf(url);
+    final box = paragraph
+        .getBoxesForSelection(
+          TextSelection(baseOffset: offset, extentOffset: offset + 1),
+        )
+        .first;
+    await tester.tapAt(paragraph.localToGlobal(box.toRect().center));
+    await tester.pump();
+  }
+
+  testWidgets(
+      'puts bare URLs on separate lines and excludes punctuation from targets',
       (tester) async {
-    const text = 'See https://example.com/a_(b)?x=1&y=2, (www.example.org).';
+    const text =
+        'See https://example.com/a_(b)?x=1&y=2, (www.example.org/a%FF).';
+    const rendered =
+        'See\nhttps://example.com/a_(b)?x=1&y=2, (\nwww.example.org/a%FF).';
     await pump(tester, text);
-    final parts = spans(tester);
-    expect(parts.map((span) => span.text).join(), text);
-    final links = parts.where((span) => span.recognizer != null).toList();
-    expect(links.length, 2);
-    for (final link in links) {
-      expect(link.style?.color, Colors.blue);
-      (link.recognizer! as TapGestureRecognizer).onTap!();
-      await tester.pump();
-    }
+    expect(find.byType(OutlinedButton), findsNothing);
+    await tapInlineLink(tester, rendered, 'https://example.com');
+    await tapInlineLink(tester, rendered, 'www.example.org');
     expect(launched, [
       'https://example.com/a_(b)?x=1&y=2',
-      'https://www.example.org',
+      'https://www.example.org/a%FF',
     ]);
   });
 
-  testWidgets('renders a Markdown link as its tappable label', (tester) async {
+  testWidgets('uses a standard Markdown label as the button text',
+      (tester) async {
     const text =
         'Call us or [contact us on WhatsApp](https://wa.me/message/BHA3NTMHBCD5O1).';
     await pump(tester, text, style: const TextStyle(fontSize: 14));
-    final parts = spans(tester);
     expect(
-      parts.map((span) => span.text).join(),
-      'Call us or contact us on WhatsApp.',
+      find.text('Call us or\n\uFFFC.', findRichText: true),
+      findsOneWidget,
     );
-    final link = parts.singleWhere((span) => span.recognizer != null);
-    expect(link.text, 'contact us on WhatsApp');
-    expect(link.style?.color, Colors.blue);
-    expect(link.style?.fontSize, 15);
-    expect(link.style?.fontWeight, FontWeight.w700);
-    expect(link.style?.decoration, TextDecoration.underline);
-    (link.recognizer! as TapGestureRecognizer).onTap!();
+    await tester.tap(button('contact us on WhatsApp'));
     await tester.pump();
     expect(launched, ['https://wa.me/message/BHA3NTMHBCD5O1']);
+  });
+
+  testWidgets('uses the outer WhatsApp label in a wrapped link',
+      (tester) async {
+    const url = 'https://api.whatsapp.com/send?phone=1234567890';
+    await pump(tester, 'Contact us on [WhatsApp]\\([$url]($url)).');
+    expect(find.text('Contact us on\n\uFFFC.', findRichText: true),
+        findsOneWidget);
+    await tester.tap(button('WhatsApp'));
+    await tester.pump();
+    expect(launched, [url]);
+  });
+
+  testWidgets('opens a wrapped package link with its original query parameters',
+      (tester) async {
+    const url = 'https://www.telzen.net/packages/plan-id?country_id=plan-id'
+        '&country_name=Brazil&plan_type=esim';
+    await pump(
+      tester,
+      'Here are the eSIM options for Brazil.\n[View Plans]\\([$url]'
+      r'(https://www.telzen.net/packages/plan-id?country_id=plan-id'
+      r'\&country_name=Brazil\&plan_type=esim))',
+    );
+    expect(
+      find.text('Here are the eSIM options for Brazil.\n\uFFFC',
+          findRichText: true),
+      findsOneWidget,
+    );
+    await tester.tap(button('View Plans'));
+    await tester.pump();
+    expect(launched, [url]);
+  });
+
+  testWidgets('displays a bare URL with an escaped scheme on a separate line',
+      (tester) async {
+    const url = 'https://telzen-landing.netlify.app/';
+    await pump(tester, r'ogay https\://telzen-landing.netlify.app/');
+    expect(find.byType(OutlinedButton), findsNothing);
+    await tapInlineLink(tester, 'ogay\n$url', url);
+    expect(launched, [url]);
+  });
+
+  testWidgets('displays separate URL lines when Markdown has no caption',
+      (tester) async {
+    const first = 'https://example.com/help';
+    const second = 'https://example.com/contact';
+    await pump(tester, '[]($first) [$second]($second)');
+    expect(find.byType(OutlinedButton), findsNothing);
+    await tapInlineLink(tester, '$first\n$second', first);
+    await tapInlineLink(tester, '$first\n$second', second);
+    expect(launched, [first, second]);
+  });
+
+  testWidgets('puts consecutive buttons and URLs on separate lines',
+      (tester) async {
+    await pump(
+      tester,
+      'See [Plans](https://example.com/plans) '
+      '[Contact](https://example.com/contact) '
+      'https://example.com/help for details.',
+    );
+    expect(button('Plans'), findsOneWidget);
+    expect(button('Contact'), findsOneWidget);
+    expect(
+      find.text(
+        'See\n\uFFFC\n\uFFFC\nhttps://example.com/help\nfor details.',
+        findRichText: true,
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('keeps unsupported Markdown destinations as plain text',
       (tester) async {
     const text = '[Open this](javascript:alert(1))';
     await pump(tester, text);
-    expect(spans(tester).where((span) => span.recognizer != null), isEmpty);
-    expect(spans(tester).map((span) => span.text).join(), text);
+    expect(find.byType(OutlinedButton), findsNothing);
+    expect(find.text(text), findsOneWidget);
   });
 
   testWidgets('updates links and leaves plain text selectable', (tester) async {
     await pump(tester, 'https://example.com');
-    await pump(tester, 'https://example.com',
-        linkColor: Colors.lightBlueAccent);
-    final link = spans(tester).singleWhere((span) => span.recognizer != null);
-    expect(link.style?.color, Colors.lightBlueAccent);
+    expect(
+        find.text('https://example.com', findRichText: true), findsOneWidget);
     await pump(tester, 'Plain text javascript:alert(1)');
-    expect(spans(tester).where((span) => span.recognizer != null), isEmpty);
-    expect(spans(tester).single.text, 'Plain text javascript:alert(1)');
+    expect(find.byType(OutlinedButton), findsNothing);
+    expect(
+      tester.widget<SelectableText>(find.byType(SelectableText)).data,
+      'Plain text javascript:alert(1)',
+    );
     await tester.pumpWidget(const SizedBox());
     expect(tester.takeException(), isNull);
   });
@@ -111,8 +184,7 @@ void main() {
   testWidgets('shows feedback when a link cannot open', (tester) async {
     succeeds = false;
     await pump(tester, 'http://example.com');
-    final link = spans(tester).firstWhere((span) => span.recognizer != null);
-    (link.recognizer! as TapGestureRecognizer).onTap!();
+    await tapInlineLink(tester, 'http://example.com', 'http://example.com');
     await tester.pumpAndSettle();
     expect(find.text('Could not open link.'), findsOneWidget);
   });

@@ -1,5 +1,33 @@
 # WisperBot Chat API
 
+## Photo uploads
+
+When the authenticated session advertises `config.photo_messages: true`, the
+prebuilt composer stages each image in a multi-photo selection at
+`POST /widget/v1/photo-uploads` and submits the ordered list to
+`POST /widget/v1/messages`. Custom composers can check
+`controller.state.widget?.photoMessagesEnabled == true`, then call
+`controller.stagePhoto` once per file with a shared UUID `requestId` and a
+per-file UUID `uploadId`. Pass that request ID, the returned attachment IDs in
+order, and the optional caption to `controller.sendPhotoMessage`. Reuse the same
+IDs, attachment order, and caption when retrying the same send. The confirmed
+message exposes its photos in order through `WisperBotMessage.attachments`.
+
+The prebuilt chat and gallery automatically renew expired signed links for
+committed photos. Custom renderers can call `controller.renewPhotoLink` with
+`WisperBotMessage.serverId` and `WisperBotAttachment.id` when both are available.
+This uses the active widget session and returns a fresh `Uri`.
+
+Single photos use the multipart form of `POST /widget/v1/messages`, which
+accepts one `attachment` per request. When the session lacks the grouped feature,
+the prebuilt composer sends a multi-photo selection in order with a shared
+`photo_group_id` and puts its caption on the first photo.
+
+Host apps with a custom composer can call `WisperBotChatController.sendImage`
+once per photo with the same UUID in the optional `photoGroupId` argument.
+Each photo has its own message and delivery status. Custom message renderers can
+read the group from `WisperBotMessage.photoGroupId`.
+
 ## Lookup images
 
 The visitor API can include an optional `lookup_images` array on a bot reply.

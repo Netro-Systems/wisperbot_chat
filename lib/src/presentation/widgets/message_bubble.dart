@@ -10,9 +10,11 @@ class _MessageBubble extends StatelessWidget {
     required this.colors,
     required this.onRetry,
     required this.onRemove,
+    this.groupedPhotos = const <WisperBotMessage>[],
   });
 
   final WisperBotMessage message;
+  final List<WisperBotMessage> groupedPhotos;
   final WisperBotChatController controller;
   final WisperBotWidgetConfig? widgetConfig;
   final WisperBotResolvedTheme colors;
@@ -37,10 +39,21 @@ class _MessageBubble extends StatelessWidget {
     }
     final senderName = message.senderName?.trim();
     final visitor = message.role == WisperBotMessageRole.visitor;
-    final deliveryLabel = visitor ? ', ${_deliveryLabel(message.status)}' : '';
+    final isPhotoGroup = groupedPhotos.isNotEmpty;
+    final deliveryStatus = groupedPhotos.fold(
+      message.status,
+      (status, photo) =>
+          photo.status.index < status.index ? photo.status : status,
+    );
+    final sender = visitor
+        ? 'Your'
+        : (senderName?.isNotEmpty == true ? senderName : 'Support');
+    final contentLabel = groupedPhotos.isEmpty
+        ? 'message. ${message.body}'
+        : '${groupedPhotos.length} photos';
+    final deliveryLabel = visitor ? ', ${_deliveryLabel(deliveryStatus)}' : '';
     return Semantics(
-      label:
-          '${visitor ? 'Your' : (senderName?.isNotEmpty == true ? senderName : 'Support')} message. ${message.body}$deliveryLabel',
+      label: '$sender $contentLabel$deliveryLabel',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -60,39 +73,57 @@ class _MessageBubble extends StatelessWidget {
             widgetConfig: widgetConfig,
             colors: colors,
             isImage: message.type == WisperBotMessageType.image,
+            isPhotoGroup: isPhotoGroup,
             bubbleKey: ValueKey<String>(
               'wisperbot-message-bubble-${message.localId}',
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                _MessageContent(
-                  message: message,
-                  colors: colors,
-                  controller: controller,
-                ),
+                if (!isPhotoGroup)
+                  _MessageContent(
+                    message: message,
+                    colors: colors,
+                    controller: controller,
+                  )
+                else
+                  _PhotoGroupContent(
+                    controller: controller,
+                    photos: groupedPhotos,
+                    borderRadius: colors.borderRadius,
+                    textColor:
+                        visitor ? colors.onVisitorBubble : colors.onAgentBubble,
+                  ),
                 const SizedBox(height: 4),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: <Widget>[
-                    Text(
-                      _time(message.createdAt),
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: visitor
-                                ? colors.onVisitorBubble.withValues(alpha: 0.72)
-                                : colors.onAgentBubble.withValues(alpha: 0.72),
-                          ),
-                    ),
-                    if (visitor) ...<Widget>[
-                      const SizedBox(width: 4),
-                      Icon(
-                        _deliveryIcon(message.status),
-                        size: 14,
-                        color: _deliveryColor(colors, message.status),
+                Padding(
+                  padding: isPhotoGroup
+                      ? const EdgeInsetsDirectional.fromSTEB(10, 0, 10, 3)
+                      : EdgeInsets.zero,
+                  child: Row(
+                    mainAxisSize:
+                        isPhotoGroup ? MainAxisSize.max : MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: <Widget>[
+                      Text(
+                        _time(message.createdAt),
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: visitor
+                                  ? colors.onVisitorBubble
+                                      .withValues(alpha: 0.72)
+                                  : colors.onAgentBubble
+                                      .withValues(alpha: 0.72),
+                            ),
                       ),
+                      if (visitor) ...<Widget>[
+                        const SizedBox(width: 4),
+                        Icon(
+                          _deliveryIcon(deliveryStatus),
+                          size: 14,
+                          color: _deliveryColor(colors, deliveryStatus),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
                 if (onRetry != null || onRemove != null) ...<Widget>[
                   const SizedBox(height: 4),

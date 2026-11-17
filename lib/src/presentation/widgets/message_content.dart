@@ -51,25 +51,36 @@ class _MessageContent extends StatelessWidget {
             errorBuilder: (_) => const SizedBox.shrink(),
             imageBuilder: (_, child) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: SizedBox(
-                width: 220,
-                child: AspectRatio(
-                  aspectRatio: 288 / 158,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: child,
-                  ),
+              child: AspectRatio(
+                aspectRatio: 288 / 158,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: child,
                 ),
               ),
             ),
           ),
-        if (isImage && hasMedia)
+        if (message.attachments.length > 1)
+          _PhotoGroupContent(
+            controller: controller,
+            photos: message.attachments
+                .map((photo) => message.copyWith(
+                      attachment: photo,
+                      body: '',
+                      attachments: const [],
+                    ))
+                .toList(growable: false),
+            textColor: textColor,
+            borderRadius: 12,
+          )
+        else if (isImage && hasMedia)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: _ImageAttachmentPreview(
-              message: message,
-              attachment: attachment,
-              localUpload: localUpload,
+              controller: controller,
+              message: message.attachments.isEmpty
+                  ? message
+                  : message.copyWith(attachment: message.attachments.first),
             ),
           ),
         if (isAudio && hasMedia)
@@ -94,7 +105,6 @@ class _MessageContent extends StatelessWidget {
         if (_visibleMessageBody(message).isNotEmpty)
           MessageLinkText(
             text: _visibleMessageBody(message),
-            linkColor: const Color(0xFF1300E6),
             style: Theme.of(context)
                 .textTheme
                 .bodyMedium
@@ -121,41 +131,121 @@ bool _isAudioAttachment({String? filename, String? mimeType, Uri? url}) {
   return RegExp(r'\.(mp3|wav|m4a|aac|ogg|oga|webm|opus|amr)$').hasMatch(target);
 }
 
+class _PhotoGroupContent extends StatelessWidget {
+  const _PhotoGroupContent({
+    required this.controller,
+    required this.photos,
+    required this.textColor,
+    required this.borderRadius,
+  });
+
+  final List<WisperBotMessage> photos;
+  final WisperBotChatController controller;
+  final Color textColor;
+  final double borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    final captionStyle = Theme.of(context)
+        .textTheme
+        .bodyMedium
+        ?.copyWith(color: textColor, height: 1.4);
+    const gap = 2.0;
+    final shownCount = math.min(photos.length, 4);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        ClipRRect(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(borderRadius - gap),
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final tileSize = (constraints.maxWidth - gap) / 2;
+              return Column(
+                children: <Widget>[
+                  for (var start = 0; start < shownCount; start += 2) ...[
+                    if (start != 0) const SizedBox(height: gap),
+                    Row(
+                      children: <Widget>[
+                        for (var index = start;
+                            index < math.min(start + 2, shownCount);
+                            index++) ...[
+                          if (index != start) const SizedBox(width: gap),
+                          Expanded(
+                            child: _ImageAttachmentPreview(
+                              controller: controller,
+                              message: photos[index],
+                              thumbnailHeight: tileSize,
+                              additionalPhotos: index == shownCount - 1
+                                  ? photos.length - shownCount
+                                  : 0,
+                              onOpen: () => _openImageViewer(
+                                context,
+                                photos,
+                                controller,
+                                initialIndex: index,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
+        ),
+        for (final caption in photos.map(_visibleMessageBody))
+          if (caption.isNotEmpty)
+            Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(10, 6, 10, 0),
+              child: MessageLinkText(text: caption, style: captionStyle),
+            ),
+      ],
+    );
+  }
+}
+
 class _ImageAttachmentPreview extends StatelessWidget {
   const _ImageAttachmentPreview({
     required this.message,
-    this.attachment,
-    this.localUpload,
+    required this.controller,
+    this.thumbnailHeight,
+    this.additionalPhotos = 0,
+    this.onOpen,
   });
 
   final WisperBotMessage message;
-  final WisperBotAttachment? attachment;
-  final WisperBotUpload? localUpload;
+  final WisperBotChatController controller;
+  final double? thumbnailHeight;
+  final int additionalPhotos;
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final filename = localUpload?.filename ?? attachment?.filename ?? 'Image';
+    final attachment = message.attachment;
+    final localUpload = message.localUpload;
+    final thumbnailHeight = this.thumbnailHeight;
+    final cacheHeight = thumbnailHeight == null
+        ? null
+        : (thumbnailHeight * MediaQuery.devicePixelRatioOf(context)).ceil();
+    final filename = _imageFilename(message);
     final isPending = message.status == WisperBotMessageStatus.pending;
     final isFailed = message.status == WisperBotMessageStatus.failed ||
         message.status == WisperBotMessageStatus.unconfirmed;
 
     return GestureDetector(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          fullscreenDialog: true,
-          builder: (_) => _ImageViewerScreen(
-            filename: filename,
-            upload: localUpload,
-            attachment: attachment,
-          ),
-        ),
-      ),
+      onTap: onOpen ??
+          () => _openImageViewer(
+              context, <WisperBotMessage>[message], controller),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(thumbnailHeight == null ? 8 : 0),
         child: SizedBox(
           width: double.infinity,
-          height: 260,
+          height: thumbnailHeight ?? 260,
           child: Stack(
             fit: StackFit.expand,
             children: <Widget>[
@@ -163,45 +253,71 @@ class _ImageAttachmentPreview extends StatelessWidget {
                 color: Colors.black.withValues(alpha: 0.06),
                 child: localUpload != null
                     ? Image.memory(
-                        localUpload!.bytes,
+                        localUpload.bytes,
                         key: const ValueKey<String>(
                           'wisperbot-local-image-preview',
                         ),
                         fit: BoxFit.cover,
-                        semanticLabel: localUpload!.filename,
+                        cacheHeight: cacheHeight,
+                        semanticLabel: localUpload.filename,
                         errorBuilder: (context, error, stackTrace) =>
                             _imageError(theme, filename),
                       )
                     : attachment != null
-                        ? Image.network(
-                            attachment!.url.toString(),
-                            key: const ValueKey<String>(
-                              'wisperbot-remote-image-preview',
-                            ),
-                            fit: BoxFit.cover,
-                            semanticLabel:
-                                attachment!.filename ?? 'Image attachment',
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Container(
-                                height: 160,
-                                width: double.infinity,
-                                color: Colors.black.withValues(alpha: 0.08),
-                                alignment: Alignment.center,
-                                child: const SizedBox(
-                                  height: 24,
-                                  width: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
+                        ? _PhotoLink(
+                            initialUrl: attachment.url,
+                            renew: _photoRenewal(message, controller),
+                            builder: (url, onError) => Image.network(
+                              url.toString(),
+                              key: const ValueKey<String>(
+                                'wisperbot-remote-image-preview',
+                              ),
+                              fit: BoxFit.cover,
+                              cacheHeight: cacheHeight,
+                              semanticLabel:
+                                  attachment.filename ?? 'Image attachment',
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Container(
+                                  height: 160,
+                                  width: double.infinity,
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  alignment: Alignment.center,
+                                  child: const SizedBox(
+                                    height: 24,
+                                    width: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   ),
-                                ),
-                              );
-                            },
-                            errorBuilder: (context, error, stackTrace) =>
-                                _imageError(theme, filename),
+                                );
+                              },
+                              errorBuilder: (context, error, stackTrace) {
+                                onError();
+                                return _imageError(theme, filename);
+                              },
+                            ),
                           )
                         : _imageError(theme, filename),
               ),
+              if (additionalPhotos > 0)
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: Colors.black.withValues(alpha: 0.54),
+                    child: Center(
+                      child: Text(
+                        '+$additionalPhotos',
+                        semanticsLabel:
+                            '$additionalPhotos more ${additionalPhotos == 1 ? 'photo' : 'photos'}',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               if (isPending)
                 Positioned.fill(
                   child: Container(
@@ -223,7 +339,8 @@ class _ImageAttachmentPreview extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (!isPending &&
+              if (thumbnailHeight == null &&
+                  !isPending &&
                   !isFailed &&
                   (attachment != null || localUpload != null))
                 Positioned(
@@ -305,19 +422,49 @@ class _ImageAttachmentPreview extends StatelessWidget {
   }
 }
 
-class _ImageViewerScreen extends StatelessWidget {
+String _imageFilename(WisperBotMessage message) =>
+    message.localUpload?.filename ?? message.attachment?.filename ?? 'Image';
+
+void _openImageViewer(
+  BuildContext context,
+  List<WisperBotMessage> photos,
+  WisperBotChatController controller, {
+  int initialIndex = 0,
+}) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (_) => _ImageViewerScreen(
+          photos: photos, initialIndex: initialIndex, controller: controller),
+    ),
+  );
+}
+
+class _ImageViewerScreen extends StatefulWidget {
   const _ImageViewerScreen({
-    required this.filename,
-    this.upload,
-    this.attachment,
+    required this.photos,
+    required this.initialIndex,
+    required this.controller,
   });
 
-  final String filename;
-  final WisperBotUpload? upload;
-  final WisperBotAttachment? attachment;
+  final List<WisperBotMessage> photos;
+  final int initialIndex;
+  final WisperBotChatController controller;
+
+  @override
+  State<_ImageViewerScreen> createState() => _ImageViewerScreenState();
+}
+
+class _ImageViewerScreenState extends State<_ImageViewerScreen> {
+  late final _pageController = PageController(initialPage: widget.initialIndex);
+  late int _index = widget.initialIndex;
+  bool _zoomed = false;
 
   @override
   Widget build(BuildContext context) {
+    final photos = widget.photos;
+    final photo = photos[_index];
+    final filename = _imageFilename(photo);
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -328,34 +475,154 @@ class _ImageViewerScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.download_rounded),
             tooltip: 'Download image',
-            onPressed: () => _downloadAttachmentToDevice(
-              context,
-              filename: filename,
-              attachment: attachment,
-              upload: upload,
-            ),
+            onPressed: () async {
+              final attachment = photo.attachment;
+              final renewal = _photoRenewal(photo, widget.controller);
+              WisperBotAttachment? current = attachment;
+              if (attachment != null &&
+                  renewal != null &&
+                  _isExpiredPhotoUrl(attachment.url)) {
+                try {
+                  current = WisperBotAttachment(
+                    url: await renewal(),
+                    filename: attachment.filename,
+                    mimeType: attachment.mimeType,
+                  );
+                } on Object {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Could not download photo.')),
+                    );
+                  }
+                  return;
+                }
+              }
+              if (!context.mounted) return;
+              await _downloadAttachmentToDevice(context,
+                  filename: filename,
+                  attachment: current,
+                  upload: photo.localUpload);
+            },
           ),
         ],
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          return InteractiveViewer(
-            constrained: false,
-            minScale: 1,
-            maxScale: 5,
-            child: SizedBox(
-              width: constraints.maxWidth,
-              child: upload != null
-                  ? Image.memory(
-                      upload!.bytes,
-                      width: constraints.maxWidth,
-                      fit: BoxFit.fitWidth,
-                      errorBuilder: (context, error, stackTrace) =>
-                          _viewerError(constraints),
-                    )
-                  : attachment != null
-                      ? Image.network(
-                          attachment!.url.toString(),
+      body: photos.length == 1
+          ? _ImageViewerPhoto(photo: photo, controller: widget.controller)
+          : PageView.builder(
+              controller: _pageController,
+              physics: _zoomed ? const NeverScrollableScrollPhysics() : null,
+              itemCount: photos.length,
+              onPageChanged: (index) => setState(() {
+                _index = index;
+                _zoomed = false;
+              }),
+              itemBuilder: (context, index) => _ImageViewerPhoto(
+                controller: widget.controller,
+                key: ValueKey(photos[index].localId),
+                photo: photos[index],
+                onZoomChanged: (zoomed) {
+                  if (index == _index && zoomed != _zoomed) {
+                    setState(() => _zoomed = zoomed);
+                  }
+                },
+              ),
+            ),
+      bottomNavigationBar: photos.length > 1
+          ? SafeArea(
+              top: false,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  IconButton(
+                    color: Colors.white,
+                    icon: const Icon(Icons.chevron_left),
+                    tooltip: 'Previous photo',
+                    onPressed: _index > 0 ? () => _goToPhoto(_index - 1) : null,
+                  ),
+                  Text(
+                    '${_index + 1} / ${photos.length}',
+                    semanticsLabel: 'Photo ${_index + 1} of ${photos.length}',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  IconButton(
+                    color: Colors.white,
+                    icon: const Icon(Icons.chevron_right),
+                    tooltip: 'Next photo',
+                    onPressed: _index + 1 < photos.length
+                        ? () => _goToPhoto(_index + 1)
+                        : null,
+                  ),
+                ],
+              ),
+            )
+          : null,
+    );
+  }
+
+  void _goToPhoto(int index) {
+    unawaited(_pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+}
+
+class _ImageViewerPhoto extends StatefulWidget {
+  const _ImageViewerPhoto(
+      {super.key,
+      required this.photo,
+      required this.controller,
+      this.onZoomChanged});
+
+  final WisperBotMessage photo;
+  final WisperBotChatController controller;
+  final ValueChanged<bool>? onZoomChanged;
+
+  @override
+  State<_ImageViewerPhoto> createState() => _ImageViewerPhotoState();
+}
+
+class _ImageViewerPhotoState extends State<_ImageViewerPhoto> {
+  final _transform = TransformationController();
+
+  @override
+  Widget build(BuildContext context) {
+    final upload = widget.photo.localUpload;
+    final attachment = widget.photo.attachment;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return InteractiveViewer(
+          constrained: false,
+          minScale: 1,
+          maxScale: 5,
+          transformationController: _transform,
+          onInteractionEnd: (_) => widget.onZoomChanged?.call(
+            _transform.value.getMaxScaleOnAxis() > 1.01,
+          ),
+          child: SizedBox(
+            width: constraints.maxWidth,
+            child: upload != null
+                ? Image.memory(
+                    upload.bytes,
+                    width: constraints.maxWidth,
+                    fit: BoxFit.fitWidth,
+                    errorBuilder: (context, error, stackTrace) =>
+                        _viewerError(constraints),
+                  )
+                : attachment != null
+                    ? _PhotoLink(
+                        initialUrl: attachment.url,
+                        renew: _photoRenewal(widget.photo, widget.controller),
+                        builder: (url, onError) => Image.network(
+                          url.toString(),
                           width: constraints.maxWidth,
                           fit: BoxFit.fitWidth,
                           loadingBuilder: (context, child, loadingProgress) {
@@ -370,15 +637,23 @@ class _ImageViewerScreen extends StatelessWidget {
                               ),
                             );
                           },
-                          errorBuilder: (context, error, stackTrace) =>
-                              _viewerError(constraints),
-                        )
-                      : _viewerError(constraints),
-            ),
-          );
-        },
-      ),
+                          errorBuilder: (context, error, stackTrace) {
+                            onError();
+                            return _viewerError(constraints);
+                          },
+                        ),
+                      )
+                    : _viewerError(constraints),
+          ),
+        );
+      },
     );
+  }
+
+  @override
+  void dispose() {
+    _transform.dispose();
+    super.dispose();
   }
 
   Widget _viewerError(BoxConstraints constraints) {
@@ -394,6 +669,80 @@ class _ImageViewerScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<Uri> Function()? _photoRenewal(
+  WisperBotMessage message,
+  WisperBotChatController controller,
+) {
+  final messageId = message.serverId;
+  final photoId = message.attachment?.id;
+  return messageId != null && photoId != null
+      ? () => controller.renewPhotoLink(messageId, photoId)
+      : null;
+}
+
+bool _isExpiredPhotoUrl(Uri url) {
+  final expiry = int.tryParse(url.queryParameters['expires'] ?? '');
+  return expiry != null &&
+      expiry * 1000 <= DateTime.now().millisecondsSinceEpoch;
+}
+
+class _PhotoLink extends StatefulWidget {
+  const _PhotoLink(
+      {required this.initialUrl, required this.renew, required this.builder});
+
+  final Uri initialUrl;
+  final Future<Uri> Function()? renew;
+  final Widget Function(Uri url, VoidCallback onError) builder;
+
+  @override
+  State<_PhotoLink> createState() => _PhotoLinkState();
+}
+
+class _PhotoLinkState extends State<_PhotoLink> {
+  late Uri _url = widget.initialUrl;
+  Uri? _attempted;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_renewIfExpired());
+  }
+
+  @override
+  void didUpdateWidget(covariant _PhotoLink oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialUrl != oldWidget.initialUrl) {
+      _url = widget.initialUrl;
+      _attempted = null;
+      unawaited(_renewIfExpired());
+    }
+  }
+
+  Future<void> _renewIfExpired() async {
+    final renew = widget.renew;
+    final current = _url;
+    if (renew == null ||
+        _attempted == current ||
+        !_isExpiredPhotoUrl(current)) {
+      return;
+    }
+    _attempted = current;
+    try {
+      final fresh = await renew();
+      if (mounted && _url == current) setState(() => _url = fresh);
+    } on Object {
+      // Keep the ordinary image failure state if the session or asset is unavailable.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(_url, () {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_renewIfExpired());
+        });
+      });
 }
 
 class _AudioAttachmentPlayer extends StatefulWidget {

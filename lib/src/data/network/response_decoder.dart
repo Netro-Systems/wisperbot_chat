@@ -347,6 +347,9 @@ final class WidgetResponseDecoder {
       body: json['body'] as String,
       status: _parseDeliveryStatus(json),
       createdAt: createdAt.toLocal(),
+      photoGroupId: type == WisperBotMessageType.image
+          ? _stringOrNull(json['photo_group_id'])
+          : null,
       attachment: attachmentUri == null
           ? null
           : WisperBotAttachment(
@@ -354,6 +357,9 @@ final class WidgetResponseDecoder {
               filename: filename,
               mimeType: mimeType,
             ),
+      attachments: type == WisperBotMessageType.image
+          ? _parsePhotoAttachments(json['attachments'])
+          : const <WisperBotAttachment>[],
       lookupImages: role == WisperBotMessageRole.agent && !isActivity
           ? _parseLookupImages(json['lookup_images'])
           : const <WisperBotLookupImage>[],
@@ -521,12 +527,31 @@ final class WidgetResponseDecoder {
           _stringOrNull(json['footer_company_name']) ?? 'WisperBot',
       teamMembers: members,
       aiEnabled: _requiredBool(json, 'ai_enabled'),
+      photoMessagesEnabled: json['photo_messages'] == true,
       requiresPreChat: _requiredBool(json, 'require_prechat'),
       preChatFields: preChatFields,
       starterQuestions: _parseStarterQuestions(json['starter_questions']),
       realtime: _parseRealtimeConfig(json['realtime']),
       offlineMessage: _stringOrNull(json['offline_message']),
     );
+  }
+
+  List<WisperBotAttachment> _parsePhotoAttachments(Object? value) {
+    if (value is! List<dynamic>) return const <WisperBotAttachment>[];
+    final attachments = <WisperBotAttachment>[];
+    for (final photo in value.take(6)) {
+      if (photo is! Map<String, dynamic>) continue;
+      final url = _safeRemoteUri(photo['url']);
+      if (url == null) continue;
+      attachments.add(WisperBotAttachment(
+        url: url,
+        id: _stringOrNull(photo['id']),
+        filename: _stringOrNull(photo['filename']),
+        mimeType: _stringOrNull(photo['mime_type']),
+        sizeBytes: photo['file_size'] is int ? photo['file_size'] as int : null,
+      ));
+    }
+    return List<WisperBotAttachment>.unmodifiable(attachments);
   }
 
   List<WisperBotStarterQuestion> _parseStarterQuestions(Object? value) {

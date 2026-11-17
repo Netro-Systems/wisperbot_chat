@@ -7,6 +7,7 @@ class _BubbleLayout extends StatelessWidget {
     required this.colors,
     required this.child,
     this.isImage = false,
+    this.isPhotoGroup = false,
     this.bubbleKey,
   });
 
@@ -15,21 +16,23 @@ class _BubbleLayout extends StatelessWidget {
   final WisperBotResolvedTheme colors;
   final Widget child;
   final bool isImage;
+  final bool isPhotoGroup;
   final Key? bubbleKey;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (context, constraints) {
+          const avatarSize = 28.0;
+          const avatarGap = 8.0;
           final viewportWidth = constraints.hasBoundedWidth
               ? constraints.maxWidth
               : MediaQuery.sizeOf(context).width;
           final widthFactor = isImage ? 0.9 : 0.76;
-          final widthLimit = isImage ? 520.0 : 420.0;
-          final availableMaxWidth = viewportWidth * widthFactor;
-          final maximumWidth = math.min(
-            availableMaxWidth > widthLimit ? widthLimit : availableMaxWidth,
-            520.0,
-          );
+          final widthLimit = isPhotoGroup
+              ? 290.0 + (visitor ? 0 : avatarSize + avatarGap)
+              : (isImage ? 520.0 : 420.0);
+          final maximumWidth =
+              math.min(viewportWidth * widthFactor, widthLimit);
           return Align(
             alignment: visitor
                 ? AlignmentDirectional.centerEnd
@@ -43,10 +46,10 @@ class _BubbleLayout extends StatelessWidget {
                   if (!visitor) ...<Widget>[
                     _SupportAvatar(
                       avatarUrl: widgetConfig?.avatarUrl,
-                      size: 28,
+                      size: avatarSize,
                       backgroundColor: colors.primary,
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: avatarGap),
                   ],
                   Flexible(
                     child: DecoratedBox(
@@ -68,10 +71,10 @@ class _BubbleLayout extends StatelessWidget {
                         ),
                       ),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 13,
-                          vertical: 9,
-                        ),
+                        padding: isPhotoGroup
+                            ? const EdgeInsets.all(2)
+                            : const EdgeInsets.symmetric(
+                                horizontal: 13, vertical: 9),
                         child: child,
                       ),
                     ),
