@@ -1,13 +1,14 @@
 # WisperBot Chat SDK example
 
 This app demonstrates the full-screen facade, floating launcher, embedded view,
-bottom sheet, dialog, image/document upload, and microphone recording. The SDK
+bottom sheet, dialog, photo and document uploads, and microphone recording. The SDK
 handles media with its built-in adapter; the app does not create a custom adapter.
 One `WisperBotChat.initialize` call owns notifications, visitor registration,
 navigation, and the controller shared by every chat integration.
 
-Bot replies display any available lookup images above the reply text. Chat
-links are tappable and use `#1300E6`.
+In chat, open **Gallery** from the attachment menu and select up to six photos
+on a supported platform. Remove any unwanted photos from the preview, add an
+optional caption, and tap Send. Tap an album thumbnail to swipe through the photos.
 
 For push troubleshooting, filter Android Studio/Flutter debug output for
 `WisperBot push`. Logs report FCM token availability, registration start/success,
@@ -29,12 +30,14 @@ option reference.
 
 1. Copy `.env.example` to `.env`.
 2. Put the SDK key from **Widget Integrations → Mobile app** in `WISPERBOT_WIDGET_KEY`. The website embed key can start chat sessions but cannot register FCM push tokens (HTTP 403).
-3. Configure native Firebase files using the project authorized in **Super Admin → Integrations → Firebase Cloud Messaging**. On Android, download `google-services.json` for `com.wisperbot.wisperbot_chat_example`. Place it in `android/app/` for all build types or in `android/app/src/debug/` for local debug builds. On iOS, add `GoogleService-Info.plist` to the Runner target.
-
-The example initializes the default Firebase app from the native configuration.
-Production hosts can initialize Firebase with FlutterFire's generated
-`DefaultFirebaseOptions.currentPlatform` before initializing WisperBot. The
-example uses Firebase Core 3 and Messaging 15 to retain its iOS 13 target.
+   For push, configure native Firebase files using the project authorized by the global
+   **Super Admin → Integrations → Firebase Cloud Messaging** configuration, and set
+   `FCM_ENABLED=true`. On Android, place the `google-services.json` for
+   `com.wisperbot.wisperbot_chat_example` in `android/app/`. No workspace credential
+   upload is required. The example defaults to `FCM_ENABLED=false` and can run
+   without Firebase configuration. Production hosts normally initialize Firebase using the
+   generated `DefaultFirebaseOptions.currentPlatform` before initializing WisperBot.
+   This example selects Firebase Core 3/Messaging 15 to retain its iOS 13 target.
 
 The Android example includes internet and microphone permissions and uses the
 Flutter tool's supported minimum SDK for audio recording. The iOS example

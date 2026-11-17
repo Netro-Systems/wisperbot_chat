@@ -231,6 +231,11 @@ class WisperBotChatController with WidgetsBindingObserver {
   bool _disposed = false;
   bool _recoveryAttempted = false;
   String? _activeSendLocalId;
+  bool Function()? _activeSendSessionIsCurrent;
+
+  bool get _deferringSendUpdates =>
+      _activeSendLocalId != null &&
+      (_activeSendSessionIsCurrent?.call() ?? true);
 
   /// Latest immutable state snapshot.
   WisperBotChatState get state => _stateMachine.state;
@@ -264,6 +269,9 @@ class WisperBotChatController with WidgetsBindingObserver {
   @internal
   WisperBotMediaAdapter? get runtimeMediaAdapter =>
       _client._config.mediaAdapter;
+
+  @internal
+  int get runtimeSessionRevision => _sessionRevision;
 
   @internal
   String get runtimePresentationScope =>
@@ -648,19 +656,116 @@ class WisperBotChatController with WidgetsBindingObserver {
 
   /// Uploads an image with an optional text [caption].
   ///
+  /// Use the same UUID as [photoGroupId] for images selected together.
+  /// Each call sends one image and produces a separate message.
+  ///
   /// Throws [WisperBotException] when the controller is not ready or the
   /// attachment is rejected or cannot be delivered.
   Future<WisperBotMessage> sendImage(
     WisperBotUpload upload, {
     String? caption,
-  }) =>
-      _enqueueSend(
-        () => _sendUploadInternal(
-          upload,
-          WisperBotMessageType.image,
-          caption?.trim(),
-        ),
+    String? photoGroupId,
+  }) {
+    final revision = _sessionRevision;
+    final session = _client._sessions._session;
+    // Recovery can replace the session without an explicit identity change.
+    final isSessionCurrent = photoGroupId == null
+        ? null
+        : () =>
+            !_disposed &&
+            revision == _sessionRevision &&
+            identical(session, _client._sessions._session);
+    return _enqueueSend(() {
+      if (isSessionCurrent?.call() == false) throw _expiredPhotoUpload;
+      return _sendUploadInternal(
+        upload,
+        WisperBotMessageType.image,
+        caption?.trim(),
+        photoGroupId: photoGroupId,
+        isSessionCurrent: isSessionCurrent,
       );
+    });
+  }
+
+  static const _expiredPhotoUpload = WisperBotException(
+    code: WisperBotErrorCode.sessionExpired,
+    message: 'This photo belongs to a previous chat session.',
+    retryable: false,
+  );
+
+  /// Stages one [photo] for a photo message without delivering it.
+  ///
+  /// Reuse the same UUIDs when retrying this file. [requestId] identifies the
+  /// complete send and [uploadId] identifies this file within it.
+  Future<String> stagePhoto(
+    WisperBotUpload photo, {
+    required String requestId,
+    required String uploadId,
+  }) async {
+    _ensureReady();
+    final revision = _sessionRevision;
+    final session = _client._requireSession();
+    try {
+      final id = await _client._remoteDataSource.stagePhoto(
+        widgetKey: _client._config.widgetKey,
+        token: session.token,
+        requestId: requestId,
+        uploadId: uploadId,
+        photo: photo,
+      );
+      if (_disposed ||
+          _sessionRevision != revision ||
+          !identical(session, _client._sessions._session)) {
+        throw _expiredPhotoUpload;
+      }
+      return id;
+    } on Object catch (error) {
+      throw _asWisperBotException(error);
+    }
+  }
+
+  /// Delivers staged photos as one message in the order of [attachmentIds].
+  ///
+  /// Retry an unconfirmed send with the same [requestId], photos, and caption.
+  Future<WisperBotMessage> sendPhotoMessage({
+    required String requestId,
+    required List<String> attachmentIds,
+    String caption = '',
+  }) {
+    final revision = _sessionRevision;
+    final session = _client._requireSession();
+    final ids = List<String>.unmodifiable(attachmentIds);
+    bool isSessionCurrent() =>
+        !_disposed &&
+        _sessionRevision == revision &&
+        identical(session, _client._sessions._session);
+
+    return _enqueueSend(() {
+      if (!isSessionCurrent()) throw _expiredPhotoUpload;
+      _ensureReady();
+      final pending = WisperBotMessage(
+        localId: 'photo-$requestId',
+        role: WisperBotMessageRole.visitor,
+        type: WisperBotMessageType.image,
+        body: caption.trim(),
+        status: WisperBotMessageStatus.pending,
+        createdAt: DateTime.now(),
+        sentBy: WisperBotSenderKind.visitor,
+      );
+      _upsertLocal(pending);
+      return _performSend(
+        pending,
+        () => _client._remoteDataSource.sendPhotoMessage(
+          widgetKey: _client._config.widgetKey,
+          token: session.token,
+          requestId: requestId,
+          attachmentIds: ids,
+          caption: caption.trim(),
+        ),
+        isSessionCurrent: isSessionCurrent,
+      );
+    });
+  }
 
   /// Uploads audio with an optional text [caption].
   ///
@@ -700,49 +805,73 @@ class WisperBotChatController with WidgetsBindingObserver {
     return _client._loadAttachmentBytes(attachment);
   }
 
+  /// Renews a photo link using the active visitor session.
+  /// Gets a fresh signed URL for a committed photo in the active chat.
+  Future<Uri> renewPhotoLink(int messageId, String photoId) async {
+    final session = _client._requireSession();
+    final url = await _client._remoteDataSource.renewPhotoLink(
+      widgetKey: _client._config.widgetKey,
+      token: session.token,
+      messageId: messageId,
+      photoId: photoId,
+    );
+    if (_disposed || !identical(session, _client._sessions._session)) {
+      throw _expiredPhotoUpload;
+    }
+    return url;
+  }
+
   Future<WisperBotMessage> _sendUploadInternal(
     WisperBotUpload upload,
     WisperBotMessageType type,
-    String? caption,
-  ) async {
+    String? caption, {
+    String? photoGroupId,
+    bool Function()? isSessionCurrent,
+  }) async {
     _ensureReady();
+    final defaultBody = switch (type) {
+      WisperBotMessageType.image =>
+        photoGroupId == null ? 'Image attachment' : '',
+      WisperBotMessageType.audio => 'Voice message',
+      _ => upload.filename.isNotEmpty ? upload.filename : 'Document attachment',
+    };
     final pending = WisperBotMessage(
       localId: _newLocalId(),
       role: WisperBotMessageRole.visitor,
       type: type,
-      body: caption?.isNotEmpty == true
-          ? caption!
-          : type == WisperBotMessageType.image
-              ? 'Image attachment'
-              : type == WisperBotMessageType.audio
-                  ? 'Voice message'
-                  : upload.filename.isNotEmpty
-                      ? upload.filename
-                      : 'Document attachment',
+      body: caption?.isNotEmpty == true ? caption! : defaultBody,
       status: WisperBotMessageStatus.pending,
       createdAt: DateTime.now(),
       localUpload: upload,
+      photoGroupId: photoGroupId,
       sentBy: WisperBotSenderKind.visitor,
     );
     _upsertLocal(pending);
     return _performSend(
       pending,
-      () => _client._sendUpload(upload, type, caption),
+      () => _client._sendUpload(upload, type, caption,
+          photoGroupId: photoGroupId),
+      isSessionCurrent: isSessionCurrent,
     );
   }
 
   Future<WisperBotMessage> _performSend(
     WisperBotMessage pending,
-    Future<WidgetSendResult> Function() operation,
-  ) async {
+    Future<WidgetSendResult> Function() operation, {
+    bool Function()? isSessionCurrent,
+  }) async {
     final started = DateTime.now();
     _activeSendLocalId = pending.localId;
+    _activeSendSessionIsCurrent = isSessionCurrent;
     try {
+      if (isSessionCurrent?.call() == false) throw _expiredPhotoUpload;
       final result = await operation();
+      if (isSessionCurrent?.call() == false) throw _expiredPhotoUpload;
       final confirmed = result.message.copyWith(
         localId: pending.localId,
         status: WisperBotMessageStatus.sent,
         localUpload: pending.localUpload,
+        photoGroupId: result.message.photoGroupId ?? pending.photoGroupId,
         clearError: true,
       );
       _replaceLocal(pending.localId, confirmed);
@@ -765,6 +894,7 @@ class WisperBotChatController with WidgetsBindingObserver {
       }
       return confirmed;
     } on Object catch (error) {
+      if (isSessionCurrent?.call() == false) throw _expiredPhotoUpload;
       final exception = _asWisperBotException(error);
       // The backend may have stored a request before the connection failed.
       // Without an idempotency key, retrying or declaring failure can duplicate
@@ -783,15 +913,23 @@ class WisperBotChatController with WidgetsBindingObserver {
         duration: DateTime.now().difference(started),
         exception: exception,
       );
-      if (exception.code == WisperBotErrorCode.sessionExpired ||
-          exception.code == WisperBotErrorCode.unauthorized) {
+      if (isSessionCurrent?.call() != false &&
+          (exception.code == WisperBotErrorCode.sessionExpired ||
+              exception.code == WisperBotErrorCode.unauthorized)) {
         unawaited(_recoverAfterSend());
       }
       throw exception;
     } finally {
       if (_activeSendLocalId == pending.localId) {
+        final shouldFlush = _deferringSendUpdates;
         _activeSendLocalId = null;
-        _flushDeferredIncomingMessages();
+        _activeSendSessionIsCurrent = null;
+        if (shouldFlush) {
+          _flushDeferredIncomingMessages();
+        } else {
+          _deferredIncomingMessages.clear();
+          _deferredMessageStatuses.clear();
+        }
       }
     }
   }
@@ -1313,7 +1451,7 @@ class WisperBotChatController with WidgetsBindingObserver {
   void _handleRealtimeMessageStatusUpdated(Object? payload) {
     final update = const WidgetResponseDecoder().realtimeMessageStatus(payload);
     if (update == null) return;
-    if (_activeSendLocalId != null &&
+    if (_deferringSendUpdates &&
         !_state.messages
             .any((message) => message.serverId == update.messageId)) {
       _deferredMessageStatuses[update.messageId] = update.status;
@@ -1430,7 +1568,7 @@ class WisperBotChatController with WidgetsBindingObserver {
     List<WisperBotMessage> incoming, {
     required bool emitReceivedEvents,
   }) {
-    if (_activeSendLocalId == null) {
+    if (!_deferringSendUpdates) {
       return _mergeMessages(
         existing,
         incoming,

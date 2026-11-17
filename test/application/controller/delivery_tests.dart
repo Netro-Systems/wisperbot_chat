@@ -504,8 +504,10 @@ void registerDeliveryTests(WisperBotConfig config) {
     await client.close();
   });
 
-  test('pending image upload keeps local preview bytes until confirmed',
+  test('grouped image upload keeps group and preview bytes until confirmed',
       () async {
+    const photoGroupId = '3658b63b-e944-4f66-8810-58992790eeef';
+    late http.Request uploadRequest;
     final sendStarted = Completer<void>();
     final sendResponse = Completer<http.Response>();
     final httpClient = MockClient((request) async {
@@ -513,6 +515,7 @@ void registerDeliveryTests(WisperBotConfig config) {
         return http.Response(jsonEncode(sessionResponse()), 200);
       }
       if (request.method == 'POST' && request.url.path.endsWith('/messages')) {
+        uploadRequest = request;
         sendStarted.complete();
         return sendResponse.future;
       }
@@ -531,12 +534,21 @@ void registerDeliveryTests(WisperBotConfig config) {
       filename: 'screenshot.png',
       mimeType: 'image/png',
     );
-    final send = controller.sendImage(upload, caption: 'Please review this');
+    final send = controller.sendImage(
+      upload,
+      caption: 'Please review this',
+      photoGroupId: photoGroupId,
+    );
     await sendStarted.future;
 
+    final multipart = latin1.decode(uploadRequest.bodyBytes);
+    expect(
+        multipart, contains('name="photo_group_id"\r\n\r\n$photoGroupId\r\n'));
+    expect('name="attachment"'.allMatches(multipart), hasLength(1));
     final pending = controller.state.messages.single;
     expect(pending.status, WisperBotMessageStatus.pending);
     expect(pending.type, WisperBotMessageType.image);
+    expect(pending.photoGroupId, photoGroupId);
     expect(pending.localUpload?.filename, 'screenshot.png');
     expect(pending.localUpload?.bytes, upload.bytes);
 
@@ -566,9 +578,81 @@ void registerDeliveryTests(WisperBotConfig config) {
 
     final confirmed = controller.state.messages.single;
     expect(confirmed.status, WisperBotMessageStatus.sent);
+    expect(confirmed.photoGroupId, photoGroupId);
     expect(confirmed.localUpload?.filename, 'screenshot.png');
     expect(confirmed.attachment?.filename, 'screenshot.png');
 
+    await controller.dispose();
+    await client.close();
+  });
+
+  test('grouped sends cannot enter a replacement identity session', () async {
+    const photoGroupId = '3658b63b-e944-4f66-8810-58992790eeef';
+    var uploads = 0;
+    final sendStarted = Completer<void>();
+    final sendResponse = Completer<http.Response>();
+    final client = WisperBotClient.fromConfig(
+      config: config,
+      sessionStore: MemorySessionStore(),
+      httpClient: MockClient((request) async {
+        if (request.url.path.endsWith('/session')) {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          final account = body['user_id'] != null;
+          return http.Response(
+            jsonEncode(sessionResponse(
+              visitorId: account ? 'account' : 'guest',
+              token: account ? 'account-token' : 'guest-token',
+              messages:
+                  account ? [message(id: 20, body: 'Account history')] : [],
+            )),
+            200,
+          );
+        }
+        if (request.method == 'POST' &&
+            request.url.path.endsWith('/messages')) {
+          uploads++;
+          if (!sendStarted.isCompleted) sendStarted.complete();
+          return sendResponse.future;
+        }
+        return http.Response(jsonEncode(pollResponse()), 200);
+      }),
+    );
+    final controller = WisperBotChatController(client: client);
+    await controller.initialize();
+
+    final upload = WisperBotUpload(
+      bytes: Uint8List.fromList([137, 80, 78, 71]),
+      filename: 'screenshot.png',
+      mimeType: 'image/png',
+    );
+    final expired = throwsA(isA<WisperBotException>().having(
+      (error) => error.code,
+      'code',
+      WisperBotErrorCode.sessionExpired,
+    ));
+    final first = expectLater(
+      controller.sendImage(upload, photoGroupId: photoGroupId),
+      expired,
+    );
+    await sendStarted.future;
+    expect(controller.state.messages.single.body, isEmpty);
+    final second = expectLater(
+      controller.sendImage(upload, photoGroupId: photoGroupId),
+      expired,
+    );
+    await controller.updateUser(const WisperBotUser(userId: 'customer-1'));
+
+    sendResponse.complete(http.Response(
+      jsonEncode({
+        'message': message(id: 4, role: 'visitor', type: 'image'),
+        'handoff': {'enabled': true, 'eligible': false, 'status': 'bot'},
+      }),
+      200,
+    ));
+    await Future.wait([first, second]);
+
+    expect(uploads, 1);
+    expect(controller.state.messages.single.body, 'Account history');
     await controller.dispose();
     await client.close();
   });

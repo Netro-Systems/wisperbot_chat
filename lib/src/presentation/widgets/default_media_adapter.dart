@@ -15,6 +15,9 @@ class _DefaultMediaAdapter implements WisperBotMediaAdapter {
 
   static const int _recordingSampleRate = 16000;
   static const int _recordingChannels = 1;
+  static const double _imageMaxSize = 2048;
+  static const int _imageQuality = 90;
+  static const int _galleryImageLimit = 6;
 
   @override
   Future<WisperBotUpload?> pickImage({
@@ -22,12 +25,15 @@ class _DefaultMediaAdapter implements WisperBotMediaAdapter {
   }) async {
     final file = await _imagePicker.pickImage(
       source: source,
-      maxWidth: 2048,
-      maxHeight: 2048,
-      imageQuality: 90,
+      maxWidth: _imageMaxSize,
+      maxHeight: _imageMaxSize,
+      imageQuality: _imageQuality,
     );
     if (file == null) return null;
+    return _readImage(file);
+  }
 
+  Future<WisperBotUpload> _readImage(XFile file) async {
     final bytes = await file.readAsBytes();
     final filename = file.name.trim();
     final mimeType = (file.mimeType ?? _imageMimeType(filename)).toLowerCase();
@@ -52,9 +58,28 @@ class _DefaultMediaAdapter implements WisperBotMediaAdapter {
   Future<WisperBotUpload?> pickCameraImage() =>
       pickImage(source: ImageSource.camera);
 
-  /// Opens gallery to select an image.
-  Future<WisperBotUpload?> pickGalleryImage() =>
-      pickImage(source: ImageSource.gallery);
+  Future<List<WisperBotUpload>> pickGalleryImages() async {
+    final List<XFile> files;
+    try {
+      files = await _imagePicker.pickMultiImage(
+        maxWidth: _imageMaxSize,
+        maxHeight: _imageMaxSize,
+        imageQuality: _imageQuality,
+        limit: _galleryImageLimit,
+      );
+    } on UnimplementedError {
+      final image = await pickImage();
+      return <WisperBotUpload>[if (image != null) image];
+    }
+    if (files.length > _galleryImageLimit) {
+      throw const WisperBotException(
+        code: WisperBotErrorCode.attachmentRejected,
+        message: 'Choose up to six photos per send.',
+        retryable: false,
+      );
+    }
+    return <WisperBotUpload>[for (final file in files) await _readImage(file)];
+  }
 
   @override
   Future<WisperBotUpload?> pickDocument() async {

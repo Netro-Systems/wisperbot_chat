@@ -324,6 +324,16 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
     final starterCount = starterQuestions.isEmpty ? 0 : 1;
     const welcomeCount = 1;
     final typingCount = _state.agentTyping == null ? 0 : 1;
+    final rows = <List<WisperBotMessage>>[];
+    for (final message in _state.messages) {
+      if (widget.messageBuilder == null &&
+          rows.isNotEmpty &&
+          _canGroupPhotos(rows.last.first, message)) {
+        rows.last.add(message);
+      } else {
+        rows.add(<WisperBotMessage>[message]);
+      }
+    }
     return RefreshIndicator(
       color: colors.primary,
       onRefresh: _controller.refresh,
@@ -334,10 +344,7 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
             reverse: true,
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-            itemCount: welcomeCount +
-                starterCount +
-                _state.messages.length +
-                typingCount,
+            itemCount: welcomeCount + starterCount + rows.length + typingCount,
             itemBuilder: (context, index) {
               if (typingCount == 1 && index == 0) {
                 return _TypingIndicator(
@@ -345,8 +352,7 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
                   colors: colors,
                 );
               }
-              final messageIndex =
-                  _state.messages.length - 1 - (index - typingCount);
+              final messageIndex = rows.length - 1 - (index - typingCount);
               if (messageIndex < 0) {
                 if (starterCount == 1 && messageIndex == -1) {
                   return Padding(
@@ -368,12 +374,15 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
                   ),
                 );
               }
-              final message = _state.messages[messageIndex];
+              final row = rows[messageIndex];
+              final message = row.first;
               return Padding(
                 padding: EdgeInsets.only(bottom: colors.messageSpacing),
                 child: widget.messageBuilder?.call(context, message) ??
                     _MessageBubble(
                       message: message,
+                      groupedPhotos:
+                          row.length > 1 ? row : const <WisperBotMessage>[],
                       controller: _controller,
                       widgetConfig: _state.widget,
                       colors: colors,
@@ -416,6 +425,24 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
     );
   }
 
+  bool _canGroupPhotos(WisperBotMessage first, WisperBotMessage next) =>
+      _isGroupablePhoto(first) &&
+      _isGroupablePhoto(next) &&
+      first.photoGroupId == next.photoGroupId &&
+      first.role == next.role &&
+      first.sentBy == next.sentBy &&
+      first.senderName == next.senderName;
+
+  bool _isGroupablePhoto(WisperBotMessage message) =>
+      message.type == WisperBotMessageType.image &&
+      message.attachments.isEmpty &&
+      message.photoGroupId != null &&
+      (message.attachment != null || message.localUpload != null) &&
+      message.lookupImages.isEmpty &&
+      !message.isActivity &&
+      message.status != WisperBotMessageStatus.failed &&
+      message.status != WisperBotMessageStatus.unconfirmed;
+
   bool _starterQuestionsEnabled(WisperBotChatState state) =>
       (state.phase == WisperBotChatPhase.ready ||
           state.phase == WisperBotChatPhase.reconnecting) &&
@@ -449,6 +476,7 @@ class _WisperBotChatViewState extends State<WisperBotChatView> {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             _Composer(
+              key: ValueKey((_controller, _controller.runtimeSessionRevision)),
               controller: _controller,
               colors: colors,
               mediaAdapter: _controller.runtimeMediaAdapter,

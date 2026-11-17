@@ -12,6 +12,9 @@ abstract final class ApiEndpoints {
   /// Sends visitor messages and fetches bounded conversation refresh pages.
   static const String messages = '/widget/v1/messages';
 
+  /// Stages one photo for a grouped message.
+  static const String photoUploads = '/widget/v1/photo-uploads';
+
   /// Publishes visitor typing state.
   static const String typing = '/widget/v1/typing';
 

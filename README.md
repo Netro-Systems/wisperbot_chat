@@ -33,7 +33,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  wisperbot_chat: ^0.2.6
+  wisperbot_chat: ^0.2.7
 ```
 
 Or run:
@@ -368,21 +368,19 @@ For advanced headless or multi-runtime applications, construct
 
 ### 🔗 Message Links
 
-The prebuilt chat UI keeps message text selectable and makes `http://`,
-`https://`, and `www.` links tappable. Markdown links such as
-`[contact us on WhatsApp](https://wa.me/...)` show only their underlined label,
-slightly larger and bold for emphasis. Tappable links use `#1300E6` and open
-through the platform's external URL handler.
-`www.` addresses use HTTPS. Trailing punctuation is excluded from raw link
+The prebuilt chat UI keeps message text selectable. Markdown links such as
+`[View plans](https://example.com/plans)` use the bracketed label as button
+text. Unlabeled `http://`, `https://`, and `www.` links appear as tappable URLs.
+Each button and URL appears on its own line. Links open through the platform's
+external URL handler.
+`www.` addresses use HTTPS, and trailing punctuation is excluded from raw link
 targets. If opening fails, the chat shows "Could not open link."
 
 ### Lookup Images
 
-When a bot reply includes lookup images, the prebuilt chat shows them above the
-reply at a 288:158 aspect ratio. A missing or failed image leaves the reply text
-visible without a placeholder. Custom chat UIs can read the image URLs and
-labels from `WisperBotMessage.lookupImages`. The lookup image contract is
-documented in `doc/API.md`.
+When a bot reply includes lookup images, they fill the chat bubble's content
+width above the reply at a 288:158 aspect ratio. Custom chat UIs can read the
+images through `WisperBotMessage.lookupImages`. See the [lookup image contract](doc/API.md).
 
 ---
 
@@ -576,6 +574,19 @@ await WisperBotChat.initialize(
 The app must provide the platform permission declarations for the media features
 it uses, including iOS photo-library and microphone usage descriptions. See the
 [example](example) app for platform setup.
+
+On platforms with multi-photo picking, customers can select up to six photos in
+the built-in Gallery, remove individual photos from the draft, and send the
+selection together. When the session supports grouped photo messages, a
+multi-photo selection is delivered as one message with one optional caption.
+Other sessions deliver separate photo messages and display adjacent photos from
+the same send together. The album shows up to four thumbnails, with the number
+of additional photos on the last tile. Tap a thumbnail to open the viewer and
+swipe through the group.
+
+Single photos, including camera captures and photos selected through a
+host-supplied media adapter, use the single-image upload flow. See the
+[photo upload contract](doc/API.md#photo-uploads) for custom chat UIs.
 
 `mediaAdapter` is an optional override for apps that need custom picker or recording
 behavior. Most integrations should leave it unset.
